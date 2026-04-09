@@ -1,5 +1,5 @@
 # SoccerMaster: A Vision Foundation Model for Soccer Understanding
-Official implementation of **SoccerMaster: A Vision Foundation Model for Soccer Understanding**
+Official implementation of **SoccerMaster: A Vision Foundation Model for Soccer Understanding** (CVPR 2026 Oral)
 
 [*Haolin Yang*](https://haolinyang-hlyang.github.io/),
 [*Jiayuan Rao*](https://jyrao.github.io/),
