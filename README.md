@@ -173,7 +173,7 @@ CUDA_VISIBLE_DEVICES=0 python -m tracklab.main -cn gsr_step_3_example_accelerate
 ## Citations
 If you find our work useful, please cite:
 ```bibtex
-@article{yang2025soccermaster,
+@inproceedings{yang2025soccermaster,
   title={SoccerMaster: A Vision Foundation Model for Soccer Understanding},
   author={Yang, Haolin and Rao, Jiayuan and Wu, Haoning and Xie, Weidi},
   journal={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
