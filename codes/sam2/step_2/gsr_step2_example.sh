@@ -7,7 +7,7 @@
 SAM_CHECKPOINT="../checkpoints/sam2.1_hiera_large.pt"  # SAM2 model checkpoint path
 SAM_CONFIG="configs/sam2.1/sam2.1_hiera_l.yaml"       # SAM2 config file path
 INPUT_PKLZ="../../sn-gamestate/outputs/gsr/step_1_sn500_10001_10002/states/sn-gamestate.pklz"
-DATASET_ROOT="../datasets/SN-GSR-2024/SoccerNetGS"  # Video frames directory
+DATASET_ROOT="../datasets/SoccerNetGS"  # Video frames directory
 OUTPUT_DIR="../outputs/gsr_step2_sn500_10001_10002"                              # Output directory
 SPLIT="sn500"                                         # Data split (train, valid, test, challenge, sn500)
 FPS=25                                               # Output video frame rate

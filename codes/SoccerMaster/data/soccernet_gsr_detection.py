@@ -32,7 +32,7 @@ class SoccerNetGSR_Detection(Dataset):
     def __init__(
             self,
             data_root: str = "./datasets/",
-            sub_dir: str = "SN-GSR-2024",
+            sub_dir: str = "",
             split: str = "train",
             transforms=None,
             num_keypoints: int = 58,

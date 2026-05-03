@@ -2,7 +2,7 @@
 
 # Set base paths
 INPUT_PKLZ="../../sn-gamestate/outputs/gsr/step_1_sn500_10001_10002/states/sn-gamestate.pklz"  # Input pklz file path
-DATASET_ROOT="../datasets/SN-GSR-2024/SoccerNetGS"  # Video frames directory
+DATASET_ROOT="../datasets/SoccerNetGS"  # Video frames directory
 OUTPUT_DIR="../outputs/gsr_step2_sn500_10001_10002"                              # Output directory
 SPLIT="sn500"                                         # Data split (train, valid, test)
 OUTPUT_PKL="${OUTPUT_DIR}/results.pkl"     # Result output pkl file path
