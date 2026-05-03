@@ -67,8 +67,8 @@ Clone the SoccerMaster model checkpoints from Hugging Face:
 
 ```bash
 cd SoccerMaster/codes/SoccerMaster/pretrained_models
-git lfs install
-git clone https://huggingface.co/xleprime/SoccerMaster
+mkdir SoccerMaster
+hf download xleprime/SoccerMaster --local-dir SoccerMaster
 ```
 
 After completing these steps, you should have the following directory structure:
@@ -126,6 +126,56 @@ ln -s ../sn-gamestate/pretrained_models pretrained_models
 
 ## Data Pipeline
 
+### Input Data Format
+
+The data pipeline follows the [SoccerNet Game State Recognition (GSR)](https://github.com/soccernet/sn-gamestate) format. You need to organize your input video frames into the following directory structure. Here we use two video sequences (`SNGS-10001` with 750 frames and `SNGS-10002` with 722 frames) as an example:
+
+```
+codes/sn-gamestate/datasets/SoccerNetGS/
+├── sequences_info.json
+└── sn500/
+    ├── SNGS-10001/
+    │   └── img1/
+    │       ├── 000001.jpg
+    │       ├── 000002.jpg
+    │       ├── ...
+    │       └── 000750.jpg
+    └── SNGS-10002/
+        └── img1/
+            ├── 000001.jpg
+            ├── 000002.jpg
+            ├── ...
+            └── 000722.jpg
+```
+
+Each video sequence should be extracted into individual frames (`.jpg`), placed under `<sequence_name>/img1/`, and named with zero-padded 6-digit indices starting from `000001.jpg`.
+
+You also need to prepare a `sequences_info.json` file that registers all sequences. The format is as follows:
+
+```json
+{
+    "sn500": [
+        {
+            "id": 0,
+            "name": "SNGS-10001",
+            "n_frames": 750
+        },
+        {
+            "id": 1,
+            "name": "SNGS-10002",
+            "n_frames": 722
+        }
+    ]
+}
+```
+
+Each entry contains:
+- `id`: a unique integer index for the sequence.
+- `name`: the directory name of the sequence (must match the folder name under `sn500/`).
+- `n_frames`: the total number of frames in the sequence.
+
+### Pipeline Steps
+
 The data pipeline consists of three steps.
 
 ### Step 1: Detection & Tracking
@@ -149,7 +199,7 @@ bash gsr_step2_example.sh
 bash merge_example.sh
 ```
 
-### Step 3: Others
+### Step 3: Remaining Modules
 
 Run the remaining pipeline modules: camera calibration, jersey number recognition, role classification, team assignment, etc.
 
