@@ -8,7 +8,6 @@ from torch.utils.data import Dataset
 import math
 from math import floor
 from torch.utils.data import DataLoader
-import torch.nn.functional as F
 from utils.box_ops import box_xywh_to_xyxy, box_xyxy_to_cxcywh, box_cxcywh_to_xywh, bbox_xywh_to_cxcywh
 from data.utils import Compose, ToTensor, RandomResize, Normalize, get_image_hw, ColorJitter, RandomHorizontalFlip, GaussianNoise, GaussianBlur, ClearAugmentationMetas, RandomCrop, RandomAffine, RandomPerspective
 from data.pnlcalib_utils.utils_keypoints import KeypointsDB
@@ -43,12 +42,11 @@ class SoccerNetGSR_Detection(Dataset):
             image_input_size: int = 512,
             detect_ball: bool = False,
             detect_ball_only: bool = False,
-            use_extra_data: bool = False,
-            extra_data_path: str = "",
-            extra_data_only: bool = False,
-            use_extra_data_amount: int = -1,
+            use_soccer_factory_data: bool = False,
+            soccer_factory_data_path: str = "",
+            soccer_factory_data_only: bool = False,
+            use_soccer_factory_data_amount: int = -1,
             train_keypoints_or_lines_detection: bool = True,
-            train_camera_regression: bool = True,
     ):
         super(SoccerNetGSR_Detection, self).__init__()
         assert split in ['train', 'valid', 'test']
@@ -64,12 +62,11 @@ class SoccerNetGSR_Detection(Dataset):
         self.image_input_size = image_input_size
         self.detect_ball = detect_ball
         self.detect_ball_only = detect_ball_only
-        self.use_extra_data = use_extra_data
-        self.extra_data_path = extra_data_path
-        self.extra_data_only = extra_data_only
-        self.use_extra_data_amount = use_extra_data_amount
+        self.use_soccer_factory_data = use_soccer_factory_data
+        self.soccer_factory_data_path = soccer_factory_data_path
+        self.soccer_factory_data_only = soccer_factory_data_only
+        self.use_soccer_factory_data_amount = use_soccer_factory_data_amount
         self.train_keypoints_or_lines_detection = train_keypoints_or_lines_detection
-        self.train_camera_regression = train_camera_regression
         
         # Validate configuration
         if self.detect_ball_only and self.detect_ball:
@@ -80,16 +77,16 @@ class SoccerNetGSR_Detection(Dataset):
         
         self.annotations = dict()
         
-        self.extra_data_sequences = set()
-        self.extra_data_pkl_paths = dict()
+        self.soccer_factory_data_sequences = set()
+        self.soccer_factory_data_pkl_paths = dict()
         
-        if not (extra_data_only and self.split == 'train'):
+        if not (soccer_factory_data_only and self.split == 'train'):
             image_paths = self._get_image_paths()
             self.image_paths.update(image_paths)
             annotations = self._get_annotations()
             self.annotations.update(annotations)
-        if use_extra_data and self.split == 'train':
-            self._init_extra_data_lazy()
+        if use_soccer_factory_data and self.split == 'train':
+            self._init_soccer_factory_data_lazy()
             
         self.set_sample_position()
             
@@ -117,7 +114,7 @@ class SoccerNetGSR_Detection(Dataset):
                 "height": 1080,
                 "length": int(metadata['info']['seq_length']),
                 "is_static": False,
-                "is_extra_data": False,
+                "is_soccer_factory_data": False,
             }
         return sequence_infos
 
@@ -138,7 +135,7 @@ class SoccerNetGSR_Detection(Dataset):
     def _get_image_path(sequence_dir, frame_idx):
         return str(os.path.join(sequence_dir, "img1", f"{frame_idx+1:06d}.jpg"))    # the image name is 1-indexed
             
-    def _init_annotations(self, sequence_names, extra_data=False):
+    def _init_annotations(self, sequence_names, soccer_factory_data=False):
         annotations = dict()
         for sequence_name in sequence_names:
             annotations[sequence_name] = []
@@ -155,10 +152,6 @@ class SoccerNetGSR_Detection(Dataset):
                     "digit_head": [],
                     "digit_tail": [],
                     "legibility_score": [],
-                    "valid_camera": torch.tensor(False, dtype=torch.bool),
-                    "intrinsic": torch.zeros((3, 3), dtype=torch.float32),
-                    "translation": torch.zeros((3, ), dtype=torch.float32),
-                    "rotation_matrix": torch.eye(3, dtype=torch.float32),
                     "lines": {},
                 })
         return annotations
@@ -265,29 +258,6 @@ class SoccerNetGSR_Detection(Dataset):
                 else:
                     raise ValueError(f"Unknown annotation: {anno}")
                 
-            # Load the camera parameters:
-            camera_path = os.path.join(self.data_dir, "camera_params", self.split, f"{sequence_name}.json")
-            camera_params = json.load(open(camera_path))
-            for frame_id, value in camera_params.items():
-                frame_idx = int(frame_id[-6:]) - 1
-                
-                params = None
-                if value["ransac_params"] is None:
-                    params = value["all_points_params"]
-                else:
-                    all_reprojection_error_by_ransac = value["all_reprojection_error_by_ransac"]
-                    all_points_params_reprojection_error = value["all_points_params"]["reprojection_error"]
-                    if all_reprojection_error_by_ransac < all_points_params_reprojection_error:
-                        params = value["ransac_params"]
-                    else:
-                        params = value["all_points_params"]
-                assert params is not None, f"Camera parameters are not found for frame {frame_id} in sequence {sequence_name}."
-                
-                annotations[sequence_name][frame_idx]["valid_camera"] = torch.tensor(True, dtype=torch.bool)
-                annotations[sequence_name][frame_idx]["intrinsic"] = torch.tensor([[params["x_focal_length"], 0, params["principal_point"][0]], [0, params["y_focal_length"], params["principal_point"][1]], [0, 0, 1]])
-                annotations[sequence_name][frame_idx]["translation"] = torch.tensor(params["position_meters"])
-                annotations[sequence_name][frame_idx]["rotation_matrix"] = torch.tensor(params["rotation_matrix"])
-        
         # Convert lists to tensors in a single operation per frame
         for sequence_name in sequence_names:
             for i in range(self.sequence_infos[sequence_name]["length"]):
@@ -320,32 +290,32 @@ class SoccerNetGSR_Detection(Dataset):
                 annotations[sequence_name][i]["is_legal"] = is_legal(annotations[sequence_name][i])
         return annotations
     
-    def _init_extra_data_lazy(self):
+    def _init_soccer_factory_data_lazy(self):
         """
         Initialize extra data lazily: only load metadata and paths, not actual annotations.
         """
-        extra_data_dir = os.path.dirname(self.extra_data_path)
-        if self.extra_data_path.endswith('.pkl'):
-            extra_data_dir = self.extra_data_path.replace('.pkl', '')
+        soccer_factory_data_dir = os.path.dirname(self.soccer_factory_data_path)
+        if self.soccer_factory_data_path.endswith('.pkl'):
+            soccer_factory_data_dir = self.soccer_factory_data_path.replace('.pkl', '')
         
         # check directory exists
-        if not os.path.exists(extra_data_dir):
-            print(f"Warning: Extra data directory not found: {extra_data_dir}")
+        if not os.path.exists(soccer_factory_data_dir):
+            print(f"Warning: Extra data directory not found: {soccer_factory_data_dir}")
             print("Please run split_extracted_info.py first to split the pkl file.")
             return
         
-        pkl_files = [f for f in os.listdir(extra_data_dir) if f.endswith('.pkl')]
+        pkl_files = [f for f in os.listdir(soccer_factory_data_dir) if f.endswith('.pkl')]
         
-        if self.use_extra_data_amount >= 0:
+        if self.use_soccer_factory_data_amount >= 0:
             pkl_files_with_idx = [(f, int(f.split('-')[-1].replace('.pkl', '')[-5:])) for f in pkl_files]
             pkl_files_with_idx.sort(key=lambda x: x[1])
-            pkl_files = [f for f, idx in pkl_files_with_idx[:self.use_extra_data_amount]]
+            pkl_files = [f for f, idx in pkl_files_with_idx[:self.use_soccer_factory_data_amount]]
         
         print(f"Found {len(pkl_files)} extra data sequences to load lazily")
         
         for pkl_file in pkl_files:
             processed_sequence_name = pkl_file.replace('.pkl', '')
-            pkl_path = os.path.join(extra_data_dir, pkl_file)
+            pkl_path = os.path.join(soccer_factory_data_dir, pkl_file)
             
             with open(pkl_path, 'rb') as f:
                 sequence_data = pickle.load(f)
@@ -357,11 +327,11 @@ class SoccerNetGSR_Detection(Dataset):
                 "height": 1080,
                 "length": num_frames,
                 "is_static": False,
-                "is_extra_data": True,
+                "is_soccer_factory_data": True,
             }
             
-            self.extra_data_sequences.add(processed_sequence_name)
-            self.extra_data_pkl_paths[processed_sequence_name] = pkl_path
+            self.soccer_factory_data_sequences.add(processed_sequence_name)
+            self.soccer_factory_data_pkl_paths[processed_sequence_name] = pkl_path
             
             sequence_dir = self._get_sequence_dir(self.data_dir, 'sn500', processed_sequence_name)
             for i in range(num_frames):
@@ -377,7 +347,7 @@ class SoccerNetGSR_Detection(Dataset):
         
         print(f"Lazy load initialization completed for {len(pkl_files)} sequences")
     
-    def _process_extra_data_frame(self, sequence_name, frame_id, frame_data):
+    def _process_soccer_factory_data_frame(self, sequence_name, frame_id, frame_data):
         """
         Process a single frame's data and convert it to an annotation dict.
 
@@ -468,7 +438,7 @@ class SoccerNetGSR_Detection(Dataset):
         
         return frame_annotation
     
-    def _load_extra_data_frames(self, sequence_name, frame_indices):
+    def _load_soccer_factory_data_frames(self, sequence_name, frame_indices):
         """
         Load annotations for multiple frames from disk, reading the pkl file once.
 
@@ -479,7 +449,7 @@ class SoccerNetGSR_Detection(Dataset):
         Returns:
             List of frame annotation dicts.
         """
-        pkl_path = self.extra_data_pkl_paths[sequence_name]
+        pkl_path = self.soccer_factory_data_pkl_paths[sequence_name]
         with open(pkl_path, 'rb') as f:
             sequence_data = pickle.load(f)
         
@@ -489,7 +459,7 @@ class SoccerNetGSR_Detection(Dataset):
             
             if frame_id in sequence_data:
                 frame_data = sequence_data[frame_id]
-                frame_annotation = self._process_extra_data_frame(sequence_name, frame_id, frame_data)
+                frame_annotation = self._process_soccer_factory_data_frame(sequence_name, frame_id, frame_data)
             else:
                 frame_annotation = {
                     "id": torch.zeros((0, ), dtype=torch.int64),
@@ -513,26 +483,26 @@ class SoccerNetGSR_Detection(Dataset):
         
         return annotations
     
-    def _get_extra_data_image_paths(self, extra_data):
+    def _get_soccer_factory_data_image_paths(self, soccer_factory_data):
         """
         Get image paths for extra data sequences
         """
         image_paths = defaultdict(list)
         
-        sequence_names = list(set(extra_data.keys()))
+        sequence_names = list(set(soccer_factory_data.keys()))
         
         processed_sequence_names = [f'SNGS-{name}' for name in sequence_names]
         
         for name, processed_sequence_name in zip(sequence_names, processed_sequence_names):
             sequence_dir = self._get_sequence_dir(self.data_dir, 'sn500', processed_sequence_name)
             
-            num_frames = len(extra_data[name])
+            num_frames = len(soccer_factory_data[name])
             self.sequence_infos[processed_sequence_name] = {
                 "width": 1920,
                 "height": 1080,
                 "length": num_frames,
                 "is_static": False,
-                "is_extra_data": True,
+                "is_soccer_factory_data": True,
             }
             
             sequence_length = self.sequence_infos[processed_sequence_name]["length"]
@@ -543,19 +513,19 @@ class SoccerNetGSR_Detection(Dataset):
         
         return image_paths
     
-    def _get_extra_data_annotations(self, extra_data):
+    def _get_soccer_factory_data_annotations(self, soccer_factory_data):
         
-        processed_sequence_names = [f'SNGS-{vid}' for vid in extra_data.keys()]
-        annotations = self._init_annotations(processed_sequence_names, extra_data=True)
+        processed_sequence_names = [f'SNGS-{vid}' for vid in soccer_factory_data.keys()]
+        annotations = self._init_annotations(processed_sequence_names, soccer_factory_data=True)
         
-        for vid in extra_data.keys():
+        for vid in soccer_factory_data.keys():
             processed_sequence_name = f'SNGS-{vid}'
             sequence_length = self.sequence_infos[processed_sequence_name]["length"]
-            for frame_id in extra_data[vid].keys():
+            for frame_id in soccer_factory_data[vid].keys():
                 frame_idx = frame_id - 1
 
-                if 'people' in extra_data[vid][frame_id].keys():
-                    for person in extra_data[vid][frame_id]['people']:
+                if 'people' in soccer_factory_data[vid][frame_id].keys():
+                    for person in soccer_factory_data[vid][frame_id]['people']:
                         annotations[processed_sequence_name][frame_idx]["id"].append(person['id'])
                         annotations[processed_sequence_name][frame_idx]["category"].append(0)
                         annotations[processed_sequence_name][frame_idx]["bbox"].append(person['bbox_ltwh'].tolist())
@@ -583,10 +553,10 @@ class SoccerNetGSR_Detection(Dataset):
                             annotations[processed_sequence_name][frame_idx]["digit_head"].append(digit_head_mapping[None])
                             annotations[processed_sequence_name][frame_idx]["digit_tail"].append(digit_tail_mapping[None])
                             
-                if extra_data[vid][frame_id]['valid_cam_params']:
-                    K = extra_data[vid][frame_id]["K"]
-                    R = extra_data[vid][frame_id]["R"]
-                    P = extra_data[vid][frame_id]["P"]
+                if soccer_factory_data[vid][frame_id]['valid_cam_params']:
+                    K = soccer_factory_data[vid][frame_id]["K"]
+                    R = soccer_factory_data[vid][frame_id]["R"]
+                    P = soccer_factory_data[vid][frame_id]["P"]
                     annotations[processed_sequence_name][frame_idx]["K"] = K
                     annotations[processed_sequence_name][frame_idx]["R"] = R
                     annotations[processed_sequence_name][frame_idx]["P"] = P
@@ -646,13 +616,13 @@ class SoccerNetGSR_Detection(Dataset):
         """
         Set the position of each legal sample.
         For test split in video mode, only frames where frame_idx % num_frames == 0 can be starting points.
-        For train split in video mode with extra_data, only frames where frame_idx % num_frames == 0 can be starting points.
+        For train split in video mode with soccer_factory_data, only frames where frame_idx % num_frames == 0 can be starting points.
         Also ensures that starting position + num_frames doesn't exceed sequence length.
         """
         self.sample_position = list()
         for sequence_name in self.annotations:
             sequence_length = self.sequence_infos[sequence_name]["length"]
-            is_extra_data = self.sequence_infos[sequence_name].get("is_extra_data", False)
+            is_soccer_factory_data = self.sequence_infos[sequence_name].get("is_soccer_factory_data", False)
             
             for frame_idx in range(len(self.annotations[sequence_name])):
                 if self.annotations[sequence_name][frame_idx]["is_legal"]:
@@ -664,7 +634,7 @@ class SoccerNetGSR_Detection(Dataset):
                             self.sample_position.append((sequence_name, frame_idx))
                     elif (self.detection_data_type == "video" and 
                         self.backbone_type == "video" and 
-                        self.split == "train") and self.use_extra_data:
+                        self.split == "train") and self.use_soccer_factory_data:
                         if (frame_idx % self.num_frames == 0 and 
                             frame_idx + self.num_frames <= sequence_length):
                             self.sample_position.append((sequence_name, frame_idx))
@@ -680,18 +650,11 @@ class SoccerNetGSR_Detection(Dataset):
     def format_data(self, image, annotation, metas):
         if self.transforms is not None:
             image, annotation, metas = self.transforms(image, annotation, metas)
-            
+
         annotation['boxes'] = annotation['bbox']
         annotation['labels'] = annotation['category']
         annotation['roles'] = annotation['role']
-        
-        if self.train_camera_regression:
-            annotation['quaternion'] = mat_to_quat(annotation['rotation_matrix'].unsqueeze(0)).squeeze(0)
-            H, W = metas['image_size']
-            fov_h = 2 * torch.atan((H / 2) / annotation['intrinsic'][1, 1])
-            fov_w = 2 * torch.atan((W / 2) / annotation['intrinsic'][0, 0])
-            annotation['fov_hw'] = torch.stack([fov_h, fov_w])
-        
+
         return image, annotation, metas
         
     
@@ -710,9 +673,9 @@ class SoccerNetGSR_Detection(Dataset):
                 image = Image.open(image_path).convert("RGB")
                 images.append(image)
             
-            if sequence_name in self.extra_data_sequences:
+            if sequence_name in self.soccer_factory_data_sequences:
                 frame_indices = list(range(start_frame, end_frame))
-                annotations = self._load_extra_data_frames(sequence_name, frame_indices)
+                annotations = self._load_soccer_factory_data_frames(sequence_name, frame_indices)
             else:
                 annotations = []
                 for i in range(start_frame, end_frame):
@@ -739,8 +702,8 @@ class SoccerNetGSR_Detection(Dataset):
             image_path = self.image_paths[sequence_name][frame_idx]
             image = Image.open(image_path).convert("RGB")
             
-            if sequence_name in self.extra_data_sequences:
-                annotations = self._load_extra_data_frames(sequence_name, [frame_idx])
+            if sequence_name in self.soccer_factory_data_sequences:
+                annotations = self._load_soccer_factory_data_frames(sequence_name, [frame_idx])
                 annotation = annotations[0]
             else:
                 annotation = copy.deepcopy(self.annotations[sequence_name][frame_idx])
@@ -757,7 +720,6 @@ class SoccerNetGSR_Detection(Dataset):
 def build_gsr_detection_dataset(config: dict, split: str):
     assert 'SoccerNetGSR_Detection' in config['DATASETS_TO_HEADS'], "SoccerNetGSR_Detection must be in DATASETS_TO_HEADS"
     train_keypoints_or_lines_detection = 'LinesDetection' in config['DATASETS_TO_HEADS']['SoccerNetGSR_Detection'] or 'KeypointsDetection' in config['DATASETS_TO_HEADS']['SoccerNetGSR_Detection']
-    train_camera_regression = 'CameraRegression' in config['DATASETS_TO_HEADS']['SoccerNetGSR_Detection']
     
     dataset = SoccerNetGSR_Detection(
         data_root=config["DATA_ROOT"],
@@ -772,12 +734,11 @@ def build_gsr_detection_dataset(config: dict, split: str):
         image_input_size=config["AUG_MAX_SIZE"],
         detect_ball=config["DETR_DETECT_BALL"],
         detect_ball_only=config["DETECT_BALL_ONLY"],
-        use_extra_data=config["USE_EXTRA_DATA"],
-        extra_data_path=config["EXTRA_DATA_PATH"],
-        extra_data_only=config["EXTRA_DATA_ONLY"],
-        use_extra_data_amount=config["USE_EXTRA_DATA_AMOUNT"],
+        use_soccer_factory_data=config["USE_EXTRA_DATA"],
+        soccer_factory_data_path=config["EXTRA_DATA_PATH"],
+        soccer_factory_data_only=config["EXTRA_DATA_ONLY"],
+        use_soccer_factory_data_amount=config["USE_EXTRA_DATA_AMOUNT"],
         train_keypoints_or_lines_detection=train_keypoints_or_lines_detection,
-        train_camera_regression=train_camera_regression,
     )
     return dataset
 
@@ -1077,119 +1038,3 @@ def collate_fn(batch):
         "metas": metas,
     }
     
-def quat_to_mat(quaternions: torch.Tensor) -> torch.Tensor:
-    """
-    Quaternion Order: XYZW or say ijkr, scalar-last
-
-    Convert rotations given as quaternions to rotation matrices.
-    Args:
-        quaternions: quaternions with real part last,
-            as tensor of shape (..., 4).
-
-    Returns:
-        Rotation matrices as tensor of shape (..., 3, 3).
-    """
-    i, j, k, r = torch.unbind(quaternions, -1)
-    # pyre-fixme[58]: `/` is not supported for operand types `float` and `Tensor`.
-    two_s = 2.0 / (quaternions * quaternions).sum(-1)
-
-    o = torch.stack(
-        (
-            1 - two_s * (j * j + k * k),
-            two_s * (i * j - k * r),
-            two_s * (i * k + j * r),
-            two_s * (i * j + k * r),
-            1 - two_s * (i * i + k * k),
-            two_s * (j * k - i * r),
-            two_s * (i * k - j * r),
-            two_s * (j * k + i * r),
-            1 - two_s * (i * i + j * j),
-        ),
-        -1,
-    )
-    return o.reshape(quaternions.shape[:-1] + (3, 3))
-    
-def mat_to_quat(matrix: torch.Tensor) -> torch.Tensor:
-    """
-    Convert rotations given as rotation matrices to quaternions.
-
-    Args:
-        matrix: Rotation matrices as tensor of shape (..., 3, 3).
-
-    Returns:
-        quaternions with real part last, as tensor of shape (..., 4).
-        Quaternion Order: XYZW or say ijkr, scalar-last
-    """
-    if matrix.size(-1) != 3 or matrix.size(-2) != 3:
-        raise ValueError(f"Invalid rotation matrix shape {matrix.shape}.")
-
-    batch_dim = matrix.shape[:-2]
-    m00, m01, m02, m10, m11, m12, m20, m21, m22 = torch.unbind(matrix.reshape(batch_dim + (9,)), dim=-1)
-
-    q_abs = _sqrt_positive_part(
-        torch.stack(
-            [1.0 + m00 + m11 + m22, 1.0 + m00 - m11 - m22, 1.0 - m00 + m11 - m22, 1.0 - m00 - m11 + m22], dim=-1
-        )
-    )
-
-    # we produce the desired quaternion multiplied by each of r, i, j, k
-    quat_by_rijk = torch.stack(
-        [
-            # pyre-fixme[58]: `**` is not supported for operand types `Tensor` and
-            #  `int`.
-            torch.stack([q_abs[..., 0] ** 2, m21 - m12, m02 - m20, m10 - m01], dim=-1),
-            # pyre-fixme[58]: `**` is not supported for operand types `Tensor` and
-            #  `int`.
-            torch.stack([m21 - m12, q_abs[..., 1] ** 2, m10 + m01, m02 + m20], dim=-1),
-            # pyre-fixme[58]: `**` is not supported for operand types `Tensor` and
-            #  `int`.
-            torch.stack([m02 - m20, m10 + m01, q_abs[..., 2] ** 2, m12 + m21], dim=-1),
-            # pyre-fixme[58]: `**` is not supported for operand types `Tensor` and
-            #  `int`.
-            torch.stack([m10 - m01, m20 + m02, m21 + m12, q_abs[..., 3] ** 2], dim=-1),
-        ],
-        dim=-2,
-    )
-
-    # We floor here at 0.1 but the exact level is not important; if q_abs is small,
-    # the candidate won't be picked.
-    flr = torch.tensor(0.1).to(dtype=q_abs.dtype, device=q_abs.device)
-    quat_candidates = quat_by_rijk / (2.0 * q_abs[..., None].max(flr))
-
-    # if not for numerical problems, quat_candidates[i] should be same (up to a sign),
-    # forall i; we pick the best-conditioned one (with the largest denominator)
-    out = quat_candidates[F.one_hot(q_abs.argmax(dim=-1), num_classes=4) > 0.5, :].reshape(batch_dim + (4,))
-
-    # Convert from rijk to ijkr
-    out = out[..., [1, 2, 3, 0]]
-
-    out = standardize_quaternion(out)
-
-    return out
-
-def _sqrt_positive_part(x: torch.Tensor) -> torch.Tensor:
-    """
-    Returns torch.sqrt(torch.max(0, x))
-    but with a zero subgradient where x is 0.
-    """
-    ret = torch.zeros_like(x)
-    positive_mask = x > 0
-    if torch.is_grad_enabled():
-        ret[positive_mask] = torch.sqrt(x[positive_mask])
-    else:
-        ret = torch.where(positive_mask, torch.sqrt(x), ret)
-    return ret
-
-def standardize_quaternion(quaternions: torch.Tensor) -> torch.Tensor:
-    """
-    Convert a unit quaternion to a standard form: one in which the real
-    part is non negative.
-
-    Args:
-        quaternions: Quaternions with real part last,
-            as tensor of shape (..., 4).
-
-    Returns:
-        Standardized quaternions as tensor of shape (..., 4).
-    """
-    return torch.where(quaternions[..., 3:4] < 0, -quaternions, quaternions)
