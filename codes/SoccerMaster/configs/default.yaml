@@ -140,10 +140,11 @@ BACKBONE_USE_TEMPORAL_GATE: True  # whether to use the temporal embedding gate m
 NUM_CLASSES: 1 # person
 DETR_DETECT_BALL: False # whether to also detect ball (if True, NUM_CLASSES will be automatically set to 2)
 DETECT_BALL_ONLY: False # whether to only detect ball and exclude person (if True, only ball will be detected)
-USE_EXTRA_DATA: True
-EXTRA_DATA_PATH: ./datasets/SoccerNetGS/extracted_info.pkl
-EXTRA_DATA_ONLY: False
-USE_EXTRA_DATA_AMOUNT: 7000 # -1: use all extra data, >=0: use first N extra data
+USE_SOCCER_FACTORY_DATA: True
+SOCCER_FACTORY_DATA_DIR: ./datasets/SoccerNetGS/extracted_info
+SOCCER_FACTORY_DATA_IMAGE_DIR: ./datasets/SoccerNetGS/sn500
+SOCCER_FACTORY_DATA_ONLY: False
+USE_SOCCER_FACTORY_DATA_AMOUNT: 7000 # -1: use all soccer factory data, >=0: use first N soccer factory data
 DETR_ENABLE_ROLE_CLASSIFICATION: True # whether to enable role classification head
 DETR_ENABLE_JN_CLASSIFICATION: True # whether to enable jersey number classification heads (jn_holistic, digit_head, digit_tail)
 DILATION: False

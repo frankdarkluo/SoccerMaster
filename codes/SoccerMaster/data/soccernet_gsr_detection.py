@@ -43,7 +43,8 @@ class SoccerNetGSR_Detection(Dataset):
             detect_ball: bool = False,
             detect_ball_only: bool = False,
             use_soccer_factory_data: bool = False,
-            soccer_factory_data_path: str = "",
+            soccer_factory_data_dir: str = "",
+            soccer_factory_data_image_dir: str = "",
             soccer_factory_data_only: bool = False,
             use_soccer_factory_data_amount: int = -1,
             train_keypoints_or_lines_detection: bool = True,
@@ -63,7 +64,8 @@ class SoccerNetGSR_Detection(Dataset):
         self.detect_ball = detect_ball
         self.detect_ball_only = detect_ball_only
         self.use_soccer_factory_data = use_soccer_factory_data
-        self.soccer_factory_data_path = soccer_factory_data_path
+        self.soccer_factory_data_dir = soccer_factory_data_dir
+        self.soccer_factory_data_image_dir = soccer_factory_data_image_dir
         self.soccer_factory_data_only = soccer_factory_data_only
         self.use_soccer_factory_data_amount = use_soccer_factory_data_amount
         self.train_keypoints_or_lines_detection = train_keypoints_or_lines_detection
@@ -292,36 +294,53 @@ class SoccerNetGSR_Detection(Dataset):
     
     def _init_soccer_factory_data_lazy(self):
         """
-        Initialize extra data lazily: only load metadata and paths, not actual annotations.
+        Initialize soccer factory data lazily: only load metadata and paths, not actual annotations.
+        Supports both .json and .pkl files (prefers .json if available).
         """
-        soccer_factory_data_dir = os.path.dirname(self.soccer_factory_data_path)
-        if self.soccer_factory_data_path.endswith('.pkl'):
-            soccer_factory_data_dir = self.soccer_factory_data_path.replace('.pkl', '')
-        
+        soccer_factory_data_dir = self.soccer_factory_data_dir
+
         # check directory exists
         if not os.path.exists(soccer_factory_data_dir):
-            print(f"Warning: Extra data directory not found: {soccer_factory_data_dir}")
-            print("Please run split_extracted_info.py first to split the pkl file.")
+            print(f"Warning: Soccer factory data directory not found: {soccer_factory_data_dir}")
             return
-        
+
+        # Prefer .json files; fall back to .pkl if no .json found
+        json_files = [f for f in os.listdir(soccer_factory_data_dir) if f.endswith('.json')]
         pkl_files = [f for f in os.listdir(soccer_factory_data_dir) if f.endswith('.pkl')]
-        
+
+        if len(json_files) > 0:
+            data_files = json_files
+            self._soccer_factory_data_format = 'json'
+            ext = '.json'
+        elif len(pkl_files) > 0:
+            data_files = pkl_files
+            self._soccer_factory_data_format = 'pkl'
+            ext = '.pkl'
+        else:
+            print(f"Warning: No .json or .pkl files found in: {soccer_factory_data_dir}")
+            return
+
         if self.use_soccer_factory_data_amount >= 0:
-            pkl_files_with_idx = [(f, int(f.split('-')[-1].replace('.pkl', '')[-5:])) for f in pkl_files]
-            pkl_files_with_idx.sort(key=lambda x: x[1])
-            pkl_files = [f for f, idx in pkl_files_with_idx[:self.use_soccer_factory_data_amount]]
-        
-        print(f"Found {len(pkl_files)} extra data sequences to load lazily")
-        
-        for pkl_file in pkl_files:
-            processed_sequence_name = pkl_file.replace('.pkl', '')
-            pkl_path = os.path.join(soccer_factory_data_dir, pkl_file)
-            
-            with open(pkl_path, 'rb') as f:
-                sequence_data = pickle.load(f)
+            data_files_with_idx = [(f, int(f.split('-')[-1].replace(ext, '')[-5:])) for f in data_files]
+            data_files_with_idx.sort(key=lambda x: x[1])
+            data_files = [f for f, idx in data_files_with_idx[:self.use_soccer_factory_data_amount]]
+
+        print(f"Found {len(data_files)} extra data sequences ({self._soccer_factory_data_format}) to load lazily")
+
+        for data_file in data_files:
+            processed_sequence_name = data_file.replace(ext, '')
+            data_path = os.path.join(soccer_factory_data_dir, data_file)
+
+            # Load only to get num_frames
+            if self._soccer_factory_data_format == 'json':
+                with open(data_path, 'r', encoding='utf-8') as f:
+                    sequence_data = json.load(f)
+            else:
+                with open(data_path, 'rb') as f:
+                    sequence_data = pickle.load(f)
             num_frames = len(sequence_data)
             del sequence_data
-            
+
             self.sequence_infos[processed_sequence_name] = {
                 "width": 1920,
                 "height": 1080,
@@ -329,23 +348,23 @@ class SoccerNetGSR_Detection(Dataset):
                 "is_static": False,
                 "is_soccer_factory_data": True,
             }
-            
+
             self.soccer_factory_data_sequences.add(processed_sequence_name)
-            self.soccer_factory_data_pkl_paths[processed_sequence_name] = pkl_path
-            
-            sequence_dir = self._get_sequence_dir(self.data_dir, 'sn500', processed_sequence_name)
+            self.soccer_factory_data_pkl_paths[processed_sequence_name] = data_path
+
+            sequence_dir = os.path.join(self.soccer_factory_data_image_dir, processed_sequence_name)
             for i in range(num_frames):
                 image_path = self._get_image_path(sequence_dir, i)
                 self.image_paths[processed_sequence_name].append(image_path)
-            
+
             self.annotations[processed_sequence_name] = []
             for i in range(num_frames):
                 self.annotations[processed_sequence_name].append({
                     "is_legal": True,
                     "lazy_load": True,
                 })
-        
-        print(f"Lazy load initialization completed for {len(pkl_files)} sequences")
+
+        print(f"Lazy load initialization completed for {len(data_files)} sequences")
     
     def _process_soccer_factory_data_frame(self, sequence_name, frame_id, frame_data):
         """
@@ -375,7 +394,9 @@ class SoccerNetGSR_Detection(Dataset):
             for person in frame_data['people']:
                 frame_annotation["id"].append(person['id'])
                 frame_annotation["category"].append(0)
-                frame_annotation["bbox"].append(person['bbox_ltwh'].tolist())
+                # Support both numpy array (pkl) and list (json)
+                bbox = person['bbox_ltwh']
+                frame_annotation["bbox"].append(bbox.tolist() if hasattr(bbox, 'tolist') else bbox)
                 frame_annotation["visibility"].append(1.0)
                 frame_annotation["role"].append(role_mapping[person['role']])
                 frame_annotation["legibility_score"].append(person['legibility_score'])
@@ -403,9 +424,12 @@ class SoccerNetGSR_Detection(Dataset):
         if frame_data['valid_cam_params']:
             frame_annotation["valid_lines"] = True
             frame_annotation["valid_keypoints"] = True
+            # Ensure K and R are numpy arrays (they may be lists from JSON)
+            K = np.array(frame_data["K"]) if not isinstance(frame_data["K"], np.ndarray) else frame_data["K"]
+            R = np.array(frame_data["R"]) if not isinstance(frame_data["R"], np.ndarray) else frame_data["R"]
             frame_annotation["lines"] = correct_lines_labels(get_visible_lines_coords(
-                frame_data["K"], frame_data["R"], 
-                self.sequence_infos[sequence_name]["height"], 
+                K, R,
+                self.sequence_infos[sequence_name]["height"],
                 self.sequence_infos[sequence_name]["width"]))
         else:
             frame_annotation["valid_lines"] = False
@@ -440,7 +464,8 @@ class SoccerNetGSR_Detection(Dataset):
     
     def _load_soccer_factory_data_frames(self, sequence_name, frame_indices):
         """
-        Load annotations for multiple frames from disk, reading the pkl file once.
+        Load annotations for multiple frames from disk, reading the data file once.
+        Supports both .json and .pkl formats.
 
         Args:
             sequence_name: e.g. 'SNGS-0001'.
@@ -449,16 +474,23 @@ class SoccerNetGSR_Detection(Dataset):
         Returns:
             List of frame annotation dicts.
         """
-        pkl_path = self.soccer_factory_data_pkl_paths[sequence_name]
-        with open(pkl_path, 'rb') as f:
-            sequence_data = pickle.load(f)
-        
+        data_path = self.soccer_factory_data_pkl_paths[sequence_name]
+
+        if data_path.endswith('.json'):
+            with open(data_path, 'r', encoding='utf-8') as f:
+                sequence_data = json.load(f)
+        else:
+            with open(data_path, 'rb') as f:
+                sequence_data = pickle.load(f)
+
         annotations = []
         for frame_idx in frame_indices:
             frame_id = frame_idx + 1
-            
-            if frame_id in sequence_data:
-                frame_data = sequence_data[frame_id]
+            # JSON keys are always strings; pkl keys may be int
+            frame_key = str(frame_id) if data_path.endswith('.json') else frame_id
+
+            if frame_key in sequence_data:
+                frame_data = sequence_data[frame_key]
                 frame_annotation = self._process_soccer_factory_data_frame(sequence_name, frame_id, frame_data)
             else:
                 frame_annotation = {
@@ -476,11 +508,11 @@ class SoccerNetGSR_Detection(Dataset):
                     "lines": {},
                     "is_legal": True,
                 }
-            
+
             annotations.append(frame_annotation)
-        
+
         del sequence_data
-        
+
         return annotations
     
     def _get_soccer_factory_data_image_paths(self, soccer_factory_data):
@@ -494,7 +526,7 @@ class SoccerNetGSR_Detection(Dataset):
         processed_sequence_names = [f'SNGS-{name}' for name in sequence_names]
         
         for name, processed_sequence_name in zip(sequence_names, processed_sequence_names):
-            sequence_dir = self._get_sequence_dir(self.data_dir, 'sn500', processed_sequence_name)
+            sequence_dir = os.path.join(self.soccer_factory_data_image_dir, processed_sequence_name)
             
             num_frames = len(soccer_factory_data[name])
             self.sequence_infos[processed_sequence_name] = {
@@ -734,10 +766,11 @@ def build_gsr_detection_dataset(config: dict, split: str):
         image_input_size=config["AUG_MAX_SIZE"],
         detect_ball=config["DETR_DETECT_BALL"],
         detect_ball_only=config["DETECT_BALL_ONLY"],
-        use_soccer_factory_data=config["USE_EXTRA_DATA"],
-        soccer_factory_data_path=config["EXTRA_DATA_PATH"],
-        soccer_factory_data_only=config["EXTRA_DATA_ONLY"],
-        use_soccer_factory_data_amount=config["USE_EXTRA_DATA_AMOUNT"],
+        use_soccer_factory_data=config["USE_SOCCER_FACTORY_DATA"],
+        soccer_factory_data_dir=config["SOCCER_FACTORY_DATA_DIR"],
+        soccer_factory_data_image_dir=config["SOCCER_FACTORY_DATA_IMAGE_DIR"],
+        soccer_factory_data_only=config["SOCCER_FACTORY_DATA_ONLY"],
+        use_soccer_factory_data_amount=config["USE_SOCCER_FACTORY_DATA_AMOUNT"],
         train_keypoints_or_lines_detection=train_keypoints_or_lines_detection,
     )
     return dataset
