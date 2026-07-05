@@ -101,48 +101,63 @@ def run_stage1(config: PipelineConfig) -> None:
 
 
 def run_stage2(config: PipelineConfig) -> int:
-    from pipeline.stage2_events.detector import EventDetector
+    from pipeline.stage2_events.detector import (
+        EventDetector,
+        compose_assists,
+        dedup_events,
+        load_frames,
+        write_events_json,
+    )
+    from pipeline.stage2_events.enricher import enrich_events
     from pipeline.stage2_events.schema import EventSchema
 
     schema = EventSchema()
+    frames = load_frames(str(config.predictions_json))
     detector = EventDetector(
-        schema,
-        fps=config.fps,
+        schema, fps=config.fps,
         shot_speed_threshold=config.ball_speed_shot_threshold_mps,
         min_gap_s=config.min_event_gap_s,
     )
     events = detector.detect(str(config.predictions_json))
 
-    if config.verify_events:
-        from pipeline.stage2_events.verify import verify_events
-        from pipeline.stage4_commentary.adapters.qwen_local import QwenLocalAdapter
+    video_info = {
+        "source": str(config.frames_dir), "fps": config.fps,
+        "duration_s": 30.0, "total_frames": config.fps * 30,
+    }
+    write_events_json(events, config.output_dir / "events_detected.json", video_info)
 
-        log.info("Verifying possession-derived events with Qwen2.5-VL ...")
-        adapter = QwenLocalAdapter(model_path=config.verify_model_path)
+    if config.verify_events:
+        from pipeline.stage2_events.verify import cleanup_verify_artifacts, verify_events
+        adapter = _build_verify_adapter(config)
+        log.info("Verifying events with %s ...", config.verify_backend)
         events, audit = verify_events(
-            events,
-            str(config.predictions_json),
-            config.frames_dir,
-            config.output_dir,
-            adapter,
-            fps=config.fps,
+            events, str(config.predictions_json), config.frames_dir, config.output_dir,
+            adapter, str(config.homography_json), fps=config.fps,
             window_s=config.verify_window_s,
             force=config.force,
         )
         dropped = sum(1 for a in audit if not a["kept"])
         log.info("Verification: %d checked, %d dropped", len(audit), dropped)
         if config.cleanup_verify_temp:
-            from pipeline.stage2_events.verify import cleanup_verify_artifacts
             cleanup_verify_artifacts(config.output_dir)
 
-    video_info = {
-        "source": str(config.frames_dir),
-        "fps": config.fps,
-        "duration_s": 30.0,
-        "total_frames": config.fps * 30,
-    }
-    detector.write_events_json(events, config.output_dir / "events.json", video_info)
+    events = enrich_events(dedup_events(compose_assists(events)), frames)
+    write_events_json(events, config.output_dir / "events.json", video_info)
     return len(events)
+
+
+def _build_verify_adapter(config: PipelineConfig):
+    if config.verify_backend == "qwen_local":
+        from pipeline.stage4_commentary.adapters.qwen_local import QwenLocalAdapter
+
+        return QwenLocalAdapter(model_path=config.verify_model_path)
+    if config.verify_backend == "doubao":
+        from pipeline.stage4_commentary.adapters.doubao_api import DoubaoAPIAdapter
+        from pipeline.stage4_commentary.generate import load_ark_env
+
+        load_ark_env()
+        return DoubaoAPIAdapter()
+    raise ValueError(f"Unknown verify backend: {config.verify_backend}")
 
 
 def run_stage3(config: PipelineConfig) -> None:
@@ -276,7 +291,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--verify-events",
         action="store_true",
-        help="Verify interception/pass events with local Qwen2.5-VL",
+        help="Verify interception/pass events with the configured VLM backend",
+    )
+    parser.add_argument(
+        "--verify-backend", default="doubao", choices=["doubao", "qwen_local"],
+        help="VLM backend for event verification (default: doubao)",
     )
     parser.add_argument(
         "--no-cleanup-verify-temp",
@@ -311,6 +330,7 @@ def config_from_args(args: argparse.Namespace) -> PipelineConfig:
         fps=args.fps,
         force=args.force,
         verify_events=args.verify_events,
+        verify_backend=args.verify_backend,
         cleanup_verify_temp=args.cleanup_verify_temp,
         topology_lines_enabled=not args.no_topology_lines,
         tts_backend=args.tts_backend,

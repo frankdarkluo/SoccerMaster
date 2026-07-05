@@ -51,6 +51,7 @@ class PipelineConfig:
     min_event_gap_s: float = 1.0
     ball_speed_shot_threshold_mps: float = 10.0
     verify_events: bool = False
+    verify_backend: str = "doubao"
     verify_window_s: float = 0.5
     verify_model_path: str = str(
         PRETRAINED_MODELS / "jn" / "Qwen2.5-VL-7B-Instruct"
