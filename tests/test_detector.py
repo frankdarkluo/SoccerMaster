@@ -89,3 +89,29 @@ def test_shot_attributes_shooter_and_goal_attributes_scorer():
     assert shots and shots[0].player_jersey is None     # emit shot even without last holder
     assert any(s.player_jersey == "9" for s in shots)   # shooter attributed once holder exists
     assert goals and goals[0].player_jersey == "9"      # scorer attributed (not null)
+
+
+def _clearance_frames():
+    # ball deep in left's own half (x≈-40), a defender clears it fast toward halfway.
+    frames = []
+    seq = {1: -40.0, 2: -40.0, 3: -40.0, 4: -34.0, 5: -28.0}  # fast move away from own goal
+    for f in range(1, 6):
+        bx = seq[f]
+        fd = FrameData(frame_id=f, ball_xy=(bx, 0.0))
+        fd.players = [{"track_id": 5, "x": max(bx, -40.0), "y": 0.0, "role": "player",
+                       "team": "left", "jersey": "5"}]
+        frames.append(fd)
+    return frames
+
+
+def test_clearance_is_attributed():
+    from pipeline.stage2_events.schema import EventSchema
+    frames = _clearance_frames()
+    det = EventDetector(EventSchema(), fps=25)
+    team = resolve_team_by_track(frames)
+    segs = possession_segments(frames, team, min_frames=3)
+    ball_pos = {f.frame_id: f.ball_xy for f in frames}
+    vel = det._velocities(ball_pos)
+    clears = det._clearances(vel, ball_pos, segs)
+    assert clears
+    assert clears[0].player_jersey == "5"   # was null in the old code
