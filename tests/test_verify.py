@@ -80,3 +80,44 @@ def test_prompt_mentions_outcome_and_reclassify_options():
     assert "outcome" in prompt and "corrected_event_code" in prompt
     # only in-family retypes offered
     assert "football.clearance" in prompt and "football.goal" not in prompt
+
+
+from pipeline.stage2_events.detector import EventDetector
+from pipeline.stage2_events.verify import verify_events, cleanup_verify_artifacts
+
+
+def test_verify_events_end_to_end_with_mock(tmp_path, predictions_file, homography_file,
+                                             frames_dir, mock_adapter):
+    events = EventDetector(EventSchema(), fps=25).detect(str(predictions_file))
+    adapter = mock_adapter(script={
+        "拦截": '{"verdict": "reject", "reason": "no"}',    # drop interception
+        "传球": '{"verdict": "confirm", "outcome": "success"}',  # keep pass
+    })
+    out_dir = tmp_path / "out"
+    verified, audit = verify_events(
+        events, str(predictions_file), frames_dir, out_dir, adapter,
+        str(homography_file), fps=25, window_s=0.2, force=False)
+    codes = [e.event_code for e in verified]
+    assert "football.pass" in codes
+    assert "football.interception" not in codes         # rejected -> dropped
+    assert (out_dir / "events_verification.json").exists()
+    # audit records verdict per checked event
+    assert any(a["verdict"] == "reject" and a["kept"] is False for a in audit)
+    # audit is self-describing: actor jersey/team present on every checked row
+    assert all("player_jersey" in a and "player_team" in a for a in audit)
+    int_row = next(a for a in audit if a["event_code"] == "football.interception")
+    assert int_row["player_team"] in ("left", "right")
+
+
+def test_verify_cache_skips_second_call(tmp_path, predictions_file, homography_file,
+                                        frames_dir, mock_adapter):
+    events = [e for e in EventDetector(EventSchema(), 25).detect(str(predictions_file))
+              if e.event_code == "football.pass"]
+    adapter = mock_adapter(default='{"verdict": "confirm"}')
+    out_dir = tmp_path / "out"
+    verify_events(events, str(predictions_file), frames_dir, out_dir, adapter,
+                  str(homography_file), fps=25, window_s=0.2)
+    n_first = len(adapter.calls)
+    verify_events(events, str(predictions_file), frames_dir, out_dir, adapter,
+                  str(homography_file), fps=25, window_s=0.2, force=False)
+    assert len(adapter.calls) == n_first   # cached -> no new adapter calls
