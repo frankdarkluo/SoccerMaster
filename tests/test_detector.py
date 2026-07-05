@@ -4,6 +4,7 @@ from pipeline.stage2_events.schema import EventSchema
 from pipeline.stage2_events.detector import EventDetector, dedup_events, write_events_json
 from pipeline.stage2_events.possession import resolve_team_by_track, possession_segments
 from pipeline.stage2_events.types import FrameData
+from pipeline.stage2_events.detector import compose_assists
 
 
 def _detect(predictions_file):
@@ -141,3 +142,25 @@ def test_write_raw_dump(tmp_path, predictions_file):
     data = _json.loads(out.read_text())
     assert data["schema_version"] == "v3-20260319"
     assert {e["event_code"] for e in data["events"]} >= {"football.pass", "football.interception"}
+
+
+def test_assist_composed_from_pass_then_goal():
+    from pipeline.stage2_events.schema import EventSchema
+    det = EventDetector(EventSchema(), fps=25)
+    p = det._make("football.pass", 100, player_jersey="7", player_team="left",
+                  target_jersey="9", target_team="left")   # t=4.0
+    g = det._make("football.goal", 150, player_jersey="9", player_team="left")  # t=6.0
+    out = compose_assists([p, g])
+    assists = [e for e in out if e.event_code == "football.assist"]
+    assert len(assists) == 1
+    assert assists[0].player_jersey == "7"       # passer credited
+
+
+def test_no_assist_when_pass_receiver_did_not_score():
+    from pipeline.stage2_events.schema import EventSchema
+    det = EventDetector(EventSchema(), fps=25)
+    p = det._make("football.pass", 100, player_jersey="7", player_team="left",
+                  target_jersey="8", target_team="left")
+    g = det._make("football.goal", 150, player_jersey="9", player_team="left")
+    out = compose_assists([p, g])
+    assert not [e for e in out if e.event_code == "football.assist"]
