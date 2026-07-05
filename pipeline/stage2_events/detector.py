@@ -169,7 +169,20 @@ class EventDetector:
         return events
 
     def _interceptions(self, segments: List[PossessionSegment]) -> List[Event]:
-        return []
+        events: List[Event] = []
+        for a, b in zip(segments, segments[1:]):
+            if a.team is None or b.team is None or a.team == b.team:
+                continue
+            events.append(self._make(
+                "football.interception",
+                b.start_fid,
+                player_jersey=b.jersey,
+                player_team=b.team,
+                track_id=b.track_id,
+                confidence=0.6,
+                description_hint="interception: cross-team possession win",
+            ))
+        return events
 
     def _dribbles(
         self,
