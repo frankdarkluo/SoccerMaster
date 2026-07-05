@@ -391,3 +391,34 @@ class EventDetector:
         }
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def dedup_events(events: List[Event]) -> List[Event]:
+    by_code: Dict[str, List[Event]] = {}
+    for ev in events:
+        by_code.setdefault(ev.event_code, []).append(ev)
+    kept: List[Event] = []
+    for code, group in by_code.items():
+        gap = EVENT_GAP_S.get(code, 1.0)
+        for ev in sorted(group, key=lambda e: e.timestamp_s):
+            if kept and kept[-1].event_code == code and ev.timestamp_s - kept[-1].timestamp_s < gap:
+                prev = kept[-1]
+                better = ev.importance > prev.importance or (
+                    ev.importance == prev.importance and ev.confidence > prev.confidence
+                )
+                if better:
+                    kept[-1] = ev
+            else:
+                kept.append(ev)
+    return sorted(kept, key=lambda e: e.timestamp_s)
+
+
+def write_events_json(events: List[Event], output_path, video_info: Optional[dict] = None) -> None:
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "video_info": video_info or {},
+        "schema_version": "v3-20260319",
+        "events": [e.to_dict() for e in events],
+    }
+    output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
