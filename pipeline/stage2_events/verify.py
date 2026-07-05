@@ -13,8 +13,11 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Optional
+import shutil
+from pathlib import Path
+from typing import List, Optional, Tuple
 
+from pipeline.stage2_events.evidence import build_bbox_index, build_evidence_frames, load_homography
 from pipeline.stage2_events.schema import EventSchema
 from pipeline.stage2_events.types import Event
 from pipeline.stage2_events.types import Verdict
@@ -161,3 +164,90 @@ def apply_verdict(event: Event, verdict: Verdict, schema: EventSchema) -> Option
         event.target_jersey = verdict.receiver_jersey
         event.target_team = event.player_team
     return event
+
+
+VERIFY_TEMP_DIRS = ("verify_cache", "verify_clips")
+
+
+def cleanup_verify_artifacts(output_dir: Path) -> None:
+    for name in VERIFY_TEMP_DIRS:
+        p = Path(output_dir) / name
+        if p.is_dir():
+            shutil.rmtree(p)
+
+
+def verify_events(
+    events: List[Event],
+    predictions_json_path: str,
+    frames_dir: Path,
+    output_dir: Path,
+    adapter,
+    homography_path: str,
+    fps: int = 25,
+    window_s: float = 0.5,
+    force: bool = False,
+) -> Tuple[List[Event], List[dict]]:
+    output_dir = Path(output_dir)
+    cache_dir = output_dir / "verify_cache"
+    clip_dir = output_dir / "verify_clips"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    schema = EventSchema()
+    bbox_index = build_bbox_index(predictions_json_path)
+    homo = load_homography(homography_path)
+
+    verified: List[Event] = []
+    audit: List[dict] = []
+
+    for event in events:
+        if event.event_code not in VERIFY_CODES or event.track_id is None:
+            verified.append(event)
+            continue
+
+        cache_path = cache_dir / f"{event.event_id}.json"
+        if cache_path.exists() and not force:
+            verdict = Verdict(**json.loads(cache_path.read_text(encoding="utf-8")))
+        else:
+            frames = build_evidence_frames(
+                event,
+                frames_dir,
+                bbox_index,
+                homo,
+                predictions_json_path,
+                clip_dir / event.event_id,
+                fps=fps,
+                window_s=window_s,
+            )
+            if not frames:
+                verdict = Verdict(verdict="uncertain", reason="no-frames")
+            else:
+                raw = adapter.generate(build_verify_prompt(event), frames)
+                verdict = parse_verdict(raw)
+            cache_path.write_text(
+                json.dumps(verdict.__dict__, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+        actor_jersey = event.player_jersey
+        actor_team = event.player_team
+        kept = apply_verdict(event, verdict, schema)
+        audit.append({
+            "event_id": event.event_id,
+            "event_code": event.event_code,
+            "timestamp_s": event.timestamp_s,
+            "player_jersey": actor_jersey,
+            "player_team": actor_team,
+            "verdict": verdict.verdict,
+            "outcome": verdict.outcome,
+            "corrected_event_code": verdict.corrected_event_code,
+            "reason": verdict.reason,
+            "kept": kept is not None,
+        })
+        if kept is not None:
+            verified.append(kept)
+
+    (output_dir / "events_verification.json").write_text(
+        json.dumps(audit, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return verified, audit
