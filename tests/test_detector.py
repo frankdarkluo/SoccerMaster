@@ -1,5 +1,7 @@
+import json as _json
+
 from pipeline.stage2_events.schema import EventSchema
-from pipeline.stage2_events.detector import EventDetector
+from pipeline.stage2_events.detector import EventDetector, dedup_events, write_events_json
 from pipeline.stage2_events.possession import resolve_team_by_track, possession_segments
 from pipeline.stage2_events.types import FrameData
 
@@ -115,3 +117,27 @@ def test_clearance_is_attributed():
     clears = det._clearances(vel, ball_pos, segs)
     assert clears
     assert clears[0].player_jersey == "5"   # was null in the old code
+
+
+def test_dedup_keeps_higher_importance_within_gap():
+    from pipeline.stage2_events.schema import EventSchema
+    det = EventDetector(EventSchema(), fps=25)
+    a = det._make("football.shoot", 100, confidence=0.95)   # t=4.0
+    a.importance = 0.2
+    b = det._make("football.shoot", 105, confidence=0.1)    # t=4.2 (< 1.0s gap)
+    b.importance = 0.9
+    c = det._make("football.pass", 50, confidence=0.8)      # t=2.0
+    kept = dedup_events([a, b, c])
+    assert [e.timestamp_s for e in kept] == sorted(e.timestamp_s for e in kept)
+    assert len([e for e in kept if e.event_code == "football.shoot"]) == 1
+    assert next(e for e in kept if e.event_code == "football.shoot") is b
+
+
+def test_write_raw_dump(tmp_path, predictions_file):
+    from pipeline.stage2_events.schema import EventSchema
+    events = EventDetector(EventSchema(), fps=25).detect(str(predictions_file))
+    out = tmp_path / "events_detected.json"
+    write_events_json(events, out, {"source": "FIXT", "fps": 25})
+    data = _json.loads(out.read_text())
+    assert data["schema_version"] == "v3-20260319"
+    assert {e["event_code"] for e in data["events"]} >= {"football.pass", "football.interception"}
