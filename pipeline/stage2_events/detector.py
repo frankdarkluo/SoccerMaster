@@ -422,3 +422,46 @@ def write_events_json(events: List[Event], output_path, video_info: Optional[dic
         "events": [e.to_dict() for e in events],
     }
     output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def compose_assists(events: List[Event]) -> List[Event]:
+    """Append assist events for a pass whose receiver scores within ASSIST_WINDOW_S.
+
+    Runs POST-verify so only surviving (confirmed/kept) passes and goals qualify.
+    """
+    schema = EventSchema()
+    goals = [e for e in events if e.event_code == "football.goal"]
+    passes = [e for e in events if e.event_code == "football.pass"]
+    ev_def = schema.get_event("football.assist")
+    display_name_en = ev_def.display_name_en
+    display_name_cn = ev_def.display_name_cn
+    importance_base = ev_def.importance_base
+    out = list(events)
+    counter = len(events)
+    for goal in goals:
+        cands = [
+            p for p in passes
+            if 0 < (goal.timestamp_s - p.timestamp_s) < ASSIST_WINDOW_S
+            and p.target_team == goal.player_team
+            and (p.target_jersey == goal.player_jersey or goal.player_jersey is None)
+        ]
+        if not cands:
+            continue
+        last = max(cands, key=lambda p: p.timestamp_s)
+        counter += 1
+        out.append(Event(
+            event_id=f"evt_{counter:03d}",
+            timestamp_s=last.timestamp_s,
+            frame_id=last.frame_id,
+            event_code="football.assist",
+            display_name_en=display_name_en,
+            display_name_cn=display_name_cn,
+            importance=importance_base,
+            player_jersey=last.player_jersey,
+            player_team=last.player_team,
+            target_jersey=last.target_jersey,
+            target_team=last.target_team,
+            confidence=0.8,
+            description_hint=f"assist: #{last.player_jersey} before goal",
+        ))
+    return out
