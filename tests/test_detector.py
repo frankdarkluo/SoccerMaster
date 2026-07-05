@@ -1,5 +1,7 @@
 from pipeline.stage2_events.schema import EventSchema
 from pipeline.stage2_events.detector import EventDetector
+from pipeline.stage2_events.possession import resolve_team_by_track, possession_segments
+from pipeline.stage2_events.types import FrameData
 
 
 def _detect(predictions_file):
@@ -32,3 +34,27 @@ def test_no_phantom_interception_storm(predictions_file):
     # exactly one real cross-team switch; the old code produced ~9
     assert sum(e.event_code == "football.interception" for e in events) == 1
     assert sum(e.event_code == "football.pass" for e in events) == 1
+
+
+def _carry_frames():
+    frames = []
+    for f in range(1, 11):
+        bx = (f - 1) * 1.0  # carrier advances 9m over the segment
+        players = [
+            {"track_id": 7, "x": bx, "y": 0.0, "role": "player", "team": "left", "jersey": "7"},
+            {"track_id": 3, "x": 3.0, "y": 0.5, "role": "player", "team": "right", "jersey": "3"},
+        ]
+        fd = FrameData(frame_id=f, ball_xy=(bx, 0.0))
+        fd.players = players
+        frames.append(fd)
+    return frames
+
+
+def test_dribble_on_long_carry_past_opponent():
+    frames = _carry_frames()
+    det = EventDetector(EventSchema(), fps=25)
+    team = resolve_team_by_track(frames)
+    segs = possession_segments(frames, team)
+    dribbles = det._dribbles(segs, frames, team)
+    assert len(dribbles) == 1
+    assert dribbles[0].player_jersey == "7" and dribbles[0].player_team == "left"
