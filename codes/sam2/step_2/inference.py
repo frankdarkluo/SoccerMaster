@@ -1,4 +1,6 @@
 import os
+import glob
+import shutil
 import numpy as np
 import torch
 import cv2
@@ -12,6 +14,9 @@ import json
 from copy import deepcopy
 import traceback
 import time
+import gc
+import subprocess
+import sys
 import multiprocessing
 from multiprocessing import Pool, Manager
 from utils import (
@@ -19,6 +24,12 @@ from utils import (
     draw_box_with_id,
     load_tracklets_for_video, load_video_frames,
     get_next_detection,
+    segment_frame_bounds,
+    segment_is_propagable,
+    segment_has_unmatched,
+    pick_primary_prompt_detection,
+    get_earliest_unmatched_detection,
+    resolve_obj_id_for_detection,
     constrain_bbox_with_previous,
     calculate_iou,
     calculate_mask_iou,
@@ -95,6 +106,10 @@ def parse_args():
                         help='Maximum height offset for bbox constraint (default: 60)')
     parser.add_argument('--kernel_size', type=int, default=5,
                         help='Kernel size for morphological operations in clean_outlier_mask (default: 5)')
+    parser.add_argument('--propagation_margin', type=int, default=50,
+                        help='Extra frames before/after a segment for bounded SAM2 propagation')
+    parser.add_argument('--max_retries_per_segment', type=int, default=2,
+                        help='Maximum retry propagations per segment after the primary prompt')
     
     # Multi-GPU multi-process parameters
     parser.add_argument('--gpu_list', type=str, required=True,
@@ -196,6 +211,69 @@ def bbox_from_mask(mask):
     y_min, y_max = np.where(rows)[0][[0, -1]]
     x_min, x_max = np.where(cols)[0][[0, -1]]
     return [x_min, y_min, x_max, y_max]
+
+
+def _merge_propagation_frame(video_segments, out_frame_idx, out_obj_ids, out_mask_logits, obj_id):
+    if out_frame_idx not in video_segments:
+        video_segments[out_frame_idx] = {}
+    for i, out_obj_id in enumerate(out_obj_ids):
+        if int(out_obj_id) != int(obj_id):
+            continue
+        mask_array = (out_mask_logits[i] > 0.0).cpu().numpy().squeeze(0)
+        valid_mask = mask_array.any()
+        video_segments[out_frame_idx][obj_id] = {
+            'mask': mask_array,
+            'valid_mask': valid_mask,
+            'has_outlier': False,
+            'bbox': bbox_from_mask(mask_array) if valid_mask else None,
+            'is_constrained': False,
+        }
+
+
+def _run_bounded_sam2_propagation(
+    predictor,
+    inference_state,
+    prompt_frame_idx: int,
+    bbox_xyxy,
+    obj_id: int,
+    propagate_start: int,
+    propagate_end: int,
+    gpu_id: int,
+):
+    """Run SAM2 only within [propagate_start, propagate_end], bidirectional from prompt."""
+    predictor.reset_state(inference_state)
+    predictor.add_new_points_or_box(
+        inference_state=inference_state,
+        frame_idx=prompt_frame_idx,
+        obj_id=obj_id,
+        box=np.array(bbox_xyxy),
+    )
+
+    video_segments = {}
+    with torch.autocast(device_type=f"cuda:{gpu_id}", dtype=torch.bfloat16):
+        forward_frames = max(1, propagate_end - prompt_frame_idx + 1)
+        for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(
+            inference_state,
+            start_frame_idx=prompt_frame_idx,
+            max_frame_num_to_track=forward_frames,
+            reverse=False,
+        ):
+            if propagate_start <= out_frame_idx <= propagate_end:
+                _merge_propagation_frame(video_segments, out_frame_idx, out_obj_ids, out_mask_logits, obj_id)
+
+        if prompt_frame_idx > propagate_start:
+            backward_frames = max(1, prompt_frame_idx - propagate_start + 1)
+            for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(
+                inference_state,
+                start_frame_idx=prompt_frame_idx,
+                max_frame_num_to_track=backward_frames,
+                reverse=True,
+            ):
+                if propagate_start <= out_frame_idx <= propagate_end:
+                    _merge_propagation_frame(video_segments, out_frame_idx, out_obj_ids, out_mask_logits, obj_id)
+
+    torch.cuda.empty_cache()
+    return video_segments
 
 
 def process_single_frame_segment(video_segments, obj_id, frame_idx, prev_frame_idx, args):
@@ -345,16 +423,227 @@ def _apply_match(detection, obj_id, video_segment, frame_idx):
     sam2_det.matched_unprocessed_detection = detection
 
 
+def _video_checkpoint_dir(video_results_dir, video_id):
+    return os.path.join(video_results_dir, f"{video_id}_checkpoint")
+
+
+def _legacy_video_checkpoint_path(video_results_dir, video_id):
+    return os.path.join(video_results_dir, f"{video_id}_checkpoint.pkl")
+
+
+def _rebuild_unprocessed_detections(unprocessed_data_obj):
+    unprocessed_detections = defaultdict(list)
+    for tracklet in unprocessed_data_obj.unprocessed_tracklets:
+        for segment in tracklet.segments:
+            for detection in segment.detections:
+                unprocessed_detections[detection.frame_idx].append(detection)
+    return unprocessed_detections
+
+
+def _rebuild_unmatched_by_frame(unmatched_segments):
+    unmatched_by_frame = defaultdict(list)
+    for segment in unmatched_segments:
+        unmatched_by_frame[segment.frame_idx].append(segment)
+    return unmatched_by_frame
+
+
+def _clear_pickle_links(unprocessed_data_obj, unmatched_segments, sam2_segment=None):
+    saved = []
+
+    for tracklet in unprocessed_data_obj.unprocessed_tracklets:
+        for segment in tracklet.segments:
+            saved.append(('parent_tracklet', segment, segment.parent_tracklet))
+            segment.parent_tracklet = None
+            for detection in segment.detections:
+                saved.append(('parent_segment', detection, detection.parent_segment))
+                saved.append(('matched_sam2_detection', detection, detection.matched_sam2_detection))
+                detection.parent_segment = None
+                detection.matched_sam2_detection = None
+
+    for segment in unmatched_segments:
+        saved.append(('source_sam2_detection', segment, segment.source_sam2_detection))
+        segment.source_sam2_detection = None
+
+    if sam2_segment is not None:
+        saved.append(('parent_video_data', sam2_segment, sam2_segment.parent_video_data))
+        saved.append(('parent_tracklet', sam2_segment, sam2_segment.parent_tracklet))
+        sam2_segment.parent_video_data = None
+        sam2_segment.parent_tracklet = None
+        for detection in sam2_segment.detections.values():
+            saved.append(('parent_segment', detection, detection.parent_segment))
+            saved.append(('matched_unprocessed_detection', detection, detection.matched_unprocessed_detection))
+            saved.append(('unmatched_segment', detection, detection.unmatched_segment))
+            detection.parent_segment = None
+            detection.matched_unprocessed_detection = None
+            if detection.unmatched_segment is not None:
+                saved.append(
+                    ('source_sam2_detection', detection.unmatched_segment, detection.unmatched_segment.source_sam2_detection)
+                )
+                detection.unmatched_segment.source_sam2_detection = None
+
+    return saved
+
+
+def _restore_pickle_links(saved):
+    for attr, obj, value in reversed(saved):
+        setattr(obj, attr, value)
+
+
+def _strip_matched_detection_masks(unprocessed_data_obj):
+    cleared = 0
+    for tracklet in unprocessed_data_obj.unprocessed_tracklets:
+        for segment in tracklet.segments:
+            for detection in segment.detections:
+                if detection.is_matched and detection.mask is not None:
+                    detection.mask = None
+                    cleared += 1
+    return cleared
+
+
+def _strip_unmatched_segment_masks(unmatched_segments):
+    cleared = 0
+    for segment in unmatched_segments:
+        if segment.mask is not None:
+            segment.mask = None
+            cleared += 1
+    return cleared
+
+
+def _lite_checkpoint_path(ckpt_dir):
+    return os.path.join(ckpt_dir, 'state.lite.pkl')
+
+
+def _strip_checkpoint_state(state):
+    cleared_matched = _strip_matched_detection_masks(state['unprocessed_data'])
+    cleared_unmatched = _strip_unmatched_segment_masks(state['unmatched_segments'])
+    state.pop('video_data', None)
+    return cleared_matched, cleared_unmatched
+
+
+def _materialize_lite_checkpoint(state_path, lite_path):
+    script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'strip_checkpoint_state.py')
+    print(f"Building lite checkpoint via subprocess: {lite_path}")
+    if os.path.exists(lite_path):
+        os.remove(lite_path)
+    result = subprocess.run(
+        [sys.executable, script_path, state_path, lite_path],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        if result.stdout:
+            print(result.stdout)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        raise RuntimeError(
+            f"strip_checkpoint_state.py failed (exit {result.returncode}) for {state_path}"
+        )
+
+
+def _load_video_checkpoint(video_results_dir, video_id):
+    ckpt_dir = _video_checkpoint_dir(video_results_dir, video_id)
+    legacy_path = _legacy_video_checkpoint_path(video_results_dir, video_id)
+    state_path = os.path.join(ckpt_dir, 'state.pkl')
+    lite_path = _lite_checkpoint_path(ckpt_dir)
+
+    if os.path.exists(lite_path):
+        print(f"Loading lite checkpoint from {lite_path}...")
+        with open(lite_path, 'rb') as f:
+            state = pickle.load(f)
+    elif os.path.exists(state_path):
+        if not os.path.exists(lite_path):
+            _materialize_lite_checkpoint(state_path, lite_path)
+        with open(lite_path, 'rb') as f:
+            state = pickle.load(f)
+        print(f"Loaded lite checkpoint ({lite_path})")
+        if os.path.exists(state_path):
+            os.remove(state_path)
+            print(f"Removed heavy checkpoint: {state_path}")
+    elif os.path.exists(legacy_path):
+        with open(legacy_path, 'rb') as f:
+            state = pickle.load(f)
+        cleared_matched, cleared_unmatched = _strip_checkpoint_state(state)
+        print(
+            f"Cleared masks from legacy checkpoint: "
+            f"{cleared_matched} matched, {cleared_unmatched} unmatched"
+        )
+    else:
+        raise FileNotFoundError(f"No checkpoint found for video {video_id}")
+
+    state['video_data'] = sam2_video_data()
+    gc.collect()
+    return state
+
+
+def _save_video_checkpoint(video_results_dir, video_id, gpu_id, unprocessed_data_obj,
+                           unmatched_segments, propagate_stats, frame_to_bbox_prompts,
+                           latest_segment):
+    """Save mid-video progress incrementally (lite state only, no mask arrays)."""
+    ckpt_dir = _video_checkpoint_dir(video_results_dir, video_id)
+    os.makedirs(ckpt_dir, exist_ok=True)
+
+    t0 = time.time()
+    saved_links = _clear_pickle_links(unprocessed_data_obj, unmatched_segments, latest_segment)
+    try:
+        cleared_matched = _strip_matched_detection_masks(unprocessed_data_obj)
+        cleared_unmatched = _strip_unmatched_segment_masks(unmatched_segments)
+        state = {
+            'unprocessed_data': unprocessed_data_obj,
+            'unmatched_segments': unmatched_segments,
+            'propagate_stats': list(propagate_stats),
+            'frame_to_bbox_prompts': {k: list(v) for k, v in frame_to_bbox_prompts.items()},
+        }
+        lite_path = _lite_checkpoint_path(ckpt_dir)
+        with open(lite_path, 'wb') as f:
+            pickle.dump(state, f, protocol=pickle.HIGHEST_PROTOCOL)
+        old_state_path = os.path.join(ckpt_dir, 'state.pkl')
+        if os.path.exists(old_state_path):
+            os.remove(old_state_path)
+        if cleared_matched or cleared_unmatched:
+            print(
+                f"[GPU {gpu_id}] Lite checkpoint saved without masks "
+                f"({cleared_matched} matched, {cleared_unmatched} unmatched)"
+            )
+    finally:
+        _restore_pickle_links(saved_links)
+
+    legacy_path = _legacy_video_checkpoint_path(video_results_dir, video_id)
+    if os.path.exists(legacy_path):
+        os.remove(legacy_path)
+
+    elapsed = time.time() - t0
+    print(
+        f"[GPU {gpu_id}] Checkpoint saved ({len(propagate_stats)} propagations, {elapsed:.1f}s): {ckpt_dir}"
+    )
+
+
+def _remove_video_checkpoint(video_results_dir, video_id, gpu_id):
+    ckpt_dir = _video_checkpoint_dir(video_results_dir, video_id)
+    legacy_path = _legacy_video_checkpoint_path(video_results_dir, video_id)
+    if os.path.isdir(ckpt_dir):
+        shutil.rmtree(ckpt_dir)
+        print(f"[GPU {gpu_id}] Removed checkpoint dir: {ckpt_dir}")
+    if os.path.exists(legacy_path):
+        os.remove(legacy_path)
+        print(f"[GPU {gpu_id}] Removed legacy checkpoint: {legacy_path}")
+
+
+def _has_video_checkpoint(video_results_dir, video_id):
+    ckpt_dir = _video_checkpoint_dir(video_results_dir, video_id)
+    legacy_path = _legacy_video_checkpoint_path(video_results_dir, video_id)
+    return (
+        os.path.exists(_lite_checkpoint_path(ckpt_dir))
+        or os.path.exists(os.path.join(ckpt_dir, 'state.pkl'))
+        or os.path.exists(legacy_path)
+    )
+
+
 def process_single_video(video_id, args, gpu_id, progress_manager, result_collector, gpu_load_manager):
     """Function to process a single video, used for multiprocessing"""
     try:
-        # Set CUDA device
         torch.cuda.set_device(gpu_id)
         os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
-        
-        # Build SAM2 predictor
-        predictor = build_sam2_video_predictor(args.sam_config, args.sam_checkpoint, device=f"cuda:{gpu_id}")
-        
+
         print(f"[GPU {gpu_id}] Starting to process video: {video_id}")
         
         # Create directory to save individual video results
@@ -387,240 +676,335 @@ def process_single_video(video_id, args, gpu_id, progress_manager, result_collec
             
         print(f"[GPU {gpu_id}] Video {video_id} first frame size: {first_frame.shape}")
         frame_height, frame_width = first_frame.shape[:2]
-        
-        # Load tracking data
-        unprocessed_data_obj, img_id_to_frame_idx, frame_idx_2_image_id = load_tracklets_for_video(
-            args.input_pklz, video_id, min_length=args.min_continuous_segment_length, num_frames=num_frames,
-            min_propagate_box_dimension=args.min_propagate_box_dimension, split=args.split
-        )
-        
-        # Initialize inference state
-        inference_state = predictor.init_state(video_path=video_dir)
-        predictor.reset_state(inference_state)
-        
-        # Convert unprocessed_data_obj to dict-based index while keeping references to original detection objects
-        unprocessed_detections = defaultdict(list)
-        for tracklet in unprocessed_data_obj.unprocessed_tracklets:
-            for segment in tracklet.segments:
-                for detection in segment.detections:
-                    unprocessed_detections[detection.frame_idx].append(detection)
-        
-        # Count segment statistics
-        total_segments = 0
-        short_segments = 0
-        for tracklet in unprocessed_data_obj.unprocessed_tracklets:
-            for segment in tracklet.segments:
-                total_segments += 1
-                if len(segment.detections) > 0 and segment.detections[0].is_short_segment:
-                    short_segments += 1
-        
-        valid_segments = total_segments - short_segments
-        print(f"[GPU {gpu_id}] Video {video_id} total segments: {total_segments}")
-        print(f"[GPU {gpu_id}] Video {video_id} short segments (length < {args.min_continuous_segment_length}): {short_segments}")
-        print(f"[GPU {gpu_id}] Video {video_id} valid segments: {valid_segments}")
-        
-        # Store bbox prompts for each frame, used for rendering prompt video later
-        frame_to_bbox_prompts = defaultdict(list)
-        
-        # Store unmatched segment information
-        unmatched_segments = []
-        
-        # Use sam2_video_data class to replace the all_video_segments dict
-        video_data = sam2_video_data()
-        
-        # Record statistics for each propagation
-        propagate_stats = []
-        
-        while True:
-            is_found, frame_idx, bbox_xyxy, track_id = get_next_detection(unprocessed_detections)
-            if not is_found:
-                break
-            
-            predictor.reset_state(inference_state)
-            
-            obj_id = int(track_id)
-            _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-                inference_state=inference_state,
-                frame_idx=frame_idx,
-                obj_id=obj_id,
-                box=np.array(bbox_xyxy)
+        del first_frame
+
+        if _has_video_checkpoint(video_results_dir, video_id):
+            print(f"[GPU {gpu_id}] Resuming video {video_id} from checkpoint")
+            checkpoint = _load_video_checkpoint(video_results_dir, video_id)
+            unprocessed_data_obj = checkpoint['unprocessed_data']
+            unmatched_segments = checkpoint['unmatched_segments']
+            video_data = checkpoint['video_data']
+            propagate_stats = checkpoint['propagate_stats']
+            frame_to_bbox_prompts = defaultdict(list, checkpoint['frame_to_bbox_prompts'])
+            del checkpoint
+            gc.collect()
+            unprocessed_detections = _rebuild_unprocessed_detections(unprocessed_data_obj)
+            unmatched_by_frame = _rebuild_unmatched_by_frame(unmatched_segments)
+            completed_track_ids = {int(stat['track_id']) for stat in propagate_stats}
+            reset_count = 0
+            for tracklet in unprocessed_data_obj.unprocessed_tracklets:
+                for segment in tracklet.segments:
+                    for detection in segment.detections:
+                        if (detection.tried_propagation and not detection.is_matched
+                                and int(detection.track_id) not in completed_track_ids):
+                            detection.tried_propagation = False
+                            reset_count += 1
+            if reset_count:
+                print(f"[GPU {gpu_id}] Reset {reset_count} incomplete tried_propagation flags for resume")
+            print(f"[GPU {gpu_id}] Resumed after {len(propagate_stats)} completed propagations")
+        else:
+            # Load tracking data
+            unprocessed_data_obj, img_id_to_frame_idx, frame_idx_2_image_id = load_tracklets_for_video(
+                args.input_pklz, video_id, min_length=args.min_continuous_segment_length, num_frames=num_frames,
+                min_propagate_box_dimension=args.min_propagate_box_dimension, split=args.split
             )
             
-            frame_to_bbox_prompts[frame_idx].append((bbox_xyxy, obj_id))
+            unprocessed_detections = _rebuild_unprocessed_detections(unprocessed_data_obj)
             
-            # Create a new video segment object
-            video_segment = sam2_video_segment(obj_id)
+            # Count segment statistics
+            total_segments = 0
+            short_segments = 0
+            for tracklet in unprocessed_data_obj.unprocessed_tracklets:
+                for segment in tracklet.segments:
+                    total_segments += 1
+                    if len(segment.detections) > 0 and segment.detections[0].is_short_segment:
+                        short_segments += 1
             
-            # Original dict format to keep the existing processing logic unchanged
-            video_segments = {}
+            valid_segments = total_segments - short_segments
+            print(f"[GPU {gpu_id}] Video {video_id} total segments: {total_segments}")
+            print(f"[GPU {gpu_id}] Video {video_id} short segments (length < {args.min_continuous_segment_length}): {short_segments}")
+            print(f"[GPU {gpu_id}] Video {video_id} valid segments: {valid_segments}")
             
-            with torch.autocast(device_type=f"cuda:{gpu_id}", dtype=torch.bfloat16):
-                for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state, start_frame_idx=0):
-                    video_segments[out_frame_idx] = {}
-                    for i, out_obj_id in enumerate(out_obj_ids):
-                        mask_array = (out_mask_logits[i] > 0.0).cpu().numpy().squeeze(0)
-                        valid_mask = mask_array.any()
-                        
-                        seg_info = {
-                            'mask': mask_array,
-                            'valid_mask': valid_mask,
-                            'has_outlier': False,
-                            'bbox': bbox_from_mask(mask_array) if valid_mask else None,
-                            'is_constrained': False
-                        }
-                        video_segments[out_frame_idx][out_obj_id] = seg_info
-            
-            # Initialize the continuous valid range starting from the prompt frame
-            prompt_frame_idx = frame_idx
-            
-            # Check if the prompt frame itself is valid
-            if not video_segments[prompt_frame_idx][obj_id]['valid_mask']:
-                continue
-            
-            # Extend the continuous valid range forward/backward
-            valid_range_start = prompt_frame_idx
-            valid_range_end = prompt_frame_idx
-            
-            for check_idx in range(frame_idx - 1, -1, -1):
-                if (check_idx in video_segments and obj_id in video_segments[check_idx] and 
-                    video_segments[check_idx][obj_id]['valid_mask']):
-                    valid_range_start = check_idx
-                else:
-                    break
-            
-            for check_idx in range(frame_idx + 1, num_frames):
-                if (check_idx in video_segments and obj_id in video_segments[check_idx] and 
-                    video_segments[check_idx][obj_id]['valid_mask']):
-                    valid_range_end = check_idx
-                else:
-                    break
-            
-            # Detect and clean outlier masks only within the continuous valid range
-            process_video_segments_in_range(video_segments, obj_id, prompt_frame_idx, valid_range_start, valid_range_end, args)
-                
-            # Distance constraint: use the extracted helper function
-            valid_range_start2 = _search_valid_range_with_distance(
-                video_segments, obj_id, prompt_frame_idx, valid_range_start, direction=-1)
-            valid_range_end2 = _search_valid_range_with_distance(
-                video_segments, obj_id, prompt_frame_idx, valid_range_end, direction=1)
-                
-            print(f"[GPU {gpu_id}] Video {video_id} object {obj_id} continuous valid range: {valid_range_start2} to {valid_range_end2}")
-            
-            # Add the processed masks to the sam2_video_segment object
-            for frame_idx in range(valid_range_start2, valid_range_end2 + 1):
-                if frame_idx in video_segments and obj_id in video_segments[frame_idx]:
-                    seg_info = video_segments[frame_idx][obj_id]
-                    detection_obj = sam2_detection(
-                        frame_idx=frame_idx,
-                        obj_id=obj_id,
-                        mask=seg_info['mask'],
-                        valid_mask=seg_info['valid_mask'],
-                        has_outlier=seg_info['has_outlier'],
-                        bbox=seg_info['bbox'],
-                        is_constrained=seg_info['is_constrained']
-                    )
-                    video_segment.add_sam2_detection(detection_obj)
-            
-            video_data.add_segment(video_segment)
-            
-            # Record statistics for each propagation
-            matched_count = 0
-            segment_frames = list(range(valid_range_start2, valid_range_end2 + 1))
-            start_unmatched_count = len(unmatched_segments)
-            
-            # Iterate over each frame within the continuous valid range, matching valid segmentation results with unprocessed detections
-            for frame_idx in range(valid_range_start2, valid_range_end2 + 1):
-                if frame_idx not in unprocessed_detections:
+            frame_to_bbox_prompts = defaultdict(list)
+            unmatched_segments = []
+            unmatched_by_frame = defaultdict(list)
+            video_data = sam2_video_data()
+            propagate_stats = []
+
+        gc.collect()
+        predictor = build_sam2_video_predictor(
+            args.sam_config, args.sam_checkpoint, device=f"cuda:{gpu_id}"
+        )
+        torch.cuda.empty_cache()
+        print(f"[GPU {gpu_id}] Loading SAM2 inference state for {num_frames} frames...")
+        t_init = time.time()
+        inference_state = predictor.init_state(
+            video_path=video_dir,
+            offload_video_to_cpu=False,
+        )
+        predictor.reset_state(inference_state)
+        print(f"[GPU {gpu_id}] SAM2 inference state ready ({time.time() - t_init:.1f}s)")
+        
+        max_attempts_per_segment = 1 + args.max_retries_per_segment
+        for tracklet in unprocessed_data_obj.unprocessed_tracklets:
+            for segment in tracklet.segments:
+                if not segment_is_propagable(segment):
                     continue
-                
-                segment_bbox = video_segment.get_sam2_detection(frame_idx).bbox
-                
-                best_iou = 0.0
-                best_seg_bbox_be_overlapped_ratio = 0.0
-                best_iou_detection_idx = -1
-                best_overlap_ratio_detection_idx = -1
-                contatin_det_bbox_cnt = 0
-                
-                for i, detection in enumerate(unprocessed_detections[frame_idx]):
-                    if not detection.is_matched:
-                        iou, seg_bbox_be_overlapped_ratio, det_bbox_be_overlapped_ratio = calculate_iou(segment_bbox, detection.bbox_xyxy)
-                        
-                        if det_bbox_be_overlapped_ratio > 0.6:
-                            contatin_det_bbox_cnt += 1
-                        
-                        if seg_bbox_be_overlapped_ratio > best_seg_bbox_be_overlapped_ratio:
-                            best_seg_bbox_be_overlapped_ratio = seg_bbox_be_overlapped_ratio
-                            best_overlap_ratio_detection_idx = i
-                            
-                        if iou > best_iou:
-                            best_iou = iou
-                            best_iou_detection_idx = i
-                
-                # Determine the best matching detection index
-                matched_det_idx = None
-                iou_ok = best_iou > args.best_iou_threshold
-                overlap_ok = best_seg_bbox_be_overlapped_ratio > args.best_seg_bbox_be_overlapped_ratio_threshold
-                
-                if best_overlap_ratio_detection_idx == best_iou_detection_idx and best_overlap_ratio_detection_idx != -1 and (iou_ok or overlap_ok):
-                    matched_det_idx = best_overlap_ratio_detection_idx
-                elif best_iou_detection_idx != -1 and iou_ok:
-                    matched_det_idx = best_iou_detection_idx
-                elif best_overlap_ratio_detection_idx != -1 and overlap_ok:
-                    matched_det_idx = best_overlap_ratio_detection_idx
-                
-                if matched_det_idx is not None:
-                    _apply_match(unprocessed_detections[frame_idx][matched_det_idx], obj_id, video_segment, frame_idx)
-                    matched_count += 1
-                else:
-                    # No match found, check if it is a missed detection (deduplication logic)
-                    sam2_det = video_segment.get_sam2_detection(frame_idx)
-                    current_mask = sam2_det.mask
-                    current_obj_id = sam2_det.obj_id
-                    is_duplicate = contatin_det_bbox_cnt > 1
-                    
-                    # Check overlap with already matched detections
-                    if not is_duplicate:
-                        for detection in unprocessed_detections[frame_idx]:
-                            if detection.is_matched:
-                                mask_iou, seg_mask_be_overlapped_ratio = calculate_mask_iou(current_mask, detection.mask)
-                                if ((mask_iou > args.mask_iou_threshold or seg_mask_be_overlapped_ratio > args.seg_mask_be_overlapped_ratio_threshold) or 
-                                    ((mask_iou > 0 or seg_mask_be_overlapped_ratio > 0) and current_obj_id == detection.matched_track_id)):
-                                    is_duplicate = True
-                                    break
-                    
-                    # Check overlap with existing unmatched_segments
-                    if not is_duplicate:
-                        for existing_segment in unmatched_segments:
-                            if existing_segment.frame_idx == frame_idx:
-                                mask_iou, seg_mask_be_overlapped_ratio = calculate_mask_iou(current_mask, existing_segment.mask)
-                                if ((mask_iou > args.mask_iou_threshold or seg_mask_be_overlapped_ratio > args.seg_mask_be_overlapped_ratio_threshold) or 
-                                    ((mask_iou > 0 or seg_mask_be_overlapped_ratio > 0) and current_obj_id == existing_segment.obj_id)):
-                                    is_duplicate = True
-                                    break
-                    
-                    if not is_duplicate:
-                        unmatched_seg = unmatched_segment.from_sam2_detection(sam2_det)
-                        sam2_det.set_unmatched_segment(unmatched_seg)
-                        unmatched_segments.append(unmatched_seg)
-            
-            # Add the statistics for this propagation to the list
-            actually_added_unmatched = len(unmatched_segments) - start_unmatched_count
-            
-            propagate_stats.append({
-                'track_id': track_id,
-                'obj_id': obj_id,
-                'prompt_frame': prompt_frame_idx,
-                'frame_range': (valid_range_start2, valid_range_end2),
-                'total_frames': len(segment_frames),
-                'matched_bboxes': matched_count,
-                'unmatched_segments_added': actually_added_unmatched
-            })
-            
-            print(f"[GPU {gpu_id}] Propagation stats - Video {video_id} Track ID: {track_id}, Obj ID: {obj_id}")
-            print(f"[GPU {gpu_id}]   Range: {valid_range_start2}-{valid_range_end2}, total {len(segment_frames)} frames")
-            print(f"[GPU {gpu_id}]   Successfully matched: {matched_count} bboxes")
-            print(f"[GPU {gpu_id}]   Added: {actually_added_unmatched} unmatched segments")
-            print(f"[GPU {gpu_id}]   Match rate: {matched_count/len(segment_frames):.2f}, New segment rate: {actually_added_unmatched/len(segment_frames):.2f}")
+
+                attempt = 0
+                while attempt < max_attempts_per_segment and segment_has_unmatched(segment):
+                    if attempt == 0:
+                        prompt_detection = pick_primary_prompt_detection(segment)
+                    else:
+                        prompt_detection = get_earliest_unmatched_detection(segment, allow_retried=True)
+                    if prompt_detection is None:
+                        break
+
+                    prompt_detection.tried_propagation = True
+                    frame_idx = prompt_detection.frame_idx
+                    bbox_xyxy = prompt_detection.bbox_xyxy
+                    track_id = prompt_detection.track_id
+                    obj_id = resolve_obj_id_for_detection(prompt_detection, unprocessed_detections)
+                    propagate_start, propagate_end = segment_frame_bounds(
+                        segment, num_frames, margin=args.propagation_margin
+                    )
+
+                    print(
+                        f"[GPU {gpu_id}] Propagating track {int(track_id)} obj {obj_id} "
+                        f"from frame {frame_idx} (bounded {propagate_start}-{propagate_end}, "
+                        f"attempt {attempt + 1}/{max_attempts_per_segment})..."
+                    )
+
+                    frame_to_bbox_prompts[frame_idx].append((bbox_xyxy, obj_id))
+                    video_segment = sam2_video_segment(obj_id)
+                    video_segments = _run_bounded_sam2_propagation(
+                        predictor,
+                        inference_state,
+                        frame_idx,
+                        bbox_xyxy,
+                        obj_id,
+                        propagate_start,
+                        propagate_end,
+                        gpu_id,
+                    )
+
+                    prompt_frame_idx = frame_idx
+                    if (
+                        prompt_frame_idx not in video_segments
+                        or obj_id not in video_segments[prompt_frame_idx]
+                        or not video_segments[prompt_frame_idx][obj_id]['valid_mask']
+                    ):
+                        attempt += 1
+                        continue
+
+                    valid_range_start = prompt_frame_idx
+                    valid_range_end = prompt_frame_idx
+
+                    for check_idx in range(frame_idx - 1, propagate_start - 1, -1):
+                        if (
+                            check_idx in video_segments
+                            and obj_id in video_segments[check_idx]
+                            and video_segments[check_idx][obj_id]['valid_mask']
+                        ):
+                            valid_range_start = check_idx
+                        else:
+                            break
+
+                    for check_idx in range(frame_idx + 1, propagate_end + 1):
+                        if (
+                            check_idx in video_segments
+                            and obj_id in video_segments[check_idx]
+                            and video_segments[check_idx][obj_id]['valid_mask']
+                        ):
+                            valid_range_end = check_idx
+                        else:
+                            break
+
+                    process_video_segments_in_range(
+                        video_segments, obj_id, prompt_frame_idx, valid_range_start, valid_range_end, args
+                    )
+
+                    valid_range_start2 = _search_valid_range_with_distance(
+                        video_segments, obj_id, prompt_frame_idx, valid_range_start, direction=-1
+                    )
+                    valid_range_end2 = _search_valid_range_with_distance(
+                        video_segments, obj_id, prompt_frame_idx, valid_range_end, direction=1
+                    )
+
+                    print(
+                        f"[GPU {gpu_id}] Video {video_id} object {obj_id} "
+                        f"continuous valid range: {valid_range_start2} to {valid_range_end2}"
+                    )
+
+                    for out_frame_idx in range(valid_range_start2, valid_range_end2 + 1):
+                        if out_frame_idx in video_segments and obj_id in video_segments[out_frame_idx]:
+                            seg_info = video_segments[out_frame_idx][obj_id]
+                            detection_obj = sam2_detection(
+                                frame_idx=out_frame_idx,
+                                obj_id=obj_id,
+                                mask=seg_info['mask'],
+                                valid_mask=seg_info['valid_mask'],
+                                has_outlier=seg_info['has_outlier'],
+                                bbox=seg_info['bbox'],
+                                is_constrained=seg_info['is_constrained'],
+                            )
+                            video_segment.add_sam2_detection(detection_obj)
+
+                    video_data.add_segment(video_segment)
+
+                    matched_count = 0
+                    segment_frames = list(range(valid_range_start2, valid_range_end2 + 1))
+                    start_unmatched_count = len(unmatched_segments)
+
+                    for match_frame_idx in range(valid_range_start2, valid_range_end2 + 1):
+                        if match_frame_idx not in unprocessed_detections:
+                            continue
+
+                        segment_bbox = video_segment.get_sam2_detection(match_frame_idx).bbox
+
+                        best_iou = 0.0
+                        best_seg_bbox_be_overlapped_ratio = 0.0
+                        best_iou_detection_idx = -1
+                        best_overlap_ratio_detection_idx = -1
+                        contatin_det_bbox_cnt = 0
+
+                        for i, detection in enumerate(unprocessed_detections[match_frame_idx]):
+                            if not detection.is_matched:
+                                iou, seg_bbox_be_overlapped_ratio, det_bbox_be_overlapped_ratio = calculate_iou(
+                                    segment_bbox, detection.bbox_xyxy
+                                )
+
+                                if det_bbox_be_overlapped_ratio > 0.6:
+                                    contatin_det_bbox_cnt += 1
+
+                                if seg_bbox_be_overlapped_ratio > best_seg_bbox_be_overlapped_ratio:
+                                    best_seg_bbox_be_overlapped_ratio = seg_bbox_be_overlapped_ratio
+                                    best_overlap_ratio_detection_idx = i
+
+                                if iou > best_iou:
+                                    best_iou = iou
+                                    best_iou_detection_idx = i
+
+                        matched_det_idx = None
+                        iou_ok = best_iou > args.best_iou_threshold
+                        overlap_ok = (
+                            best_seg_bbox_be_overlapped_ratio
+                            > args.best_seg_bbox_be_overlapped_ratio_threshold
+                        )
+
+                        if (
+                            best_overlap_ratio_detection_idx == best_iou_detection_idx
+                            and best_overlap_ratio_detection_idx != -1
+                            and (iou_ok or overlap_ok)
+                        ):
+                            matched_det_idx = best_overlap_ratio_detection_idx
+                        elif best_iou_detection_idx != -1 and iou_ok:
+                            matched_det_idx = best_iou_detection_idx
+                        elif best_overlap_ratio_detection_idx != -1 and overlap_ok:
+                            matched_det_idx = best_overlap_ratio_detection_idx
+
+                        if matched_det_idx is not None:
+                            _apply_match(
+                                unprocessed_detections[match_frame_idx][matched_det_idx],
+                                obj_id,
+                                video_segment,
+                                match_frame_idx,
+                            )
+                            matched_count += 1
+                        else:
+                            sam2_det = video_segment.get_sam2_detection(match_frame_idx)
+                            current_mask = sam2_det.mask
+                            current_obj_id = sam2_det.obj_id
+                            is_duplicate = contatin_det_bbox_cnt > 1
+
+                            if not is_duplicate:
+                                for detection in unprocessed_detections[match_frame_idx]:
+                                    if detection.is_matched:
+                                        if detection.mask is None:
+                                            if current_obj_id == detection.matched_track_id:
+                                                is_duplicate = True
+                                                break
+                                            continue
+                                        mask_iou, seg_mask_be_overlapped_ratio = calculate_mask_iou(
+                                            current_mask, detection.mask
+                                        )
+                                        if (
+                                            (
+                                                mask_iou > args.mask_iou_threshold
+                                                or seg_mask_be_overlapped_ratio
+                                                > args.seg_mask_be_overlapped_ratio_threshold
+                                            )
+                                            or (
+                                                (mask_iou > 0 or seg_mask_be_overlapped_ratio > 0)
+                                                and current_obj_id == detection.matched_track_id
+                                            )
+                                        ):
+                                            is_duplicate = True
+                                            break
+
+                            if not is_duplicate:
+                                for existing_segment in unmatched_by_frame[match_frame_idx]:
+                                    if existing_segment.mask is None:
+                                        continue
+                                    mask_iou, seg_mask_be_overlapped_ratio = calculate_mask_iou(
+                                        current_mask, existing_segment.mask
+                                    )
+                                    if (
+                                        (
+                                            mask_iou > args.mask_iou_threshold
+                                            or seg_mask_be_overlapped_ratio
+                                            > args.seg_mask_be_overlapped_ratio_threshold
+                                        )
+                                        or (
+                                            (mask_iou > 0 or seg_mask_be_overlapped_ratio > 0)
+                                            and current_obj_id == existing_segment.obj_id
+                                        )
+                                    ):
+                                        is_duplicate = True
+                                        break
+
+                            if not is_duplicate:
+                                unmatched_seg = unmatched_segment.from_sam2_detection(sam2_det)
+                                sam2_det.set_unmatched_segment(unmatched_seg)
+                                unmatched_segments.append(unmatched_seg)
+                                unmatched_by_frame[match_frame_idx].append(unmatched_seg)
+
+                    actually_added_unmatched = len(unmatched_segments) - start_unmatched_count
+                    denom = max(len(segment_frames), 1)
+
+                    propagate_stats.append({
+                        'track_id': track_id,
+                        'obj_id': obj_id,
+                        'prompt_frame': prompt_frame_idx,
+                        'bounded_range': (propagate_start, propagate_end),
+                        'frame_range': (valid_range_start2, valid_range_end2),
+                        'attempt': attempt + 1,
+                        'total_frames': len(segment_frames),
+                        'matched_bboxes': matched_count,
+                        'unmatched_segments_added': actually_added_unmatched,
+                    })
+
+                    print(
+                        f"[GPU {gpu_id}] Propagation stats - Video {video_id} Track ID: {track_id}, "
+                        f"Obj ID: {obj_id}, attempt {attempt + 1}"
+                    )
+                    print(
+                        f"[GPU {gpu_id}]   Bounded: {propagate_start}-{propagate_end}, "
+                        f"valid: {valid_range_start2}-{valid_range_end2}, total {len(segment_frames)} frames"
+                    )
+                    print(f"[GPU {gpu_id}]   Successfully matched: {matched_count} bboxes")
+                    print(f"[GPU {gpu_id}]   Added: {actually_added_unmatched} unmatched segments")
+                    print(
+                        f"[GPU {gpu_id}]   Match rate: {matched_count/denom:.2f}, "
+                        f"New segment rate: {actually_added_unmatched/denom:.2f}"
+                    )
+
+                    _save_video_checkpoint(
+                        video_results_dir, video_id, gpu_id, unprocessed_data_obj,
+                        unmatched_segments, propagate_stats, frame_to_bbox_prompts,
+                        latest_segment=video_segment,
+                    )
+                    attempt += 1
         
         # Summarize all propagation statistics for this video
         print(f"\n[GPU {gpu_id}] Propagation statistics summary for video {video_id}:")
@@ -668,7 +1052,8 @@ def process_single_video(video_id, args, gpu_id, progress_manager, result_collec
         # Single video result
         video_result = {
             'unmatched_segments': unmatched_segments,
-            'unprocessed_data': unprocessed_data_obj
+            'unprocessed_data': unprocessed_data_obj,
+            'propagate_stats': list(propagate_stats),
         }
         
         if args.fix_duplicate_track_ids:
@@ -682,6 +1067,8 @@ def process_single_video(video_id, args, gpu_id, progress_manager, result_collec
         with open(video_result_path, 'wb') as f:
             pickle.dump(video_result, f)
         print(f"[GPU {gpu_id}] Video {video_id} results saved to: {video_result_path}")
+
+        _remove_video_checkpoint(video_results_dir, video_id, gpu_id)
         
         # Collect results
         result_collector.add_result(video_id, video_result)
@@ -957,15 +1344,23 @@ def main():
         
         start_time = time.time()
         
-        with Pool(processes=total_processes) as pool:
+        if total_processes == 1:
             try:
-                for _ in tqdm(pool.imap_unordered(process_video_wrapper, tasks), total=len(tasks), desc="Video processing progress"):
-                    pass
+                for task in tqdm(tasks, desc="Video processing progress"):
+                    process_video_wrapper(task)
             except KeyboardInterrupt:
-                print("\nInterrupt signal received, stopping all processes...")
-                pool.terminate()
-                pool.join()
+                print("\nInterrupt signal received, stopping...")
                 raise
+        else:
+            with Pool(processes=total_processes) as pool:
+                try:
+                    for _ in tqdm(pool.imap_unordered(process_video_wrapper, tasks), total=len(tasks), desc="Video processing progress"):
+                        pass
+                except KeyboardInterrupt:
+                    print("\nInterrupt signal received, stopping all processes...")
+                    pool.terminate()
+                    pool.join()
+                    raise
         
         processing_time = time.time() - start_time
         

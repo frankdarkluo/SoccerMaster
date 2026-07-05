@@ -58,7 +58,7 @@ First, download the SigLIP2 backbone model to the pretrained models directory:
 
 ```bash
 pip install huggingface_hub
-hf download google/siglip2-large-patch16-512 --local-dir ./codes/SoccerMaster/pretrained_models/google/siglip2-large-patch16-512
+hf download google/siglip2-large-patch16-512 --local-dir ./codes/sn-gamestate/pretrained_models/google/siglip2-large-patch16-512
 ```
 
 ### 3. Download SoccerMaster Checkpoints
@@ -66,14 +66,15 @@ hf download google/siglip2-large-patch16-512 --local-dir ./codes/SoccerMaster/pr
 Clone the SoccerMaster model checkpoints from Hugging Face:
 
 ```bash
-cd SoccerMaster/codes/SoccerMaster/pretrained_models
+cd codes/sn-gamestate/pretrained_models
 mkdir SoccerMaster
 hf download xleprime/SoccerMaster --local-dir SoccerMaster
 ```
 
-After completing these steps, you should have the following directory structure:
+After completing these steps, the SigLIP2 and SoccerMaster checkpoints live under `codes/sn-gamestate/pretrained_models/`:
+
 ```
-root/codes/SoccerMaster/pretrained_models/
+codes/sn-gamestate/pretrained_models/
 ├── google/
 │   └── siglip2-large-patch16-512/
 └── SoccerMaster/
@@ -117,12 +118,7 @@ codes/sn-gamestate/pretrained_models/
 - **jn**: Download Qwen2.5-VL models from the [Qwen2.5-VL Collection](https://huggingface.co/collections/Qwen/qwen25-vl) on Hugging Face.
 - **yolo**: Move `yolo_v8x6_finetuned.pt` to `codes/sn-gamestate/pretrained_models/yolo/`. This file can be obtained from [https://huggingface.co/xleprime/SoccerMaster](https://huggingface.co/xleprime/SoccerMaster).
 
-After preparing all pretrained models, create a symbolic link so that `codes/SoccerMaster/pretrained_models` points to `codes/sn-gamestate/pretrained_models`:
-
-```bash
-cd codes/SoccerMaster
-ln -s ../sn-gamestate/pretrained_models pretrained_models
-```
+All datasets for the data pipeline live under `codes/sn-gamestate/datasets/SoccerNetGS/` (see [Input Data Format](#input-data-format) below). The pretraining code in `codes/SoccerMaster/` reads models and data from `../sn-gamestate/` via config paths.
 
 ## Data Pipeline
 
@@ -217,132 +213,8 @@ CUDA_VISIBLE_DEVICES=0 python -m tracklab.main -cn gsr_step_3_example_accelerate
 - [] Refine pretraining code.
 - [x] Release SoccerMaster checkpoints.
 - [x] Add instructions for quick start.
-- [x] Release datasets.
+- [ ] Release datasets.
 - [x] Release data pipeline.
-
-## Soccer Factory Dataset
-
-We release the **Soccer Factory** dataset containing 7,000 video sequences with per-frame annotations (bounding boxes, roles, jersey numbers, and camera parameters). The data is distributed as H.264-encoded videos and JSON annotations.
-
-### Download
-
-Download the following files from [link]:
-
-| File | Contents | Size |
-|------|----------|------|
-| `soccer_factory_annotations.tar.gz` | Per-frame annotations (JSON) | 2.2 GB |
-| `soccer_factory_videos_part1.tar` | Videos for SNGS-10001 ~ SNGS-11000 | 15 GB |
-| `soccer_factory_videos_part2.tar` | Videos for SNGS-11001 ~ SNGS-12000 | 14 GB |
-| `soccer_factory_videos_part3.tar` | Videos for SNGS-12001 ~ SNGS-13000 | 15 GB |
-| `soccer_factory_videos_part4.tar` | Videos for SNGS-13001 ~ SNGS-14000 | 15 GB |
-| `soccer_factory_videos_part5.tar` | Videos for SNGS-14001 ~ SNGS-15000 | 14 GB |
-| `soccer_factory_videos_part6.tar` | Videos for SNGS-15001 ~ SNGS-16000 | 13 GB |
-| `soccer_factory_videos_part7.tar` | Videos for SNGS-16001 ~ SNGS-17000 | 13 GB |
-
-### Setup
-
-Place all downloaded files in a working directory, then follow the steps below.
-
-#### Step 1: Extract annotations
-
-```bash
-mkdir -p datasets/SoccerNetGS/extracted_info
-tar xzf soccer_factory_annotations.tar.gz
-mv annotations/* datasets/SoccerNetGS/extracted_info/
-```
-
-#### Step 2: Extract frames from videos
-
-The video tar files contain H.264-encoded `.mp4` files. Use the provided script to decode them back into image sequences:
-
-```bash
-# Option A: Extract directly from tar files (recommended, no intermediate extraction needed)
-python data/extract_frames.py \
-    --tar_files soccer_factory_videos_part*.tar \
-    --output_dir datasets/SoccerNetGS/sn500 \
-    --quality 95
-
-# Option B: Extract tar files first, then decode
-tar xf soccer_factory_videos_part1.tar
-tar xf soccer_factory_videos_part2.tar
-# ... repeat for all parts ...
-python data/extract_frames.py \
-    --video_dir ./videos \
-    --output_dir datasets/SoccerNetGS/sn500 \
-    --quality 95
-```
-
-**Dependencies:** `ffmpeg` must be installed on your system (`apt install ffmpeg` or `brew install ffmpeg`).
-
-**Note:** The script supports resumption — if interrupted, simply re-run the same command and it will skip already-extracted sequences.
-
-#### Step 3: Verify the final directory structure
-
-After extraction, your directory should look like:
-
-```
-codes/SoccerMaster/datasets/SoccerNetGS/
-├── extracted_info/                  # Annotations (JSON)
-│   ├── SNGS-10001.json
-│   ├── SNGS-10002.json
-│   └── ... (7000 files)
-└── sn500/                           # Image sequences
-    ├── SNGS-10001/
-    │   └── img1/
-    │       ├── 000001.jpg
-    │       ├── 000002.jpg
-    │       └── ... (up to ~750 frames per sequence)
-    ├── SNGS-10002/
-    │   └── img1/
-    │       └── ...
-    └── ... (7000 directories)
-```
-
-#### Step 4: Configure training
-
-In your training config (e.g., `configs/default.yaml`), set the paths:
-
-```yaml
-USE_SOCCER_FACTORY_DATA: True
-SOCCER_FACTORY_DATA_DIR: ./datasets/SoccerNetGS/extracted_info
-SOCCER_FACTORY_DATA_IMAGE_DIR: ./datasets/SoccerNetGS/sn500
-USE_SOCCER_FACTORY_DATA_AMOUNT: 7000  # -1 to use all
-```
-
-### Annotation Format
-
-Each JSON file (e.g., `SNGS-10001.json`) contains per-frame annotations keyed by frame ID (1-indexed string):
-
-```json
-{
-  "1": {
-    "people": [
-      {
-        "id": 1,
-        "bbox_ltwh": [x, y, w, h],
-        "role": "player",
-        "legibility_score": 0.95,
-        "jersey_number": 7.0
-      },
-      ...
-    ],
-    "valid_cam_params": true,
-    "K": [[...], [...], [...]],
-    "R": [[...], [...], [...]]
-  },
-  "2": { ... },
-  ...
-}
-```
-
-Fields:
-- `people[].bbox_ltwh`: Bounding box in (left, top, width, height) format, pixel coordinates for 1920x1080 images.
-- `people[].role`: One of `"player"`, `"goalkeeper"`, `"referee"`, `"ball"`, `"other"`.
-- `people[].legibility_score`: Confidence of jersey number visibility (0.0 to 1.0).
-- `people[].jersey_number`: Jersey number (float or null).
-- `valid_cam_params`: Whether camera calibration is available for this frame.
-- `K`: 3x3 camera intrinsic matrix.
-- `R`: 3x3 rotation matrix.
 
 ## Citations
 If you find our work useful, please cite:

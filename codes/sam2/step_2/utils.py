@@ -457,6 +457,78 @@ def get_next_detection(unprocessed_detections):
 
     return False, None, None, None
 
+
+def segment_frame_bounds(segment, num_frames: int, margin: int = 0) -> tuple[int, int]:
+    """Return inclusive [start, end] frame range for bounded SAM2 propagation."""
+    if not segment.detections:
+        return 0, max(0, num_frames - 1)
+    seg_min = segment.detections[0].frame_idx
+    seg_max = segment.detections[-1].frame_idx
+    start = max(0, seg_min - margin)
+    end = min(num_frames - 1, seg_max + margin) if num_frames > 0 else seg_max
+    return start, end
+
+
+def segment_is_propagable(segment) -> bool:
+    if not segment.detections:
+        return False
+    return not segment.detections[0].is_short_segment
+
+
+def segment_has_unmatched(segment) -> bool:
+    return any(not detection.is_matched for detection in segment.detections)
+
+
+def pick_primary_prompt_detection(segment):
+    """Pick the first eligible detection in a segment as the primary SAM2 prompt."""
+    for detection in segment.detections:
+        if detection.is_short_segment or detection.is_matched:
+            continue
+        return detection
+    return None
+
+
+def get_earliest_unmatched_detection(segment, allow_retried: bool = False):
+    """Pick the earliest unmatched detection for a bounded retry within a segment."""
+    for detection in segment.detections:
+        if detection.is_matched:
+            continue
+        if not allow_retried and detection.tried_propagation:
+            continue
+        return detection
+    return None
+
+
+def resolve_obj_id_for_detection(
+    detection,
+    unprocessed_detections,
+    look_back_frames: int = 50,
+):
+    """Resolve stable SAM2 obj_id using recent match history when available."""
+    frame_idx = detection.frame_idx
+    track_id = detection.track_id
+    start_frame = max(0, frame_idx - look_back_frames)
+    matched_history = []
+
+    for prev_frame_idx in range(start_frame, frame_idx):
+        if prev_frame_idx not in unprocessed_detections:
+            continue
+        for prev_detection in unprocessed_detections[prev_frame_idx]:
+            if (
+                prev_detection.track_id == track_id
+                and prev_detection.is_matched
+                and prev_detection.matched_track_id is not None
+            ):
+                matched_history.append(prev_detection.matched_track_id)
+
+    if len(matched_history) > 5:
+        counter = Counter(matched_history)
+        most_common_id, most_common_count = counter.most_common(1)[0]
+        if most_common_count > (len(matched_history) * 2 / 3):
+            return int(most_common_id)
+    return int(track_id)
+
+
 # Calculate IoU and overlap ratios between two bounding boxes
 def calculate_iou(box1, box2):
     # Ensure both box1 and box2 are not None
@@ -885,6 +957,7 @@ def fix_duplicate_track_ids_in_data(unprocessed_data_obj, unmatched_segments, sa
     
     while True:
         has_conflict = False
+        modified_cnt = 0
         frame_to_id = {}
 
         for tracklet in unprocessed_data_obj.unprocessed_tracklets:
@@ -945,7 +1018,7 @@ def fix_duplicate_track_ids_in_data(unprocessed_data_obj, unmatched_segments, sa
                             segment.obj_id = new_obj_id
                             
                             # Update obj_id for all detections in this segment
-                            for frame_idx, detection in segment.get_all_detections().items():
+                            for frame_idx2, detection in segment.get_all_detections().items():
                                 detection.obj_id = new_obj_id
                                 
                                 # Update matched_track_id of the matched unprocessed_detection
@@ -955,17 +1028,33 @@ def fix_duplicate_track_ids_in_data(unprocessed_data_obj, unmatched_segments, sa
                                 # Update obj_id of the associated unmatched_segment
                                 if detection.unmatched_segment:
                                     detection.unmatched_segment.obj_id = new_obj_id
+                        global_obj_id_set.add(new_obj_id)
+                        modified_cnt += 1
                     else:
                         print(f"Video {video_id}: tracklet {track_id} has conflict but no segments need changing")
                         duplicated_unprocessed_detections = []
+                        for tracklet in unprocessed_data_obj.unprocessed_tracklets:
+                            for seg in tracklet.segments:
+                                for detection in seg.detections:
+                                    if (detection.is_matched
+                                            and detection.frame_idx == frame_idx
+                                            and int(detection.matched_track_id) == int(track_id)):
+                                        duplicated_unprocessed_detections.append(detection)
                         for segment in segments:
                             for frame_idx2, detection in segment.get_all_detections().items():
-                                if detection.is_matched:
-                                    if frame_idx2 == frame_idx and detection.matched_track_id == track_id:
-                                        duplicated_unprocessed_detections.append(detection)
+                                upd = detection.matched_unprocessed_detection
+                                if upd is None:
+                                    continue
+                                if (
+                                    frame_idx2 == frame_idx
+                                    and upd.is_matched
+                                    and int(upd.matched_track_id) == int(track_id)
+                                    and upd not in duplicated_unprocessed_detections
+                                ):
+                                    duplicated_unprocessed_detections.append(upd)
                         duplicated_unmatched_segments = []
                         for segment in unmatched_segments:
-                            if segment.frame_idx == frame_idx and segment.obj_id == track_id:
+                            if segment.frame_idx == frame_idx and int(segment.obj_id) == int(track_id):
                                 duplicated_unmatched_segments.append(segment)
                         
                         duplicated_ones = duplicated_unprocessed_detections + duplicated_unmatched_segments
@@ -991,11 +1080,20 @@ def fix_duplicate_track_ids_in_data(unprocessed_data_obj, unmatched_segments, sa
                                 # Add new ID to global set
                                 global_obj_id_set.add(new_obj_id)
                             
-                            has_conflict = True
                             modified_cnt += 1
+                        else:
+                            print(
+                                f"Video {video_id}: WARNING could not resolve duplicate track_id "
+                                f"{track_id} at frame {frame_idx} (found {len(duplicated_ones)} duplicate object(s)); skipping"
+                            )
+                            modified_cnt = -1
                         
                                 
         if not has_conflict:
+            break
+        if modified_cnt <= 0:
+            if modified_cnt == 0:
+                print(f"Video {video_id}: WARNING duplicate track_id fix made no progress; stopping")
             break
     
 
