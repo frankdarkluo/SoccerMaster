@@ -99,13 +99,19 @@ class EventDetector:
 
         team_by_track = resolve_team_by_track(frames)
         segments = possession_segments(frames, team_by_track)
+        ball_pos = {
+            frame.frame_id: frame.ball_xy
+            for frame in frames
+            if frame.ball_xy is not None
+        }
+        velocities = self._velocities(ball_pos)
 
         raw: List[Event] = []
         raw += self._passes(segments)
         raw += self._interceptions(segments)
         raw += self._dribbles(segments, frames, team_by_track)
-        raw += self._shots({}, {}, segments)
-        raw += self._goals({}, segments)
+        raw += self._shots(velocities, ball_pos, segments)
+        raw += self._goals(ball_pos, segments)
         raw += self._clearances({}, {}, segments)
         return sorted(raw, key=lambda e: e.timestamp_s)
 
@@ -231,20 +237,75 @@ class EventDetector:
             ))
         return events
 
+    def _velocities(self, ball_pos: Dict[int, Tuple[float, float]]) -> Dict[int, float]:
+        velocities: Dict[int, float] = {}
+        previous_fid = None
+        previous_xy = None
+        for fid in sorted(ball_pos):
+            xy = ball_pos[fid]
+            if previous_fid is not None and previous_xy is not None:
+                velocities[fid] = math.hypot(xy[0] - previous_xy[0], xy[1] - previous_xy[1]) * self.fps
+            previous_fid = fid
+            previous_xy = xy
+        return velocities
+
+    def _last_holder_before(
+        self,
+        segments: List[PossessionSegment],
+        frame_id: int,
+    ) -> Optional[PossessionSegment]:
+        best = None
+        for segment in segments:
+            if segment.end_fid <= frame_id and (best is None or segment.end_fid > best.end_fid):
+                best = segment
+        return best
+
     def _shots(
         self,
         velocities: Dict[int, float],
         ball_pos: Dict[int, Tuple[float, float]],
         segments: List[PossessionSegment],
     ) -> List[Event]:
-        return []
+        events: List[Event] = []
+        for fid, speed in velocities.items():
+            if speed < self.shot_speed_threshold or fid not in ball_pos:
+                continue
+            bx, _ = ball_pos[fid]
+            if abs(bx) <= (GOAL_X - PENALTY_AREA_LENGTH):
+                continue
+            shooter = self._last_holder_before(segments, fid)
+            events.append(self._make(
+                "football.shoot",
+                fid,
+                player_jersey=shooter.jersey if shooter else None,
+                player_team=shooter.team if shooter else None,
+                track_id=shooter.track_id if shooter else None,
+                ball_speed_mps=speed,
+                confidence=min(speed / 20.0, 1.0),
+                description_hint=f"shot: ball {speed:.1f} m/s near goal",
+            ))
+        return events
 
     def _goals(
         self,
         ball_pos: Dict[int, Tuple[float, float]],
         segments: List[PossessionSegment],
     ) -> List[Event]:
-        return []
+        events: List[Event] = []
+        for fid, (bx, by) in ball_pos.items():
+            if abs(abs(bx) - GOAL_X) > GOAL_LINE_TOL_M or abs(by) > GOAL_Y_HALF:
+                continue
+            scorer = self._last_holder_before(segments, fid)
+            events.append(self._make(
+                "football.goal",
+                fid,
+                player_jersey=scorer.jersey if scorer else None,
+                player_team=scorer.team if scorer else None,
+                track_id=scorer.track_id if scorer else None,
+                confidence=0.85,
+                description_hint="goal: ball crosses goal line",
+            ))
+        return events
 
     def _clearances(
         self,
