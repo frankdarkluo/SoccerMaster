@@ -6,6 +6,7 @@ Assist is composed post-verify (compose_assists). Timestamps are ACTION moments.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -190,7 +191,45 @@ class EventDetector:
         frames: List[FrameData],
         team_by_track: Dict[int, Optional[str]],
     ) -> List[Event]:
-        return []
+        events: List[Event] = []
+        frame_by_id = {frame.frame_id: frame for frame in frames}
+        for segment in segments:
+            displacement = math.hypot(
+                segment.end_xy[0] - segment.start_xy[0],
+                segment.end_xy[1] - segment.start_xy[1],
+            )
+            if displacement < DRIBBLE_MIN_DISPLACEMENT_M:
+                continue
+
+            engaged_fid = None
+            min_d = None
+            for fid in range(segment.start_fid, segment.end_fid + 1):
+                frame = frame_by_id.get(fid)
+                if frame is None or frame.ball_xy is None:
+                    continue
+                bx, by = frame.ball_xy
+                for player in frame.players:
+                    track_id = player.get("track_id")
+                    if track_id is not None and team_by_track.get(int(track_id)) == segment.team:
+                        continue
+                    d = math.hypot(player["x"] - bx, player["y"] - by)
+                    if d <= DRIBBLE_OPPONENT_RADIUS_M and (min_d is None or d < min_d):
+                        min_d = d
+                        engaged_fid = fid
+
+            if engaged_fid is None:
+                continue
+
+            events.append(self._make(
+                "football.dribble",
+                engaged_fid,
+                player_jersey=segment.jersey,
+                player_team=segment.team,
+                track_id=segment.track_id,
+                confidence=0.6,
+                description_hint=f"dribble: {displacement:.1f}m carry past opponent",
+            ))
+        return events
 
     def _shots(
         self,
