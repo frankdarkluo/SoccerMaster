@@ -65,3 +65,14 @@ class PossessionSegment:
     end_fid: int
     start_xy: Tuple[float, float]
     end_xy: Tuple[float, float]
+
+
+@dataclass
+class Verdict:
+    verdict: str = "uncertain"
+    outcome: Optional[str] = None
+    actor_jersey: Optional[str] = None
+    actor_team: Optional[str] = None
+    receiver_jersey: Optional[str] = None
+    corrected_event_code: Optional[str] = None
+    reason: str = ""
