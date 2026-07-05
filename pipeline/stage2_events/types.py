@@ -54,3 +54,14 @@ class FrameData:
     frame_id: int
     ball_xy: Optional[Tuple[float, float]] = None
     players: List[dict] = field(default_factory=list)
+
+
+@dataclass
+class PossessionSegment:
+    track_id: int
+    team: Optional[str]
+    jersey: Optional[str]
+    start_fid: int
+    end_fid: int
+    start_xy: Tuple[float, float]
+    end_xy: Tuple[float, float]

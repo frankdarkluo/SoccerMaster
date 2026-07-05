@@ -399,3 +399,7 @@ class EventDetector:
         }
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def load_frames(path: str) -> List[FrameData]:
+    return EventDetector(EventSchema())._load_frames(path)
