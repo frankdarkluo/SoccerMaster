@@ -8,7 +8,7 @@ from configs.util import load_super_config, yaml_to_dict
 
 # ─── 路径配置 ────────────────────────────────────────────────────────────────
 CONFIG_PATH      = "./configs/pretrain.yaml"
-CHECKPOINT_DIR   = "./pretrained_models/SoccerMaster"
+CHECKPOINT_DIR   = "../sn-gamestate/pretrained_models/SoccerMaster"
 DEVICE           = "cuda" if torch.cuda.is_available() else "cpu"
 # ─────────────────────────────────────────────────────────────────────────────
 

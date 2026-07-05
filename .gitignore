@@ -29,6 +29,17 @@ models/bak
 .cursorignore
 pyrightconfig.json
 soccerbackbone.egg-info
+docs/superpowers/
+
+# Media files outside root images/
+*.jpg
+*.jpeg
+*.JPG
+*.JPEG
+*.mp4
+*.MP4
+!images/
+!images/**
 
 # macOS system files
 .DS_Store
