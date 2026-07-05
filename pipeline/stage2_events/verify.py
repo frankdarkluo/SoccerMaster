@@ -15,6 +15,8 @@ import json
 import re
 from typing import Optional
 
+from pipeline.stage2_events.schema import EventSchema
+from pipeline.stage2_events.types import Event
 from pipeline.stage2_events.types import Verdict
 
 DUEL_CODES = {"football.pass", "football.clearance", "football.dribble", "football.interception"}
@@ -90,3 +92,72 @@ def parse_verdict(raw: str) -> Verdict:
         ),
         reason=str(data.get("reason") or "")[:400],
     )
+
+
+def build_verify_prompt(event: Event) -> str:
+    jersey = event.player_jersey or "unknown"
+    team = event.player_team or "unknown"
+    name, name_cn = event.display_name_en, event.display_name_cn
+    family = sorted(FAMILY.get(event.event_code, {event.event_code}))
+    retypes = ", ".join(family)
+    outcome_line = (
+        f"2) outcome — if confirmed, did the {name} SUCCEED? "
+        "success = won/completed (interception wins the ball; pass reaches a teammate; "
+        "dribble beats the man; clearance removes danger). "
+        "failure = attempted but lost/incomplete. Omit unless verdict is confirm.\n"
+        if event.event_code in DUEL_CODES
+        else "2) outcome — leave null for this event type.\n"
+    )
+    return (
+        "You are a football video analyst. A tracking system flagged a candidate "
+        f'"{name}" ({name_cn}) at t={event.timestamp_s:.2f}s by the highlighted player '
+        f"(red box): jersey #{jersey}, {team} team. Frames show the ball (green circle) "
+        "and, for shots, a yellow arrow toward the goal.\n"
+        "Answer these questions:\n"
+        f"1) verdict — did this player ATTEMPT a {name} here? confirm / reject / uncertain.\n"
+        f"{outcome_line}"
+        f"3) corrected_event_code — if it is actually a different action, pick ONE of: "
+        f"{retypes}. Else null.\n"
+        "4) actor_jersey / actor_team(left|right) — correct the actor if the red box is wrong.\n"
+        "Output ONLY JSON:\n"
+        '{"verdict": "confirm|reject|uncertain", "outcome": "success|failure|null", '
+        '"corrected_event_code": "<one of the codes or null>", '
+        '"actor_jersey": "<number or empty>", "actor_team": "left|right|", '
+        '"receiver_jersey": "<number or empty>", "reason": "<short>"}'
+    )
+
+
+def apply_verdict(event: Event, verdict: Verdict, schema: EventSchema) -> Optional[Event]:
+    """Dispose a candidate per verdict. Returns None to drop. Mutates+returns otherwise."""
+    if verdict.verdict == "reject":
+        return None
+
+    if verdict.verdict == "uncertain":
+        event.confidence = round(event.confidence * 0.5, 2)
+        event.tags["verified"] = "uncertain"
+        return event
+
+    event.tags["verified"] = "true"
+
+    new_code = verdict.corrected_event_code
+    if new_code and new_code != event.event_code and new_code in FAMILY.get(event.event_code, set()):
+        ev_def = schema.get_event(new_code)
+        event.event_code = new_code
+        event.display_name_en = ev_def.display_name_en
+        event.display_name_cn = ev_def.display_name_cn
+        event.importance = ev_def.importance_base
+
+    if event.event_code in DUEL_CODES and verdict.outcome is not None:
+        event.tags["outcome"] = verdict.outcome
+        if verdict.outcome == "failure":
+            event.confidence = round(event.confidence * 0.5, 2)
+            event.importance = round(event.importance * 0.5, 2)
+
+    if verdict.actor_jersey:
+        event.player_jersey = verdict.actor_jersey
+    if verdict.actor_team in ("left", "right"):
+        event.player_team = verdict.actor_team
+    if verdict.receiver_jersey and event.event_code == "football.pass":
+        event.target_jersey = verdict.receiver_jersey
+        event.target_team = event.player_team
+    return event
