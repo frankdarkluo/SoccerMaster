@@ -112,7 +112,7 @@ class EventDetector:
         raw += self._dribbles(segments, frames, team_by_track)
         raw += self._shots(velocities, ball_pos, segments)
         raw += self._goals(ball_pos, segments)
-        raw += self._clearances({}, {}, segments)
+        raw += self._clearances(velocities, ball_pos, segments)
         return sorted(raw, key=lambda e: e.timestamp_s)
 
     def _next_id(self) -> str:
@@ -260,6 +260,16 @@ class EventDetector:
                 best = segment
         return best
 
+    def _holder_at_frame(
+        self,
+        segments: List[PossessionSegment],
+        frame_id: int,
+    ) -> Optional[PossessionSegment]:
+        for segment in segments:
+            if segment.start_fid <= frame_id <= segment.end_fid:
+                return segment
+        return self._last_holder_before(segments, frame_id)
+
     def _shots(
         self,
         velocities: Dict[int, float],
@@ -313,7 +323,28 @@ class EventDetector:
         ball_pos: Dict[int, Tuple[float, float]],
         segments: List[PossessionSegment],
     ) -> List[Event]:
-        return []
+        events: List[Event] = []
+        for fid, speed in velocities.items():
+            if speed < CLEARANCE_SPEED_MPS or fid not in ball_pos or (fid - 1) not in ball_pos:
+                continue
+            bx, _ = ball_pos[fid]
+            prev_bx, _ = ball_pos[fid - 1]
+            moving_away = abs(bx) < abs(prev_bx)
+            in_own_half = abs(prev_bx) > 20
+            if not (moving_away and in_own_half):
+                continue
+            clearer = self._holder_at_frame(segments, fid)
+            events.append(self._make(
+                "football.clearance",
+                fid,
+                player_jersey=clearer.jersey if clearer else None,
+                player_team=clearer.team if clearer else None,
+                track_id=clearer.track_id if clearer else None,
+                ball_speed_mps=speed,
+                confidence=0.6,
+                description_hint="clearance: ball driven away from own goal",
+            ))
+        return events
 
     def _event_gap_s(self, event_code: str) -> float:
         return EVENT_GAP_S.get(event_code, self.min_gap_s)
