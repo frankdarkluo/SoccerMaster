@@ -58,3 +58,34 @@ def test_dribble_on_long_carry_past_opponent():
     dribbles = det._dribbles(segs, frames, team)
     assert len(dribbles) == 1
     assert dribbles[0].player_jersey == "7" and dribbles[0].player_team == "left"
+
+
+def _shot_frames():
+    # #9 left holds ball near right goal (x≈48) frames 1-4, then ball rockets to
+    # x=52.5 (goal line) over frames 5-6: high speed + crosses line.
+    frames = []
+    seq = {1: 47.0, 2: 47.5, 3: 48.0, 4: 48.0, 5: 50.5, 6: 52.5}
+    for f in range(1, 7):
+        bx = seq[f]
+        fd = FrameData(frame_id=f, ball_xy=(bx, 0.0))
+        fd.players = [
+            {"track_id": 9, "x": min(bx, 48.0), "y": 0.0, "role": "player",
+             "team": "left", "jersey": "9"},
+        ]
+        frames.append(fd)
+    return frames
+
+
+def test_shot_attributes_shooter_and_goal_attributes_scorer():
+    from pipeline.stage2_events.schema import EventSchema
+    frames = _shot_frames()
+    det = EventDetector(EventSchema(), fps=25, shot_speed_threshold=10.0)
+    team = resolve_team_by_track(frames)
+    segs = possession_segments(frames, team)
+    ball_pos = {f.frame_id: f.ball_xy for f in frames}
+    vel = det._velocities(ball_pos)
+    shots = det._shots(vel, ball_pos, segs)
+    goals = det._goals(ball_pos, segs)
+    assert shots and shots[0].player_jersey is None     # emit shot even without last holder
+    assert any(s.player_jersey == "9" for s in shots)   # shooter attributed once holder exists
+    assert goals and goals[0].player_jersey == "9"      # scorer attributed (not null)
