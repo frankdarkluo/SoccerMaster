@@ -59,6 +59,9 @@ def run_stage1(config: PipelineConfig) -> None:
             output_dir,
             fps=config.fps,
             sequence_name=sequence_name,
+            ball_labels_path=Path(config.clip_dir) / "Labels-GameState.json"
+            if (Path(config.clip_dir) / "Labels-GameState.json").is_file()
+            else None,
         )
         return
 
@@ -91,12 +94,14 @@ def run_stage1(config: PipelineConfig) -> None:
         sequence_name = config.sequence_prefix
 
     pklz_path = run_full_gsr(config)
+    labels_path = Path(config.clip_dir) / "Labels-GameState.json"
     convert_pklz_to_json(
         pklz_path,
         video_id,
         output_dir,
         fps=fps,
         sequence_name=sequence_name,
+        ball_labels_path=labels_path if labels_path.is_file() else None,
     )
 
 
@@ -130,16 +135,16 @@ def run_stage2(config: PipelineConfig) -> int:
         from pipeline.stage2_events.verify import cleanup_verify_artifacts, verify_events
         adapter = _build_verify_adapter(config)
         log.info("Verifying events with %s ...", config.verify_backend)
+        candidates = dedup_events(events)
+        log.info("Dedup before verify: %d raw -> %d candidates", len(events), len(candidates))
         events, audit = verify_events(
-            events, str(config.predictions_json), config.frames_dir, config.output_dir,
+            candidates, str(config.predictions_json), config.frames_dir, config.output_dir,
             adapter, str(config.homography_json), fps=config.fps,
             window_s=config.verify_window_s,
-            force=config.force,
         )
         dropped = sum(1 for a in audit if not a["kept"])
         log.info("Verification: %d checked, %d dropped", len(audit), dropped)
-        if config.cleanup_verify_temp:
-            cleanup_verify_artifacts(config.output_dir)
+        cleanup_verify_artifacts(config.output_dir)
 
     events = enrich_events(dedup_events(compose_assists(events)), frames)
     write_events_json(events, config.output_dir / "events.json", video_info)
@@ -297,13 +302,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--verify-backend", default="doubao", choices=["doubao", "qwen_local"],
         help="VLM backend for event verification (default: doubao)",
     )
-    parser.add_argument(
-        "--no-cleanup-verify-temp",
-        dest="cleanup_verify_temp",
-        action="store_false",
-        help="Keep verify_clips/ and verify_cache/ after verification (default: delete them)",
-    )
-    parser.set_defaults(cleanup_verify_temp=True)
     parser.add_argument("--no-topology-lines", action="store_true")
     parser.add_argument(
         "--tts-backend",
@@ -331,7 +329,6 @@ def config_from_args(args: argparse.Namespace) -> PipelineConfig:
         force=args.force,
         verify_events=args.verify_events,
         verify_backend=args.verify_backend,
-        cleanup_verify_temp=args.cleanup_verify_temp,
         topology_lines_enabled=not args.no_topology_lines,
         tts_backend=args.tts_backend,
         tts_language=args.tts_language,

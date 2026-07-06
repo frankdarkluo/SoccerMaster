@@ -7,7 +7,6 @@ Verdict: did the action happen (confirm/reject/uncertain), did it succeed
 
 Fail-hard: no try/except around infra or logic. The ONLY guard is model-text
 -> JSON parsing, which maps malformed output to a deterministic 'uncertain'.
-Per-candidate verdict cache makes crash+rerun cheap.
 """
 from __future__ import annotations
 
@@ -132,13 +131,8 @@ def build_verify_prompt(event: Event) -> str:
 
 def apply_verdict(event: Event, verdict: Verdict, schema: EventSchema) -> Optional[Event]:
     """Dispose a candidate per verdict. Returns None to drop. Mutates+returns otherwise."""
-    if verdict.verdict == "reject":
+    if verdict.verdict == "reject" or verdict.verdict == "uncertain":
         return None
-
-    if verdict.verdict == "uncertain":
-        event.confidence = round(event.confidence * 0.5, 2)
-        event.tags["verified"] = "uncertain"
-        return event
 
     event.tags["verified"] = "true"
 
@@ -166,14 +160,13 @@ def apply_verdict(event: Event, verdict: Verdict, schema: EventSchema) -> Option
     return event
 
 
-VERIFY_TEMP_DIRS = ("verify_cache", "verify_clips")
+VERIFY_CLIPS_DIR = "verify_clips"
 
 
 def cleanup_verify_artifacts(output_dir: Path) -> None:
-    for name in VERIFY_TEMP_DIRS:
-        p = Path(output_dir) / name
-        if p.is_dir():
-            shutil.rmtree(p)
+    p = Path(output_dir) / VERIFY_CLIPS_DIR
+    if p.is_dir():
+        shutil.rmtree(p)
 
 
 def verify_events(
@@ -185,12 +178,10 @@ def verify_events(
     homography_path: str,
     fps: int = 25,
     window_s: float = 0.5,
-    force: bool = False,
 ) -> Tuple[List[Event], List[dict]]:
     output_dir = Path(output_dir)
-    cache_dir = output_dir / "verify_cache"
-    clip_dir = output_dir / "verify_clips"
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    clip_dir = output_dir / VERIFY_CLIPS_DIR
+    clip_dir.mkdir(parents=True, exist_ok=True)
 
     schema = EventSchema()
     bbox_index = build_bbox_index(predictions_json_path)
@@ -204,29 +195,21 @@ def verify_events(
             verified.append(event)
             continue
 
-        cache_path = cache_dir / f"{event.event_id}.json"
-        if cache_path.exists() and not force:
-            verdict = Verdict(**json.loads(cache_path.read_text(encoding="utf-8")))
+        frames = build_evidence_frames(
+            event,
+            frames_dir,
+            bbox_index,
+            homo,
+            predictions_json_path,
+            clip_dir / event.event_id,
+            fps=fps,
+            window_s=window_s,
+        )
+        if not frames:
+            verdict = Verdict(verdict="uncertain", reason="no-frames")
         else:
-            frames = build_evidence_frames(
-                event,
-                frames_dir,
-                bbox_index,
-                homo,
-                predictions_json_path,
-                clip_dir / event.event_id,
-                fps=fps,
-                window_s=window_s,
-            )
-            if not frames:
-                verdict = Verdict(verdict="uncertain", reason="no-frames")
-            else:
-                raw = adapter.generate(build_verify_prompt(event), frames)
-                verdict = parse_verdict(raw)
-            cache_path.write_text(
-                json.dumps(verdict.__dict__, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            raw = adapter.generate(build_verify_prompt(event), frames)
+            verdict = parse_verdict(raw)
 
         actor_jersey = event.player_jersey
         actor_team = event.player_team

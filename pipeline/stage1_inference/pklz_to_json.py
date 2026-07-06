@@ -64,6 +64,28 @@ def _bbox_image(bbox_ltwh: Any) -> dict | None:
     }
 
 
+def _homography_entry(h: Any) -> dict:
+    if h is None:
+        return {"H": None, "H_inv": None, "valid": False}
+    if isinstance(h, float) and np.isnan(h):
+        return {"H": None, "H_inv": None, "valid": False}
+    try:
+        h_arr = np.array(h, dtype=float)
+    except (TypeError, ValueError):
+        return {"H": None, "H_inv": None, "valid": False}
+    if h_arr.shape != (3, 3) or not np.isfinite(h_arr).all():
+        return {"H": None, "H_inv": None, "valid": False}
+    try:
+        h_inv = np.linalg.inv(h_arr)
+    except np.linalg.LinAlgError:
+        return {"H": None, "H_inv": None, "valid": False}
+    return {
+        "H": h_arr.tolist(),
+        "H_inv": h_inv.tolist(),
+        "valid": True,
+    }
+
+
 def _to_serializable(obj: Any) -> Any:
     if isinstance(obj, np.ndarray):
         return obj.tolist()
@@ -74,12 +96,43 @@ def _to_serializable(obj: Any) -> Any:
     return obj
 
 
+def _ball_annotations_from_labels(labels_path: Path, start_ann_id: int) -> list[dict]:
+    """Append GT ball rows when GSR pklz has no ball detections."""
+    data = json.loads(labels_path.read_text(encoding="utf-8"))
+    balls = []
+    ann_id = start_ann_id
+    for ann in data.get("annotations", []):
+        attrs = ann.get("attributes") or {}
+        if attrs.get("role") != "ball":
+            continue
+        bp = _bbox_pitch(ann.get("bbox_pitch"))
+        if bp is None:
+            continue
+        ann_id += 1
+        balls.append({
+            "id": str(ann_id),
+            "image_id": str(ann["image_id"]),
+            "track_id": int(ann.get("track_id", 0)),
+            "supercategory": "object",
+            "category_id": ROLE_TO_CATEGORY["ball"],
+            "bbox_image": ann.get("bbox_image"),
+            "bbox_pitch": bp,
+            "attributes": {
+                "role": "ball",
+                "team": attrs.get("team"),
+                "jersey": str(attrs.get("jersey") or ""),
+            },
+        })
+    return balls
+
+
 def convert_pklz_to_json(
     pklz_path: Path,
     video_id: str,
     output_dir: Path,
     fps: int = 25,
     sequence_name: str | None = None,
+    ball_labels_path: Path | str | None = None,
 ) -> Tuple[Path, Path]:
     """
     Convert pklz tracker state to predictions.json + homography_per_frame.json.
@@ -98,6 +151,15 @@ def convert_pklz_to_json(
             detections_df = pickle.load(f)
         with z.open(f"{video_id}_image.pkl") as f:
             image_df = pickle.load(f)
+
+    homography_data: dict[str, dict] = {"frames": {}}
+    valid_homography_image_ids = set()
+    for _, row in image_df.iterrows():
+        image_id = str(row.get("id", row.name))
+        entry = _homography_entry(row.get("h"))
+        homography_data["frames"][image_id] = entry
+        if entry["valid"]:
+            valid_homography_image_ids.add(image_id)
 
     images = []
     for _, row in image_df.iterrows():
@@ -118,18 +180,21 @@ def convert_pklz_to_json(
     annotations = []
     ann_id = 0
     for _, row in detections_df.iterrows():
-        bp = _bbox_pitch(row.get("bbox_pitch"))
-        if bp is None:
+        image_id = str(row["image_id"])
+        bbox_image = _bbox_image(row.get("bbox_ltwh"))
+        has_valid_homography = image_id in valid_homography_image_ids
+        bp = _bbox_pitch(row.get("bbox_pitch")) if has_valid_homography else None
+        if bp is None and (has_valid_homography or bbox_image is None):
             continue
         role = row.get("role")
         ann_id += 1
         annotations.append({
             "id": str(ann_id),
-            "image_id": str(row["image_id"]),
+            "image_id": image_id,
             "track_id": int(row["track_id"]),
             "supercategory": "object",
             "category_id": ROLE_TO_CATEGORY.get(role, 7),
-            "bbox_image": _bbox_image(row.get("bbox_ltwh")),
+            "bbox_image": bbox_image,
             "bbox_pitch": bp,
             "attributes": {
                 "role": role,
@@ -137,6 +202,10 @@ def convert_pklz_to_json(
                 "jersey": str(row.get("jersey_number", "")) if row.get("jersey_number") is not None else "",
             },
         })
+
+    has_ball = any(a.get("attributes", {}).get("role") == "ball" for a in annotations)
+    if not has_ball and ball_labels_path is not None:
+        annotations.extend(_ball_annotations_from_labels(Path(ball_labels_path), ann_id))
 
     name = sequence_name or f"SNGS-{video_id}"
     predictions = {
@@ -153,24 +222,6 @@ def convert_pklz_to_json(
     pred_path = output_dir / "predictions.json"
     with open(pred_path, "w", encoding="utf-8") as f:
         json.dump(predictions, f, indent=2, ensure_ascii=False, default=_to_serializable)
-
-    homography_data: dict[str, dict] = {"frames": {}}
-    for _, row in image_df.iterrows():
-        image_id = str(row.get("id", row.name))
-        h = row.get("h")
-        if h is not None and not (isinstance(h, float) and np.isnan(h)):
-            h_arr = np.array(h, dtype=float)
-            try:
-                h_inv = np.linalg.inv(h_arr)
-                homography_data["frames"][image_id] = {
-                    "H": h_arr.tolist(),
-                    "H_inv": h_inv.tolist(),
-                    "valid": True,
-                }
-            except np.linalg.LinAlgError:
-                homography_data["frames"][image_id] = {"H": None, "H_inv": None, "valid": False}
-        else:
-            homography_data["frames"][image_id] = {"H": None, "H_inv": None, "valid": False}
 
     homo_path = output_dir / "homography_per_frame.json"
     with open(homo_path, "w", encoding="utf-8") as f:
