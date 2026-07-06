@@ -56,7 +56,6 @@ class PipelineConfig:
     verify_model_path: str = str(
         PRETRAINED_MODELS / "jn" / "Qwen2.5-VL-7B-Instruct"
     )
-    cleanup_verify_temp: bool = True
 
     # --- Stage 3 ---
     beam_duration_s: float = 0.5
