@@ -62,6 +62,7 @@ def generate_commentary(
     topo_json_path: Optional[Path] = None,
     visual_input: Optional[Union[Path, List[Path]]] = None,
     schema: Optional[EventSchema] = None,
+    verification_audit_path: Optional[Path] = None,
 ) -> Path:
     """Build prompt, call LLM adapter (Doubao by default), write commentary.json."""
     config = config or PipelineConfig()
@@ -79,6 +80,7 @@ def generate_commentary(
         config.languages,
         topo_json_path=topo_json_path,
         roster=roster,
+        verification_audit_path=verification_audit_path,
     )
     raw_output = adapter.generate(prompt, visual_input)
     segments = parse_commentary_output(raw_output)

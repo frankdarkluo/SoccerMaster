@@ -100,6 +100,33 @@ def _box(img, bbox, color, thickness=3, expand: int = 0):
     cv2.rectangle(img, (x, y), (x + w, y + h), color, thickness)
 
 
+def _homography_valid(homo: Dict[str, dict], image_id: str) -> bool:
+    entry = homo.get(image_id)
+    if not entry:
+        return False
+    if entry.get("valid") is False:
+        return False
+    matrix = entry.get("H")
+    if matrix is None:
+        return False
+    return True
+
+
+def image_space_goal_point(
+    actor_bbox: dict,
+    player_team: Optional[str],
+    img_width: int,
+) -> Tuple[int, int]:
+    """Heuristic shoot-direction target when homography is confirmed invalid (H2 fallback)."""
+    ax, ay = _center(actor_bbox)
+    # Broadcast view: left team attacks right goal (+x pitch), right team attacks left.
+    if player_team == "right":
+        gx = int(img_width * 0.12)
+    else:
+        gx = int(img_width * 0.88)
+    return gx, ay
+
+
 def _center(bbox: dict) -> Tuple[int, int]:
     cx = bbox.get("x_center", bbox.get("x", 0))
     cy = bbox.get("y_center", bbox.get("y", 0))
@@ -164,19 +191,24 @@ def build_evidence_frames(
 
         if event.event_code in ("football.shoot", "football.goal") and actor_bbox:
             image_id = frame_to_image.get(fnum)
-            if image_id is not None:
+            goal_point = None
+            if image_id is not None and _homography_valid(homo, image_id):
                 goal_point = project_pitch_to_image(homo, image_id, goal_x, 0.0)
-                if goal_point is not None:
-                    ax, ay = _center(actor_bbox)
-                    gx, gy = int(goal_point[0]), int(goal_point[1])
-                    cv2.arrowedLine(
-                        img,
-                        (ax, ay),
-                        (gx, gy),
-                        GOAL_ARROW_COLOR,
-                        2,
-                        tipLength=0.05,
-                    )
+            # Image-space fallback: only when homography is confirmed invalid (H2 long-gap path).
+            if goal_point is None and image_id is not None and not _homography_valid(homo, image_id):
+                gx, gy = image_space_goal_point(actor_bbox, event.player_team, img.shape[1])
+                goal_point = (float(gx), float(gy))
+            if goal_point is not None:
+                ax, ay = _center(actor_bbox)
+                gx, gy = int(goal_point[0]), int(goal_point[1])
+                cv2.arrowedLine(
+                    img,
+                    (ax, ay),
+                    (gx, gy),
+                    GOAL_ARROW_COLOR,
+                    2,
+                    tipLength=0.05,
+                )
 
         out = out_dir / f"{event.event_id}_{fnum:06d}.jpg"
         cv2.imwrite(str(out), img)

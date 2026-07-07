@@ -1,5 +1,5 @@
-"""Re-export pitch constants from formation_topology."""
-from formation_topology.pitch import (
+"""Re-export pitch constants from pipeline.topology."""
+from pipeline.topology.pitch import (
     PITCH_LENGTH,
     PITCH_WIDTH,
     canonicalize,

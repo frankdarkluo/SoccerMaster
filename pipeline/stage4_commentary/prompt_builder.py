@@ -8,12 +8,56 @@ from typing import Dict, List, Optional
 from pipeline.stage2_events.schema import EventSchema
 
 
+def _find_gaps(timestamps: List[float], duration_s: float, gap_threshold_s: float) -> List[tuple]:
+    """Return (start, end) windows of at least gap_threshold_s with no confirmed event."""
+    bounds = [0.0] + sorted(timestamps) + [duration_s]
+    gaps = []
+    for start, end in zip(bounds, bounds[1:]):
+        if end - start >= gap_threshold_s:
+            gaps.append((start, end))
+    return gaps
+
+
+def _load_gap_filler_events(
+    verification_audit_path: Optional[Path],
+    confirmed_timestamps: List[float],
+    duration_s: float,
+    gap_threshold_s: float,
+) -> List[dict]:
+    """Rejected candidates that named a plausible corrected_event_code but weren't
+    kept (e.g. the correction fell outside the event family), surfaced only inside
+    long silent gaps so commentary has something concrete to loosely reference."""
+    if not verification_audit_path or not Path(verification_audit_path).exists():
+        return []
+    with open(verification_audit_path, encoding="utf-8") as f:
+        audit = json.load(f)
+
+    gaps = _find_gaps(confirmed_timestamps, duration_s, gap_threshold_s)
+    if not gaps:
+        return []
+
+    fillers = []
+    for entry in audit:
+        if entry.get("kept"):
+            continue
+        corrected = entry.get("corrected_event_code")
+        if not corrected or corrected == "null":
+            continue
+        t = entry.get("timestamp_s")
+        if t is None or not any(start <= t < end for start, end in gaps):
+            continue
+        fillers.append(entry)
+    return fillers
+
+
 def build_commentary_prompt(
     events_json_path: Path,
     schema: EventSchema,
     languages: List[str],
     topo_json_path: Optional[Path] = None,
     roster: Optional[Dict[str, Dict[str, str]]] = None,
+    verification_audit_path: Optional[Path] = None,
+    gap_threshold_s: float = 8.0,
 ) -> str:
     with open(events_json_path, encoding="utf-8") as f:
         events_data = json.load(f)
@@ -75,13 +119,39 @@ PACING (critical for TTS):
             line += "  ⚡ HIGHLIGHT"
         parts.append(line)
 
+    duration_s = events_data.get("video_info", {}).get("duration_s", 30.0)
+    confirmed_timestamps = [ev["timestamp_s"] for ev in events_data.get("events", [])]
+    gap_fillers = _load_gap_filler_events(
+        verification_audit_path, confirmed_timestamps, duration_s, gap_threshold_s,
+    )
+    if gap_fillers:
+        parts.append("\n[Unconfirmed Activity]")
+        parts.append(
+            "These candidates were flagged during a long stretch with no confirmed event, "
+            "but a verifier could not fully confirm the original label. You MAY loosely "
+            "reference one if it helps avoid dead air in this window, using soft/hedged "
+            "language (e.g. 'appears to', 'a challenge for the ball'). Never present these "
+            "as confirmed actions, and do not invent outcomes beyond the reason given."
+        )
+        for entry in gap_fillers:
+            line = f"t={entry['timestamp_s']}s: possible [{entry.get('corrected_event_code')}]"
+            event_id = entry.get("event_id", "")
+            if event_id:
+                line += f" id={event_id}"
+            if entry.get("player_jersey"):
+                line += f" #{entry['player_jersey']}"
+            if entry.get("player_team"):
+                line += f" ({entry['player_team']})"
+            line += f" — unconfirmed: \"{entry.get('reason', '')}\""
+            parts.append(line)
+
     if topo_json_path and topo_json_path.exists():
         parts.append("\n[Formation Context]")
         with open(topo_json_path, encoding="utf-8") as f:
             topo = json.load(f)
         records = topo if isinstance(topo, list) else topo.get("records", [])
         for record in records[:6]:
-            t = record.get("window_start_s", "?")
+            t = record.get("t_start", record.get("window_start_s", "?"))
             team = record.get("team", "?")
             height = record.get("block_height_m")
             depth = record.get("block_depth_m")

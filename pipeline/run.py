@@ -167,6 +167,7 @@ def _build_verify_adapter(config: PipelineConfig):
 
 def run_stage3(config: PipelineConfig) -> None:
     from pipeline.stage3_effects.render import render_annotated_video
+    from pipeline.stage3_effects.topology_analysis import run_topology_analysis
 
     homography_path = config.homography_json if config.homography_json.exists() else None
     render_annotated_video(
@@ -178,6 +179,13 @@ def run_stage3(config: PipelineConfig) -> None:
         homography_json_path=homography_path,
     )
 
+    if config.force or not config.topology_json.exists():
+        run_topology_analysis(
+            config.predictions_json,
+            config.topology_json,
+            fps=config.fps,
+        )
+
 
 def run_stage4(config: PipelineConfig) -> None:
     from pipeline.stage4_commentary.generate import generate_commentary
@@ -186,11 +194,14 @@ def run_stage4(config: PipelineConfig) -> None:
     if visual is None and config.topdown_video.exists():
         visual = config.topdown_video
 
+    verification_audit_path = config.events_verification_json
     generate_commentary(
         config.events_json,
         config.commentary_json,
         config=config,
         visual_input=visual,
+        topo_json_path=config.topology_json if config.topology_json.exists() else None,
+        verification_audit_path=verification_audit_path if verification_audit_path.exists() else None,
     )
 
 

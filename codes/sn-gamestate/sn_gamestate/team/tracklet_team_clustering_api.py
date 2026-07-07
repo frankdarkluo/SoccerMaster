@@ -7,6 +7,8 @@ from tracklab.pipeline.videolevel_module import VideoLevelModule
 warnings.filterwarnings("ignore")
 from sklearn.cluster import KMeans
 
+from sn_gamestate.reid.embedding_utils import mean_track_embedding
+
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +34,9 @@ class TrackletTeamClustering(VideoLevelModule):
         for track_id, group in player_detections.groupby("track_id"):
             if np.isnan(track_id):
                 continue
-            embeddings = np.mean(np.vstack(group.embeddings.values), axis=0)
+            embeddings = mean_track_embedding(group.embeddings.values)
+            if embeddings is None:
+                continue
             embeddings_list.append({'track_id': track_id, 'embeddings': embeddings})
 
         if not embeddings_list:  # Check if embeddings_list is empty

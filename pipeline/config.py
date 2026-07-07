@@ -93,6 +93,14 @@ class PipelineConfig:
         return self.output_dir / "events.json"
 
     @property
+    def events_verification_json(self) -> Path:
+        return self.output_dir / "events_verification.json"
+
+    @property
+    def topology_json(self) -> Path:
+        return self.output_dir / "topo.json"
+
+    @property
     def annotated_video(self) -> Path:
         return self.output_dir / "annotated_video.mp4"
 

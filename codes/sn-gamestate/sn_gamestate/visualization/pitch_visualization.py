@@ -159,7 +159,7 @@ class PitchVisualizationEngine(Callback):
             filepath.parent.mkdir(parents=True, exist_ok=True)
             video_writer = cv2.VideoWriter(
                 str(filepath),
-                cv2.VideoWriter_fourcc(*"mp4v"),
+                cv2.VideoWriter_fourcc(*"avc1"),
                 float(self.cfg.video_fps),
                 (image.shape[1], image.shape[0]),
             )
