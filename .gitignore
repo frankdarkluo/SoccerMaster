@@ -12,6 +12,7 @@ pretrained_models
 *.csv
 datasets
 outputs
+tests
 
 # Deformable attention compiled files
 *.so
