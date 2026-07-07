@@ -1,0 +1,1 @@
+from .bpbreid_strong_sort_api import BPBReIDStrongSORT

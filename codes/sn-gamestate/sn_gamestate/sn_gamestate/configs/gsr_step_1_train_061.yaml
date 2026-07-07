@@ -1,0 +1,16 @@
+# Step 1 — Detection & Tracking on train/SNGS-061 only
+defaults:
+  - gsr_step_1_example
+  - _self_
+
+experiment_subname: "step_1_train_SNGS-061"
+
+dataset:
+  eval_set: "train"
+  dataset_path: /home/luoguoqing/SoccerMaster/codes/sn-gamestate/datasets/SoccerNetGS
+  start_vid: 61
+  end_vid: 61
+
+visualization:
+  cfg:
+    save_videos: True
