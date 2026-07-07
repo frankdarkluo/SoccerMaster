@@ -14,6 +14,8 @@ from collections import Counter
 import logging
 from sklearn.metrics.pairwise import cosine_similarity
 
+from sn_gamestate.reid.embedding_utils import mean_track_embedding
+
 log = logging.getLogger(__name__)
 
 class ConcatTrackletsByReid(VideoLevelModule):
@@ -34,9 +36,15 @@ class ConcatTrackletsByReid(VideoLevelModule):
         track_id_2_image_ids = {}
         for track_id in detections.track_id.unique():
             tracklet = detections[detections.track_id == track_id]
-            embeddings = np.mean(tracklet.embeddings.values, axis=0).squeeze()
+            embeddings = mean_track_embedding(tracklet.embeddings.values)
+            if embeddings is None:
+                continue
             track_id_2_embeddings[track_id] = embeddings
             track_id_2_image_ids[track_id] = set(tracklet.image_id.values)
+
+        if len(track_id_2_embeddings) < 2:
+            return detections
+
         sorted_track_ids = sorted(track_id_2_embeddings.keys())
         sorted_track_id_2_embeddings = {track_id: track_id_2_embeddings[track_id] for track_id in sorted_track_ids}
         track_id_2_embeddings = sorted_track_id_2_embeddings

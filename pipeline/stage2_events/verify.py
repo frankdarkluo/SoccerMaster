@@ -131,18 +131,29 @@ def build_verify_prompt(event: Event) -> str:
 
 def apply_verdict(event: Event, verdict: Verdict, schema: EventSchema) -> Optional[Event]:
     """Dispose a candidate per verdict. Returns None to drop. Mutates+returns otherwise."""
-    if verdict.verdict == "reject" or verdict.verdict == "uncertain":
+    if verdict.verdict == "uncertain":
+        return None
+
+    new_code = verdict.corrected_event_code
+    is_valid_reclassification = (
+        new_code is not None
+        and new_code != event.event_code
+        and new_code in FAMILY.get(event.event_code, set())
+    )
+
+    if verdict.verdict == "reject" and not is_valid_reclassification:
         return None
 
     event.tags["verified"] = "true"
 
-    new_code = verdict.corrected_event_code
-    if new_code and new_code != event.event_code and new_code in FAMILY.get(event.event_code, set()):
+    if is_valid_reclassification:
         ev_def = schema.get_event(new_code)
         event.event_code = new_code
         event.display_name_en = ev_def.display_name_en
         event.display_name_cn = ev_def.display_name_cn
         event.importance = ev_def.importance_base
+        if verdict.verdict == "reject":
+            event.tags["reclassified"] = "true"
 
     if event.event_code in DUEL_CODES and verdict.outcome is not None:
         event.tags["outcome"] = verdict.outcome

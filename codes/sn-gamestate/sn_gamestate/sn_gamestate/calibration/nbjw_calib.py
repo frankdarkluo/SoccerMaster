@@ -22,7 +22,6 @@ from nbjw_calib.utils.utils_heatmap import (get_keypoints_from_heatmap_batch_max
                                             get_keypoints_from_heatmap_batch_maxpool_l, complete_keypoints, \
                                             coords_to_dict)
 from nbjw_calib.utils.utils_calib import FramebyFrameCalib
-from scipy.signal import savgol_filter
 
 def kp_to_line(keypoints):
     line_keypoints_match = {"Big rect. left bottom": [24, 68, 25],

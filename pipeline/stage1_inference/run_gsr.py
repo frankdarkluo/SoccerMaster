@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
@@ -16,6 +17,8 @@ from pipeline.stage1_inference.cpu_guard import (
 )
 
 log = logging.getLogger(__name__)
+
+_PYTHON = os.environ.get("GSR_PYTHON", sys.executable)
 
 
 def _sequence_name(config: PipelineConfig) -> str:
@@ -101,7 +104,7 @@ def _run(cmd: list[str], cwd: Path, dry_run: bool = False) -> None:
 
     # PyTorch >= 2.6 defaults torch.load(weights_only=True), which breaks YOLO
     # and other full-pickle GSR checkpoints. Patch before launching tracklab.
-    if len(cmd) >= 3 and cmd[0] == "python" and cmd[1] == "-m":
+    if len(cmd) >= 3 and os.path.basename(cmd[0]) in {"python", "python3"} and cmd[1] == "-m":
         module = cmd[2]
         argv = [module, *cmd[3:]]
         bootstrap = (
@@ -112,8 +115,11 @@ def _run(cmd: list[str], cwd: Path, dry_run: bool = False) -> None:
             f"sys.argv = {argv!r}; "
             f"runpy.run_module({module!r}, run_name='__main__', alter_sys=True)"
         )
-        subprocess.run([cmd[0], "-c", bootstrap], check=True, cwd=str(cwd), env=env)
+        subprocess.run([_PYTHON, "-c", bootstrap], check=True, cwd=str(cwd), env=env)
         return
+
+    if cmd and os.path.basename(cmd[0]) in {"python", "python3"}:
+        cmd = [_PYTHON, *cmd[1:]]
 
     subprocess.run(cmd, check=True, cwd=str(cwd), env=env)
 
@@ -140,6 +146,7 @@ def run_step1(config: PipelineConfig, dry_run: bool = False) -> Path:
         f"dataset.start_vid={seq_id}",
         f"dataset.end_vid={seq_id}",
         f"hydra.run.dir={_rel_to_gsr(out_dir)}",
+        f"use_rich={os.environ.get('GSR_USE_RICH', 'false')}",
         *hydra_cpu_overrides(),
     ]
     _run(cmd, GSR_ROOT, dry_run=dry_run)
@@ -227,9 +234,16 @@ def run_step3(config: PipelineConfig, dry_run: bool = False) -> Path:
         f"dataset.end_vid={seq_id}",
         f"state.load_file={load_file}",
         f"hydra.run.dir={_rel_to_gsr(out_dir)}",
+        f"use_rich={os.environ.get('GSR_USE_RICH', 'false')}",
         *hydra_cpu_overrides(),
     ]
     _run(cmd, GSR_ROOT, dry_run=dry_run)
+
+    if not dry_run:
+        from pipeline.stage1_inference.calibration_guard import check_pklz
+        report_path = out_dir / "calibration_report.json"
+        check_pklz(final_pklz, seq_id, report_path=report_path)
+
     return final_pklz
 
 

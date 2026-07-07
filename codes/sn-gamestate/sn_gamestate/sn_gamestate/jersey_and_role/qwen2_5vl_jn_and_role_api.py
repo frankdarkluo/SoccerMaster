@@ -103,6 +103,7 @@ class QWEN2_5VL_JN_AND_ROLE_BATCH(DetectionLevelModule):
         )
         self.vllm_llm = None
         self.vllm_sampling = None
+        self.vllm_use_tqdm = False
 
     def _init_vllm(self, cfg):
         from vllm import LLM, SamplingParams
@@ -134,6 +135,9 @@ class QWEN2_5VL_JN_AND_ROLE_BATCH(DetectionLevelModule):
             temperature=self.TEMPERATURE,
             max_tokens=self.MAX_NEW_TOKENS,
         )
+        # vLLM prints per-batch tqdm ("Rendering prompts" / "Processed prompts").
+        # TrackLab already shows one progress bar per pipeline module.
+        self.vllm_use_tqdm = bool(getattr(cfg, "vllm_use_tqdm", False))
 
     def no_jersey_number(self):
         return None, 0
@@ -190,7 +194,9 @@ class QWEN2_5VL_JN_AND_ROLE_BATCH(DetectionLevelModule):
     def _generate_texts(self, messages_batch):
         if self.use_vllm:
             vllm_inputs = [self._build_vllm_request(messages) for messages in messages_batch]
-            outputs = self.vllm_llm.generate(vllm_inputs, self.vllm_sampling)
+            outputs = self.vllm_llm.generate(
+                vllm_inputs, self.vllm_sampling, use_tqdm=self.vllm_use_tqdm
+            )
             return [output.outputs[0].text for output in outputs]
 
         texts = [
