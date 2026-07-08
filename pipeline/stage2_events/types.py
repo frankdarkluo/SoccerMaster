@@ -90,7 +90,7 @@ class Candidate:
             "candidate_id": self.candidate_id,
             "timestamp_s": round(self.timestamp_s, 2),
             "frame_id": self.frame_id,
-            "signals": self.signals,
+            "signals": list(self.signals),
             "strength": round(self.strength, 2),
             "track_id": int(self.track_id) if self.track_id is not None else None,
             "jersey": self.jersey,
@@ -103,10 +103,10 @@ class Candidate:
             d["ball_xy"] = [round(self.ball_xy[0], 1), round(self.ball_xy[1], 1)]
         if self.ball_direction:
             d["ball_direction"] = self.ball_direction
-        if self.prev_holder:
-            d["prev_holder"] = self.prev_holder
-        if self.next_holder:
-            d["next_holder"] = self.next_holder
+        if self.prev_holder is not None:
+            d["prev_holder"] = dict(self.prev_holder)
+        if self.next_holder is not None:
+            d["next_holder"] = dict(self.next_holder)
         return d
 
 
