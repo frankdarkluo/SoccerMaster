@@ -7,7 +7,7 @@ def test_candidate_to_dict_roundtrip():
         signals=["kick", "possession_change"], strength=0.75,
         track_id=1, jersey="1", team="left", role="goalkeeper",
         ball_speed_mps=13.2, ball_xy=(-44.0, 0.0), ball_direction="toward_opponent_goal",
-        prev_holder=None,
+        prev_holder={},
         next_holder={"track_id": 9, "jersey": "9", "team": "left",
                      "role": "player", "start_fid": 271},
     )
@@ -15,8 +15,13 @@ def test_candidate_to_dict_roundtrip():
     assert d["candidate_id"] == "cand_001"
     assert d["signals"] == ["kick", "possession_change"]
     assert d["role"] == "goalkeeper"
+    assert d["prev_holder"] == {}
     assert d["next_holder"]["jersey"] == "9"
     assert d["ball_speed_mps"] == 13.2
+    d["signals"].append("mutated")
+    d["next_holder"]["jersey"] = "10"
+    assert c.signals == ["kick", "possession_change"]
+    assert c.next_holder["jersey"] == "9"
 
 
 def test_classification_defaults():
