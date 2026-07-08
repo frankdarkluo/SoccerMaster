@@ -43,7 +43,7 @@ class EventDef:
     negative_flag: bool
 
 
-COMPUTABLE_TAGS = {"pitch_zone", "shot_distance", "pass_distance", "pass_direction", "pattern_of_play"}
+COMPUTABLE_TAGS = {"pitch_zone", "shot_distance", "pass_distance", "pass_direction"}
 
 
 class EventSchema:
