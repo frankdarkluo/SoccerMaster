@@ -23,6 +23,19 @@ def resolve_team_by_track(frames: List[FrameData]) -> Dict[int, Optional[str]]:
     return {track_id: counts.most_common(1)[0][0] for track_id, counts in votes.items()}
 
 
+def resolve_role_by_track(frames: List[FrameData]) -> Dict[int, str]:
+    """Majority-vote role per track (player / goalkeeper / referee / other)."""
+    votes: Dict[int, Counter] = defaultdict(Counter)
+    for frame in frames:
+        for player in frame.players:
+            track_id = player.get("track_id")
+            role = player.get("role")
+            if track_id is None or not role:
+                continue
+            votes[int(track_id)][role] += 1
+    return {track_id: counts.most_common(1)[0][0] for track_id, counts in votes.items()}
+
+
 def _nearest_holder(frame: FrameData) -> Optional[dict]:
     if frame.ball_xy is None:
         return None

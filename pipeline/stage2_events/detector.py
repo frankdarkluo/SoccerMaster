@@ -1,7 +1,11 @@
-"""Rule-based event detection from predictions.json (segment + velocity based).
+"""Untyped key-moment candidate detection from predictions.json.
 
-Emits raw candidates for pass, shoot, goal, clearance, interception, dribble.
-Assist is composed post-verify (compose_assists). Timestamps are ACTION moments.
+The rule engine no longer names actions. It detects 5 structural signals -
+kick (segment end + ball speed), possession change, carry-past-opponent,
+sustained pressure, geometry (goal line / box entry) - merges them into
+candidates (timestamp + actor + facts), and classify.py asks a VLM to name
+the action. Typed helpers that run AFTER classification (dedup, assists,
+buildup density filler, events.json writer) also live here.
 """
 from __future__ import annotations
 
@@ -10,21 +14,30 @@ import math
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from pipeline.stage2_events.possession import (
-    POSSESSION_RADIUS_M,
-    possession_segments,
-    resolve_team_by_track,
-)
 from pipeline.stage2_events.schema import EventSchema
-from pipeline.stage2_events.types import Event, FrameData, PossessionSegment
+from pipeline.stage2_events.types import Candidate, Event, FrameData, PossessionSegment
 from pipeline.utils.labels import frame_index_from_labels
-from pipeline.utils.pitch import GOAL_X, GOAL_Y_HALF, PENALTY_AREA_LENGTH
+from pipeline.utils.pitch import GOAL_X, GOAL_Y_HALF, PENALTY_AREA_LENGTH, PENALTY_AREA_WIDTH
 
-DRIBBLE_MIN_DISPLACEMENT_M = 6.0
-DRIBBLE_OPPONENT_RADIUS_M = 4.0
-CLEARANCE_SPEED_MPS = 8.0
+KICK_SPEED_MPS = 8.0
+PRESSURE_RADIUS_M = 4.0
+PRESSURE_MIN_FRAMES = 10
+CARRY_MIN_DISPLACEMENT_M = 6.0
+CARRY_OPPONENT_RADIUS_M = 4.0
 GOAL_LINE_TOL_M = 1.5
+MERGE_WINDOW_S = 0.5
+CANDIDATE_CAP = 20
+BIN_S = 5.0
 ASSIST_WINDOW_S = 5.0
+
+SIGNAL_STRENGTH = {
+    "goal_line": 1.0,
+    "kick": 0.7,
+    "possession_win": 0.6,
+    "carry": 0.5,
+    "box_entry": 0.5,
+    "pressure": 0.4,
+}
 
 EVENT_GAP_S = {
     "football.goal": 2.0,
@@ -34,6 +47,11 @@ EVENT_GAP_S = {
     "football.interception": 0.8,
     "football.dribble": 1.0,
     "football.assist": 1.0,
+    "football.tackle": 0.8,
+    "football.pressing": 1.0,
+    "football.save": 1.0,
+    "football.goal_kick": 1.0,
+    "football.buildup": 5.0,
 }
 
 
@@ -77,320 +95,264 @@ def load_frames(path: str) -> List[FrameData]:
     return [frames_dict[frame_num] for frame_num in sorted(frames_dict.keys())]
 
 
-class EventDetector:
-    def __init__(
-        self,
-        schema: EventSchema,
-        fps: int = 25,
-        shot_speed_threshold: float = 10.0,
-        min_gap_s: float = 1.0,
-    ):
-        self.schema = schema
-        self.fps = fps
-        self.shot_speed_threshold = shot_speed_threshold
-        self.min_gap_s = min_gap_s
-        self._counter = 0
+def ball_positions(frames: List[FrameData]) -> Dict[int, Tuple[float, float]]:
+    return {frame.frame_id: frame.ball_xy for frame in frames if frame.ball_xy is not None}
 
-    def detect(self, predictions_json_path: str) -> List[Event]:
-        self._counter = 0
-        frames = load_frames(predictions_json_path)
-        if not frames:
-            return []
 
-        team_by_track = resolve_team_by_track(frames)
-        segments = possession_segments(frames, team_by_track)
-        ball_pos = {
-            frame.frame_id: frame.ball_xy
-            for frame in frames
-            if frame.ball_xy is not None
-        }
-        velocities = self._velocities(ball_pos)
+def ball_velocities(ball_pos: Dict[int, Tuple[float, float]], fps: int) -> Dict[int, float]:
+    velocities: Dict[int, float] = {}
+    fids = sorted(ball_pos)
+    for i in range(1, len(fids)):
+        f1, f2 = fids[i - 1], fids[i]
+        dt = (f2 - f1) / fps
+        if dt <= 0:
+            continue
+        dx = ball_pos[f2][0] - ball_pos[f1][0]
+        dy = ball_pos[f2][1] - ball_pos[f1][1]
+        velocities[f2] = math.hypot(dx, dy) / dt
+    return velocities
 
-        raw: List[Event] = []
-        raw += self._passes(segments)
-        raw += self._interceptions(segments)
-        raw += self._dribbles(segments, frames, team_by_track)
-        raw += self._shots(velocities, ball_pos, segments)
-        raw += self._goals(ball_pos, segments)
-        raw += self._clearances(velocities, ball_pos, segments)
-        return sorted(raw, key=lambda e: e.timestamp_s)
 
-    def _next_id(self) -> str:
-        self._counter += 1
-        return f"evt_{self._counter:03d}"
+def _holder_info(segment: PossessionSegment, role_by_track: Dict[int, str], fid_key: str) -> dict:
+    return {
+        "track_id": segment.track_id,
+        "jersey": segment.jersey,
+        "team": segment.team,
+        "role": role_by_track.get(segment.track_id, "player"),
+        fid_key: segment.start_fid if fid_key == "start_fid" else segment.end_fid,
+    }
 
-    def _make(
-        self,
-        code: str,
-        frame_id: int,
-        *,
-        player_jersey: Optional[str] = None,
-        player_team: Optional[str] = None,
-        target_jersey: Optional[str] = None,
-        target_team: Optional[str] = None,
-        track_id: Optional[int] = None,
-        ball_speed_mps: Optional[float] = None,
-        confidence: float = 0.7,
-        description_hint: str = "",
-    ) -> Event:
-        ev = self.schema.get_event(code)
-        tid = int(track_id) if track_id is not None else None
-        return Event(
-            event_id=self._next_id(),
-            timestamp_s=frame_id / self.fps,
-            frame_id=frame_id,
-            event_code=code,
-            display_name_en=ev.display_name_en if ev else code,
-            display_name_cn=ev.display_name_cn if ev else code,
-            importance=ev.importance_base if ev else 0.3,
-            player_jersey=player_jersey,
-            player_team=player_team,
-            target_jersey=target_jersey,
-            target_team=target_team,
-            track_id=tid,
-            ball_speed_mps=ball_speed_mps,
-            confidence=confidence,
-            description_hint=description_hint,
-        )
 
-    def _passes(self, segments: List[PossessionSegment]) -> List[Event]:
-        events: List[Event] = []
-        for a, b in zip(segments, segments[1:]):
-            if a.track_id == b.track_id:
+def _max_speed_after(velocities: Dict[int, float], fid: int, horizon: int = 5) -> Optional[float]:
+    speeds = [velocities[f] for f in range(fid, fid + horizon + 1) if f in velocities]
+    return max(speeds) if speeds else None
+
+
+def _ball_direction(
+    ball_pos: Dict[int, Tuple[float, float]],
+    fid: int,
+    team: Optional[str],
+    horizon: int = 5,
+) -> Optional[str]:
+    pts = [ball_pos[f] for f in range(fid, fid + horizon + 1) if f in ball_pos]
+    if len(pts) < 2 or team not in ("left", "right"):
+        return None
+    dx = pts[-1][0] - pts[0][0]
+    dy = pts[-1][1] - pts[0][1]
+    attack_sign = 1 if team != "right" else -1
+    toward = dx * attack_sign
+    if abs(toward) < abs(dy) * 0.5:
+        return "lateral"
+    return "toward_opponent_goal" if toward > 0 else "toward_own_goal"
+
+
+def _raw(signal: str, frame_id: int, fps: int, **kw) -> Candidate:
+    return Candidate(
+        candidate_id="",
+        frame_id=frame_id,
+        timestamp_s=frame_id / fps,
+        signals=[signal],
+        strength=SIGNAL_STRENGTH[signal],
+        **kw,
+    )
+
+
+def _kick_candidates(segments, velocities, ball_pos, role_by_track, fps) -> List[Candidate]:
+    out = []
+    for i, seg in enumerate(segments):
+        nxt = segments[i + 1] if i + 1 < len(segments) else None
+        speed = _max_speed_after(velocities, seg.end_fid)
+        if nxt is None and (speed is None or speed < KICK_SPEED_MPS):
+            continue
+        out.append(_raw(
+            "kick",
+            seg.end_fid,
+            fps,
+            track_id=seg.track_id,
+            jersey=seg.jersey,
+            team=seg.team,
+            role=role_by_track.get(seg.track_id, "player"),
+            ball_speed_mps=speed,
+            ball_xy=ball_pos.get(seg.end_fid),
+            ball_direction=_ball_direction(ball_pos, seg.end_fid, seg.team),
+            next_holder=_holder_info(nxt, role_by_track, "start_fid") if nxt else None,
+        ))
+    return out
+
+
+def _possession_win_candidates(segments, ball_pos, role_by_track, fps) -> List[Candidate]:
+    out = []
+    for a, b in zip(segments, segments[1:]):
+        if a.team is None or b.team is None or a.team == b.team:
+            continue
+        out.append(_raw(
+            "possession_win",
+            b.start_fid,
+            fps,
+            track_id=b.track_id,
+            jersey=b.jersey,
+            team=b.team,
+            role=role_by_track.get(b.track_id, "player"),
+            ball_xy=ball_pos.get(b.start_fid),
+            prev_holder=_holder_info(a, role_by_track, "end_fid"),
+        ))
+    return out
+
+
+def _carry_candidates(
+    segments,
+    frames,
+    team_by_track,
+    role_by_track,
+    ball_pos,
+    fps,
+) -> List[Candidate]:
+    out = []
+    frame_by_id = {frame.frame_id: frame for frame in frames}
+    for seg in segments:
+        displacement = math.hypot(seg.end_xy[0] - seg.start_xy[0], seg.end_xy[1] - seg.start_xy[1])
+        if displacement < CARRY_MIN_DISPLACEMENT_M:
+            continue
+        engaged_fid = None
+        min_d = None
+        for fid in range(seg.start_fid, seg.end_fid + 1):
+            frame = frame_by_id.get(fid)
+            if frame is None or frame.ball_xy is None:
                 continue
-            if a.team is None or b.team is None:
-                continue
-            if a.team != b.team:
-                continue
-            events.append(self._make(
-                "football.pass",
-                a.end_fid,
-                player_jersey=a.jersey,
-                player_team=a.team,
-                target_jersey=b.jersey,
-                target_team=b.team,
-                track_id=a.track_id,
-                confidence=0.7,
-                description_hint="pass: same-team possession hand-off",
-            ))
-        return events
-
-    def _interceptions(self, segments: List[PossessionSegment]) -> List[Event]:
-        events: List[Event] = []
-        for a, b in zip(segments, segments[1:]):
-            if a.team is None or b.team is None or a.team == b.team:
-                continue
-            events.append(self._make(
-                "football.interception",
-                b.start_fid,
-                player_jersey=b.jersey,
-                player_team=b.team,
-                track_id=b.track_id,
-                confidence=0.6,
-                description_hint="interception: cross-team possession win",
-            ))
-        return events
-
-    def _dribbles(
-        self,
-        segments: List[PossessionSegment],
-        frames: List[FrameData],
-        team_by_track: Dict[int, Optional[str]],
-    ) -> List[Event]:
-        events: List[Event] = []
-        frame_by_id = {frame.frame_id: frame for frame in frames}
-        for segment in segments:
-            displacement = math.hypot(
-                segment.end_xy[0] - segment.start_xy[0],
-                segment.end_xy[1] - segment.start_xy[1],
-            )
-            if displacement < DRIBBLE_MIN_DISPLACEMENT_M:
-                continue
-
-            engaged_fid = None
-            min_d = None
-            for fid in range(segment.start_fid, segment.end_fid + 1):
-                frame = frame_by_id.get(fid)
-                if frame is None or frame.ball_xy is None:
+            bx, by = frame.ball_xy
+            for player in frame.players:
+                tid = player.get("track_id")
+                if tid is not None and team_by_track.get(int(tid)) == seg.team:
                     continue
+                if player.get("role") == "referee":
+                    continue
+                d = math.hypot(player["x"] - bx, player["y"] - by)
+                if d <= CARRY_OPPONENT_RADIUS_M and (min_d is None or d < min_d):
+                    min_d, engaged_fid = d, fid
+        if engaged_fid is None:
+            continue
+        out.append(_raw(
+            "carry",
+            engaged_fid,
+            fps,
+            track_id=seg.track_id,
+            jersey=seg.jersey,
+            team=seg.team,
+            role=role_by_track.get(seg.track_id, "player"),
+            ball_xy=ball_pos.get(engaged_fid),
+        ))
+    return out
+
+
+def _pressure_candidates(
+    segments,
+    frames,
+    team_by_track,
+    role_by_track,
+    ball_pos,
+    fps,
+) -> List[Candidate]:
+    out = []
+    frame_by_id = {frame.frame_id: frame for frame in frames}
+    for seg in segments:
+        run_start = None
+        run_len = 0
+        presser = None
+        for fid in range(seg.start_fid, seg.end_fid + 1):
+            frame = frame_by_id.get(fid)
+            opp = None
+            if frame is not None and frame.ball_xy is not None:
                 bx, by = frame.ball_xy
+                best = None
                 for player in frame.players:
-                    track_id = player.get("track_id")
-                    if track_id is not None and team_by_track.get(int(track_id)) == segment.team:
+                    tid = player.get("track_id")
+                    if tid is None or player.get("role") == "referee":
+                        continue
+                    if team_by_track.get(int(tid)) == seg.team:
                         continue
                     d = math.hypot(player["x"] - bx, player["y"] - by)
-                    if d <= DRIBBLE_OPPONENT_RADIUS_M and (min_d is None or d < min_d):
-                        min_d = d
-                        engaged_fid = fid
+                    if d <= PRESSURE_RADIUS_M and (best is None or d < best[0]):
+                        best = (d, player)
+                opp = best[1] if best else None
+            if opp is not None:
+                if run_start is None:
+                    run_start, presser = fid, opp
+                run_len += 1
+                if run_len == PRESSURE_MIN_FRAMES:
+                    out.append(_raw(
+                        "pressure",
+                        run_start,
+                        fps,
+                        track_id=int(presser["track_id"]),
+                        jersey=presser.get("jersey"),
+                        team=team_by_track.get(int(presser["track_id"])),
+                        role=role_by_track.get(int(presser["track_id"]), "player"),
+                        ball_xy=ball_pos.get(run_start),
+                        prev_holder=_holder_info(seg, role_by_track, "end_fid"),
+                    ))
+            else:
+                run_start, run_len, presser = None, 0, None
+    return out
 
-            if engaged_fid is None:
-                continue
 
-            events.append(self._make(
-                "football.dribble",
-                engaged_fid,
-                player_jersey=segment.jersey,
-                player_team=segment.team,
-                track_id=segment.track_id,
-                confidence=0.6,
-                description_hint=f"dribble: {displacement:.1f}m carry past opponent",
-            ))
-        return events
+def _in_penalty_area(bx: float, by: float) -> bool:
+    return abs(bx) >= (GOAL_X - PENALTY_AREA_LENGTH) and abs(by) <= PENALTY_AREA_WIDTH / 2
 
-    def _velocities(self, ball_pos: Dict[int, Tuple[float, float]]) -> Dict[int, float]:
-        velocities: Dict[int, float] = {}
-        previous_fid = None
-        previous_xy = None
-        for fid in sorted(ball_pos):
-            xy = ball_pos[fid]
-            if previous_fid is not None and previous_xy is not None:
-                velocities[fid] = math.hypot(xy[0] - previous_xy[0], xy[1] - previous_xy[1]) * self.fps
-            previous_fid = fid
-            previous_xy = xy
-        return velocities
 
-    def _last_holder_before(
-        self,
-        segments: List[PossessionSegment],
-        frame_id: int,
-    ) -> Optional[PossessionSegment]:
-        best = None
-        for segment in segments:
-            if segment.end_fid <= frame_id and (best is None or segment.end_fid > best.end_fid):
-                best = segment
-        return best
+def _last_holder_before(segments, frame_id) -> Optional[PossessionSegment]:
+    best = None
+    for seg in segments:
+        if seg.end_fid <= frame_id and (best is None or seg.end_fid > best.end_fid):
+            best = seg
+    return best
 
-    def _holder_at_frame(
-        self,
-        segments: List[PossessionSegment],
-        frame_id: int,
-    ) -> Optional[PossessionSegment]:
-        for segment in segments:
-            if segment.start_fid <= frame_id <= segment.end_fid:
-                return segment
-        return self._last_holder_before(segments, frame_id)
 
-    def _shots(
-        self,
-        velocities: Dict[int, float],
-        ball_pos: Dict[int, Tuple[float, float]],
-        segments: List[PossessionSegment],
-    ) -> List[Event]:
-        events: List[Event] = []
-        for fid, speed in velocities.items():
-            if speed < self.shot_speed_threshold or fid not in ball_pos:
-                continue
-            bx, _ = ball_pos[fid]
-            if abs(bx) <= (GOAL_X - PENALTY_AREA_LENGTH):
-                continue
-            shooter = self._last_holder_before(segments, fid)
-            events.append(self._make(
-                "football.shoot",
-                fid,
-                player_jersey=shooter.jersey if shooter else None,
-                player_team=shooter.team if shooter else None,
-                track_id=shooter.track_id if shooter else None,
-                ball_speed_mps=speed,
-                confidence=min(speed / 20.0, 1.0),
-                description_hint=f"shot: ball {speed:.1f} m/s near goal",
-            ))
-        return events
+def _geometry_candidates(segments, ball_pos, role_by_track, fps) -> List[Candidate]:
+    out = []
+    fids = sorted(ball_pos)
+    seen_goal_line = False
+    for i, fid in enumerate(fids):
+        bx, by = ball_pos[fid]
+        crossed = abs(abs(bx) - GOAL_X) <= GOAL_LINE_TOL_M and abs(by) <= GOAL_Y_HALF
+        entered = i > 0 and _in_penalty_area(bx, by) and not _in_penalty_area(*ball_pos[fids[i - 1]])
+        signal = "goal_line" if crossed and not seen_goal_line else "box_entry" if entered else None
+        if crossed:
+            seen_goal_line = True
+        elif not entered:
+            seen_goal_line = False
+        if signal is None:
+            continue
+        holder = _last_holder_before(segments, fid)
+        out.append(_raw(
+            signal,
+            fid,
+            fps,
+            track_id=holder.track_id if holder else None,
+            jersey=holder.jersey if holder else None,
+            team=holder.team if holder else None,
+            role=role_by_track.get(holder.track_id, "player") if holder else "player",
+            ball_xy=ball_pos.get(fid),
+        ))
+    return out
 
-    def _goals(
-        self,
-        ball_pos: Dict[int, Tuple[float, float]],
-        segments: List[PossessionSegment],
-    ) -> List[Event]:
-        events: List[Event] = []
-        for fid, (bx, by) in ball_pos.items():
-            if abs(abs(bx) - GOAL_X) > GOAL_LINE_TOL_M or abs(by) > GOAL_Y_HALF:
-                continue
-            scorer = self._last_holder_before(segments, fid)
-            events.append(self._make(
-                "football.goal",
-                fid,
-                player_jersey=scorer.jersey if scorer else None,
-                player_team=scorer.team if scorer else None,
-                track_id=scorer.track_id if scorer else None,
-                confidence=0.85,
-                description_hint="goal: ball crosses goal line",
-            ))
-        return events
 
-    def _clearances(
-        self,
-        velocities: Dict[int, float],
-        ball_pos: Dict[int, Tuple[float, float]],
-        segments: List[PossessionSegment],
-    ) -> List[Event]:
-        events: List[Event] = []
-        for fid, speed in velocities.items():
-            if speed < CLEARANCE_SPEED_MPS or fid not in ball_pos or (fid - 1) not in ball_pos:
-                continue
-            bx, _ = ball_pos[fid]
-            prev_bx, _ = ball_pos[fid - 1]
-            moving_away = abs(bx) < abs(prev_bx)
-            in_own_half = abs(prev_bx) > 20
-            if not (moving_away and in_own_half):
-                continue
-            clearer = self._holder_at_frame(segments, fid)
-            events.append(self._make(
-                "football.clearance",
-                fid,
-                player_jersey=clearer.jersey if clearer else None,
-                player_team=clearer.team if clearer else None,
-                track_id=clearer.track_id if clearer else None,
-                ball_speed_mps=speed,
-                confidence=0.6,
-                description_hint="clearance: ball driven away from own goal",
-            ))
-        return events
-
-    def _event_gap_s(self, event_code: str) -> float:
-        return EVENT_GAP_S.get(event_code, self.min_gap_s)
-
-    def _deduplicate(self, events: List[Event]) -> List[Event]:
-        if not events:
-            return []
-        by_code: Dict[str, List[Event]] = {}
-        for ev in events:
-            by_code.setdefault(ev.event_code, []).append(ev)
-
-        kept: List[Event] = []
-        for code, code_events in by_code.items():
-            gap = self._event_gap_s(code)
-            sorted_evts = sorted(code_events, key=lambda e: e.timestamp_s)
-            code_kept: List[Event] = []
-            for ev in sorted_evts:
-                if not code_kept:
-                    code_kept.append(ev)
-                    continue
-                if ev.timestamp_s - code_kept[-1].timestamp_s < gap:
-                    prev = code_kept[-1]
-                    if ev.importance > prev.importance or (
-                        ev.importance == prev.importance and ev.confidence > prev.confidence
-                    ):
-                        code_kept[-1] = ev
-                else:
-                    code_kept.append(ev)
-            kept.extend(code_kept)
-        return kept
-
-    def write_events_json(
-        self,
-        events: List[Event],
-        output_path: Path,
-        video_info: Optional[dict] = None,
-    ) -> None:
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        data = {
-            "video_info": video_info or {},
-            "schema_version": "v3-20260319",
-            "events": [e.to_dict() for e in events],
-        }
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+def detect_candidates(
+    frames: List[FrameData],
+    segments: List[PossessionSegment],
+    team_by_track: Dict[int, Optional[str]],
+    role_by_track: Dict[int, str],
+    fps: int = 25,
+) -> List[Candidate]:
+    """All raw signal candidates, time-sorted, unmerged and without ids."""
+    ball_pos = ball_positions(frames)
+    velocities = ball_velocities(ball_pos, fps)
+    raw: List[Candidate] = []
+    raw += _kick_candidates(segments, velocities, ball_pos, role_by_track, fps)
+    raw += _possession_win_candidates(segments, ball_pos, role_by_track, fps)
+    raw += _carry_candidates(segments, frames, team_by_track, role_by_track, ball_pos, fps)
+    raw += _pressure_candidates(segments, frames, team_by_track, role_by_track, ball_pos, fps)
+    raw += _geometry_candidates(segments, ball_pos, role_by_track, fps)
+    return sorted(raw, key=lambda c: c.timestamp_s)
 
 
 def dedup_events(events: List[Event]) -> List[Event]:
@@ -424,18 +386,30 @@ def write_events_json(events: List[Event], output_path, video_info: Optional[dic
     output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def write_candidates_json(
+    candidates: List[Candidate],
+    output_path,
+    video_info: Optional[dict] = None,
+) -> None:
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "video_info": video_info or {},
+        "schema_version": "v4-candidates-20260707",
+        "candidates": [c.to_dict() for c in candidates],
+    }
+    output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
 def compose_assists(events: List[Event]) -> List[Event]:
     """Append assist events for a pass whose receiver scores within ASSIST_WINDOW_S.
 
-    Runs POST-verify so only surviving (confirmed/kept) passes and goals qualify.
+    Runs POST-classification so only surviving passes and goals qualify.
     """
     schema = EventSchema()
     goals = [e for e in events if e.event_code == "football.goal"]
     passes = [e for e in events if e.event_code == "football.pass"]
     ev_def = schema.get_event("football.assist")
-    display_name_en = ev_def.display_name_en
-    display_name_cn = ev_def.display_name_cn
-    importance_base = ev_def.importance_base
     out = list(events)
     counter = len(events)
     for goal in goals:
@@ -454,9 +428,9 @@ def compose_assists(events: List[Event]) -> List[Event]:
             timestamp_s=last.timestamp_s,
             frame_id=last.frame_id,
             event_code="football.assist",
-            display_name_en=display_name_en,
-            display_name_cn=display_name_cn,
-            importance=importance_base,
+            display_name_en=ev_def.display_name_en,
+            display_name_cn=ev_def.display_name_cn,
+            importance=ev_def.importance_base,
             player_jersey=last.player_jersey,
             player_team=last.player_team,
             target_jersey=last.target_jersey,
