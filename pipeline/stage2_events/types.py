@@ -68,6 +68,62 @@ class PossessionSegment:
 
 
 @dataclass
+class Candidate:
+    """An untyped key moment proposed by the rule engine. The VLM names the action."""
+    candidate_id: str
+    frame_id: int
+    timestamp_s: float
+    signals: List[str]
+    strength: float
+    track_id: Optional[int] = None
+    jersey: Optional[str] = None
+    team: Optional[str] = None
+    role: str = "player"
+    ball_speed_mps: Optional[float] = None
+    ball_xy: Optional[Tuple[float, float]] = None
+    ball_direction: Optional[str] = None  # toward_opponent_goal | toward_own_goal | lateral
+    prev_holder: Optional[dict] = None    # {track_id, jersey, team, role, end_fid}
+    next_holder: Optional[dict] = None    # {track_id, jersey, team, role, start_fid}
+
+    def to_dict(self) -> dict:
+        d = {
+            "candidate_id": self.candidate_id,
+            "timestamp_s": round(self.timestamp_s, 2),
+            "frame_id": self.frame_id,
+            "signals": self.signals,
+            "strength": round(self.strength, 2),
+            "track_id": int(self.track_id) if self.track_id is not None else None,
+            "jersey": self.jersey,
+            "team": self.team,
+            "role": self.role,
+        }
+        if self.ball_speed_mps is not None:
+            d["ball_speed_mps"] = round(self.ball_speed_mps, 1)
+        if self.ball_xy is not None:
+            d["ball_xy"] = [round(self.ball_xy[0], 1), round(self.ball_xy[1], 1)]
+        if self.ball_direction:
+            d["ball_direction"] = self.ball_direction
+        if self.prev_holder:
+            d["prev_holder"] = self.prev_holder
+        if self.next_holder:
+            d["next_holder"] = self.next_holder
+        return d
+
+
+@dataclass
+class Classification:
+    """Parsed VLM answer for one candidate."""
+    action: str = "none"                 # full code (football.pass) or "none"
+    outcome: Optional[str] = None        # success | failure | None
+    actor_jersey: Optional[str] = None
+    actor_team: Optional[str] = None
+    receiver_jersey: Optional[str] = None
+    confidence: float = 0.5
+    tags: Dict[str, str] = field(default_factory=dict)
+    reason: str = ""
+
+
+@dataclass
 class Verdict:
     verdict: str = "uncertain"
     outcome: Optional[str] = None
