@@ -7,8 +7,12 @@ from pathlib import Path
 from typing import List, Optional
 
 from pipeline.config import DATASET_ROOT
-from pipeline.stage2_events.detector import EventDetector
-from pipeline.stage2_events.schema import EventSchema
+from pipeline.stage2_events.detector import detect_candidates, load_frames
+from pipeline.stage2_events.possession import (
+    possession_segments,
+    resolve_role_by_track,
+    resolve_team_by_track,
+)
 from pipeline.utils.clip_index_to_events import ACTION_TO_EVENT_CODE
 
 
@@ -30,19 +34,25 @@ def _labels_path(dataset_root: Path, sample_id: str) -> Path:
 
 
 def _best_match(
-    events: list,
-    expected_code: str,
+    candidates: list,
     expected_time_s: float,
     tolerance_s: float,
 ):
-    candidates = [
-        e for e in events
-        if e.event_code == expected_code
-        and abs(e.timestamp_s - expected_time_s) <= tolerance_s
+    matches = [
+        c for c in candidates
+        if abs(c.timestamp_s - expected_time_s) <= tolerance_s
     ]
-    if not candidates:
+    if not matches:
         return None
-    return min(candidates, key=lambda e: abs(e.timestamp_s - expected_time_s))
+    return min(matches, key=lambda c: abs(c.timestamp_s - expected_time_s))
+
+
+def _detect_candidates(labels_path: Path, fps: int):
+    frames = load_frames(str(labels_path))
+    team_by_track = resolve_team_by_track(frames)
+    role_by_track = resolve_role_by_track(frames)
+    segments = possession_segments(frames, team_by_track)
+    return detect_candidates(frames, segments, team_by_track, role_by_track, fps=fps)
 
 
 def validate_clip_index(
@@ -51,8 +61,11 @@ def validate_clip_index(
     tolerance_s: float = 1.5,
     fps: int = 25,
 ) -> List[ValidationRow]:
-    """Run detector on each clip_index row and compare to rounded event time."""
-    detector = EventDetector(EventSchema(), fps=fps)
+    """Run candidate detector on each clip_index row and compare rounded event time.
+
+    Stage 2 now emits untyped candidates; this utility validates timestamp
+    coverage only, not final action labels.
+    """
     rows: List[ValidationRow] = []
 
     with open(clip_index_csv, encoding="utf-8") as f:
@@ -90,8 +103,8 @@ def validate_clip_index(
                 ))
                 continue
 
-            events = detector.detect(str(labels_path))
-            match = _best_match(events, expected_code, expected_time, tolerance_s)
+            candidates = _detect_candidates(labels_path, fps)
+            match = _best_match(candidates, expected_time, tolerance_s)
             if match is None:
                 rows.append(ValidationRow(
                     sample_id=sample_id,
@@ -101,7 +114,7 @@ def validate_clip_index(
                     matched=False,
                     matched_time_s=None,
                     time_error_s=None,
-                    note="no matching detected event",
+                    note="no matching detected candidate",
                 ))
                 continue
 
