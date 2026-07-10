@@ -97,9 +97,9 @@ Rename the existing repository `.env` loader to a backend-neutral helper in `pip
 Replace `make_raw_final_video.py` and `make_final_video.py` with:
 
 ```bash
-python -m pipeline.stage5_tts.run --output-dir outputs/<SEQ> --voice preview
-python -m pipeline.stage5_tts.run --output-dir outputs/<SEQ> --voice clone
-python -m pipeline.stage5_tts.run --output-dir outputs/<SEQ> --voice both
+python -m pipeline.stage5_tts.run --output-dir outputs/SNGS-116 --voice preview
+python -m pipeline.stage5_tts.run --output-dir outputs/SNGS-116 --voice clone
+python -m pipeline.stage5_tts.run --output-dir outputs/SNGS-116 --voice both
 ```
 
 The runner reuses the existing synthesis, pacing, mux, Edge TTS, and CosyVoice code. It does not add an adapter factory.
@@ -107,8 +107,8 @@ The runner reuses the existing synthesis, pacing, mux, Edge TTS, and CosyVoice c
 Base-video selection is:
 
 1. Explicit `--video`, when supplied.
-2. `<output-dir>/annotated_video.mp4`, when present.
-3. `<output-dir>/clip.mp4` otherwise.
+2. `outputs/SNGS-116/annotated_video.mp4`, when present.
+3. `outputs/SNGS-116/clip.mp4` otherwise.
 
 `--voice both` runs the inexpensive Edge preview first and CosyVoice second. Existing per-segment caches remain in use unless `--force` is supplied.
 
@@ -139,7 +139,7 @@ Stage 5
   tts_segments/
 ```
 
-`scripts/run_stage2b.sh` writes into the Stage 1 output directory instead of a `<SEQ>-2b` sibling. Optional Stage 3 can therefore read Stage 1 predictions/homography and Stage 2B events without copying artifacts.
+`scripts/run_stage2b.sh` writes into the Stage 1 output directory instead of an A/B sibling such as `outputs/SNGS-116-2b`. Optional Stage 3 can therefore read Stage 1 predictions/homography and Stage 2B events without copying artifacts.
 
 ## Canonical-Copy Reconciliation
 
@@ -170,6 +170,7 @@ Delete the following canonical obsolete areas:
 - `pipeline/utils/clip_index_to_events.py`
 - `pipeline/utils/validate_clip_index.py`
 - `pipeline/SNGS-117-2b/`
+- `reference_football.csv`
 - `tests/`
 
 Delete obsolete canonical scripts:
@@ -225,4 +226,3 @@ The final `rg` command must return no matches. A live Stage 1 GPU run, ARK Stage
 ## Ponytail Review Summary
 
 The cleanup removes duplicate packages, two replaced pipeline stages, unused diagnostics, one-off probes, redundant wrappers, obsolete adapters, and test-only files. The estimated result is approximately 13,000 fewer Python and shell lines, after accounting for the small helper extraction and consolidated Stage 5 runner.
-
