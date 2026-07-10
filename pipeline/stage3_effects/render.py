@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -13,6 +14,8 @@ from pipeline.utils.video import reencode_to_h264
 from pipeline.stage3_effects.beam_targets import load_predictions_index
 from pipeline.stage3_effects.overlay import apply_frame_overlays
 from pipeline.stage3_effects.projection import load_homography
+
+log = logging.getLogger(__name__)
 
 
 def _sorted_frame_paths(frames_dir: Path) -> list[Path]:
@@ -85,15 +88,12 @@ def render_annotated_video(
 
     writer.release()
 
-    if reencode_h264:
-        if not shutil.which("ffmpeg"):
-            tmp_path.unlink(missing_ok=True)
-            raise RuntimeError(
-                "ffmpeg is required to produce H.264 annotated_video.mp4 for IDE playback"
-            )
+    if reencode_h264 and shutil.which("ffmpeg"):
         reencode_to_h264(tmp_path, output_path)
         tmp_path.unlink(missing_ok=True)
     else:
-        tmp_path.rename(output_path)
+        if reencode_h264:
+            log.warning("ffmpeg not found; keeping OpenCV mp4v output at %s", output_path)
+        tmp_path.replace(output_path)
 
     return output_path

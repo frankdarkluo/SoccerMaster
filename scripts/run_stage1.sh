@@ -5,7 +5,7 @@
 # Writes only: predictions.json, homography_per_frame.json, and step{1,2,3}/ GSR artifacts.
 # Does NOT touch downstream outputs (events.json, annotated_video.mp4, commentary, final_video).
 # Step 3 uses vLLM + Qwen2.5-VL-7B-Instruct-AWQ (gsr_step_3_example_accelerate_vllm).
-# Re-run Stage 2–5 manually when you want to refresh those.
+# Run Stage 2B next; Stage 3 is optional and Stage 5 is driven by Stage 2B.
 #
 # The clip_dir path selects both the split and the sequence, e.g.:
 #   .../test/SNGS-148  → only test/SNGS-148

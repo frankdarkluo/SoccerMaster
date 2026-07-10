@@ -5,9 +5,8 @@ import asyncio
 import logging
 from pathlib import Path
 
-import edge_tts
-
 from pipeline.stage5_tts.tts_adapter import (
+    ENERGY_ENGAGED,
     ENERGY_EXCITED,
     ENERGY_EXPLOSIVE,
     ENERGY_NORMAL,
@@ -24,6 +23,7 @@ _VOICES = {
 # Prosody per energy tier (grill-me option B).
 _PROSODY = {
     ENERGY_NORMAL: {"rate": "+15%", "pitch": "+0Hz", "volume": "+0%"},
+    ENERGY_ENGAGED: {"rate": "+20%", "pitch": "+4Hz", "volume": "+5%"},
     ENERGY_EXCITED: {"rate": "+25%", "pitch": "+8Hz", "volume": "+10%"},
     ENERGY_EXPLOSIVE: {"rate": "+35%", "pitch": "+15Hz", "volume": "+20%"},
 }
@@ -49,6 +49,8 @@ class EdgeTTSAdapter(TTSAdapter):
         prosody = _PROSODY.get(energy, _PROSODY[ENERGY_NORMAL])
 
         async def _run() -> None:
+            import edge_tts
+
             comm = edge_tts.Communicate(
                 text,
                 self.voice,

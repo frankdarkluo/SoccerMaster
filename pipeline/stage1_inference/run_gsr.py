@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import zipfile
 from pathlib import Path
 
@@ -61,6 +62,79 @@ def _rel_to_gsr(path: Path) -> str:
     return os.path.relpath(path.resolve(), GSR_ROOT.resolve())
 
 
+def _format_duration(seconds: float) -> str:
+    seconds_i = int(round(seconds))
+    hours, rem = divmod(seconds_i, 3600)
+    minutes, secs = divmod(rem, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m {secs:02d}s"
+    if minutes:
+        return f"{minutes}m {secs:02d}s"
+    return f"{secs}s"
+
+
+def _timed_step(name: str, func, *args, **kwargs):
+    start = time.perf_counter()
+    log.info("Timer start: %s", name)
+    try:
+        return func(*args, **kwargs)
+    finally:
+        log.info("Timer done:  %s took %s", name, _format_duration(time.perf_counter() - start))
+
+
+def _env_int(name: str) -> str | None:
+    value = os.environ.get(name)
+    if value in (None, ""):
+        return None
+    try:
+        valid = int(value) >= 1
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ValueError(f"{name} must be a positive integer, got {value!r}")
+    return value
+
+
+def gsr_batch_overrides(step: int) -> list[str]:
+    overrides: list[str] = []
+    if step == 1:
+        shared = _env_int("GSR_STEP1_BATCH")
+        for module, env_name in (
+            ("bbox_detector", "GSR_BBOX_BATCH"),
+            ("pose_bottomup", "GSR_POSE_BATCH"),
+            ("reid", "GSR_REID_BATCH"),
+            ("track", "GSR_TRACK_BATCH"),
+            ("legibility", "GSR_LEGIBILITY_BATCH"),
+            ("jersey_number_detect", "GSR_JERSEY_BATCH"),
+            ("role", "GSR_ROLE_BATCH"),
+        ):
+            value = _env_int(env_name) or shared
+            if value:
+                overrides.append(f"modules.{module}.batch_size={value}")
+    elif step == 3:
+        for module, env_name in (
+            ("legibility", "GSR_STEP3_LEGIBILITY_BATCH"),
+            ("jersey_and_role", "GSR_VLLM_BATCH"),
+        ):
+            value = _env_int(env_name)
+            if value:
+                overrides.append(f"modules.{module}.batch_size={value}")
+        if (use_vllm := os.environ.get("GSR_USE_VLLM")) is not None:
+            overrides.append(f"modules.jersey_and_role.cfg.use_vllm={use_vllm.lower()}")
+        for env_name, key in (
+            ("GSR_HF_MODEL", "model_path"),
+            ("GSR_VLLM_MODEL", "vllm_model_path"),
+        ):
+            if value := os.environ.get(env_name):
+                model_path = Path(value)
+                if not model_path.is_absolute():
+                    model_path = GSR_ROOT / "pretrained_models" / "jn" / value
+                overrides.append(f"modules.jersey_and_role.cfg.{key}={model_path}")
+        if gpu_mem := os.environ.get("GSR_VLLM_GPU_MEMORY_UTILIZATION"):
+            overrides.append(f"modules.jersey_and_role.cfg.vllm_gpu_memory_utilization={gpu_mem}")
+    return overrides
+
+
 def _artifact_ready(path: Path, min_bytes: int = 1) -> bool:
     return path.is_file() and path.stat().st_size >= min_bytes
 
@@ -82,6 +156,7 @@ def _subprocess_env() -> dict[str, str]:
     repo = str(REPO_ROOT)
     prev = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = repo + (os.pathsep + prev if prev else "")
+    env.setdefault("CUDA_VISIBLE_DEVICES", env.get("GPU_LIST", "0"))
     return env
 
 
@@ -148,6 +223,7 @@ def run_step1(config: PipelineConfig, dry_run: bool = False) -> Path:
         f"hydra.run.dir={_rel_to_gsr(out_dir)}",
         f"use_rich={os.environ.get('GSR_USE_RICH', 'false')}",
         *hydra_cpu_overrides(),
+        *gsr_batch_overrides(step=1),
     ]
     _run(cmd, GSR_ROOT, dry_run=dry_run)
     return states_dir
@@ -233,9 +309,15 @@ def run_step3(config: PipelineConfig, dry_run: bool = False) -> Path:
         f"dataset.start_vid={seq_id}",
         f"dataset.end_vid={seq_id}",
         f"state.load_file={load_file}",
+        "data_dir=${project_dir}/datasets",
+        "model_dir=${project_dir}/pretrained_models",
+        "dataset.dataset_path=${data_dir}/SoccerNetGS",
         f"hydra.run.dir={_rel_to_gsr(out_dir)}",
         f"use_rich={os.environ.get('GSR_USE_RICH', 'false')}",
+        f"visualization.cfg.save_videos={os.environ.get('GSR_SAVE_VIDEOS', 'false')}",
+        f"visualization.cfg.save_images={os.environ.get('GSR_SAVE_IMAGES', 'false')}",
         *hydra_cpu_overrides(),
+        *gsr_batch_overrides(step=3),
     ]
     _run(cmd, GSR_ROOT, dry_run=dry_run)
 
@@ -249,7 +331,13 @@ def run_step3(config: PipelineConfig, dry_run: bool = False) -> Path:
 
 def run_full_gsr(config: PipelineConfig, dry_run: bool = False) -> Path:
     """Run all 3 GSR steps for the sequence in config.clip_dir. Returns final pklz."""
-    run_step1(config, dry_run=dry_run)
-    if not config.skip_sam2:
-        run_step2(config, dry_run=dry_run)
-    return run_step3(config, dry_run=dry_run)
+    total_start = time.perf_counter()
+    try:
+        _timed_step("GSR Step 1 detection/tracking", run_step1, config, dry_run=dry_run)
+        if config.skip_sam2:
+            log.info("Timer skip:  GSR Step 2 SAM2 refinement")
+        else:
+            _timed_step("GSR Step 2 SAM2 refinement", run_step2, config, dry_run=dry_run)
+        return _timed_step("GSR Step 3 calibration/identity", run_step3, config, dry_run=dry_run)
+    finally:
+        log.info("Timer total: GSR Stage 1 took %s", _format_duration(time.perf_counter() - total_start))

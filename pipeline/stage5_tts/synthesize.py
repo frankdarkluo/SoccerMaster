@@ -1,6 +1,7 @@
 """Read commentary.json, synthesize TTS per segment, assemble into a timed audio track."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import shutil
@@ -9,6 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from pipeline.stage5_tts.tts_adapter import (
+    ENERGY_ENGAGED,
     ENERGY_EXCITED,
     ENERGY_EXPLOSIVE,
     ENERGY_NORMAL,
@@ -24,6 +26,15 @@ _SHOT_CODES = ("football.shoot", "football.shot", "shoot", "shot")
 # Text keywords as fallback when event codes are unavailable.
 _GOAL_KEYWORDS = ("球进了", "进球", "GOAL!", "GOAL", "goal!")
 _SHOT_KEYWORDS = ("射门", "远射", "太精彩", "STRIKE", "shoots", "fires", "SHOT")
+
+
+# Commentary emits energy ∈ {calm, engaged, excited, explosive}; map onto tiers.
+_ENERGY_TIERS = {
+    "calm": ENERGY_NORMAL,
+    "engaged": ENERGY_ENGAGED,
+    "excited": ENERGY_EXCITED,
+    "explosive": ENERGY_EXPLOSIVE,
+}
 
 
 def _text_key(language: str) -> str:
@@ -83,10 +94,14 @@ def energy_for_segment(
     seg: dict,
     event_codes: Optional[dict[str, str]] = None,
 ) -> str:
-    """Classify segment energy: event codes first, text keywords as fallback.
+    """Classify segment energy: explicit tag first, then event/text fallback.
 
-    Returns ``explosive`` (goal) > ``excited`` (shot) > ``normal``.
+    Returns ``explosive`` (goal) > ``excited`` (shot) > ``engaged`` > ``normal``.
     """
+    tagged = _ENERGY_TIERS.get(str(seg.get("energy", "")).strip().lower())
+    if tagged is not None:
+        return tagged
+
     event_codes = event_codes or {}
     codes = [
         event_codes.get(ref, "").lower()
@@ -138,7 +153,8 @@ def synthesize_segments(
 
         energy = energy_for_segment(seg, event_codes)
         # include energy in filename so cache invalidates when tier changes
-        out = seg_dir / f"seg_{i:03d}_{energy}.mp3"
+        digest = hashlib.sha1(f"{language}\0{energy}\0{text}".encode("utf-8")).hexdigest()[:10]
+        out = seg_dir / f"seg_{i:03d}_{energy}_{digest}.mp3"
         if out.exists() and out.stat().st_size > 0:
             log.debug("Reusing cached %s", out)
             paths.append(out)
@@ -154,31 +170,48 @@ def synthesize_segments(
 _FADE_S = 0.12
 
 
+_MAX_STRETCH = 1.35
+
+
 def _plan_placement(
     starts_wanted: List[float],
     durations: List[float],
     highlights: List[bool],
     total_duration_s: float,
-) -> list[tuple[float, float]]:
-    """Compute (start, allowed_duration) for each segment.
+) -> list[tuple[float, float, float]]:
+    """Compute (start, tempo, allowed_duration) for each segment.
 
-    Normal lines flow back-to-back: they start at ``max(timestamp_s, prev_end)``
-    so no forced silence and no overlap. Highlight lines (goal/shot) always
-    start exactly at their ``timestamp_s`` so the emotional beat stays locked to
-    the video; a preceding line that would collide gets trimmed via allowed_dur.
+    Normal lines flow back-to-back: start at ``max(timestamp_s, prev_end)`` and
+    spill freely (commentary lag is acceptable — 2026-07-08 decision). Highlight
+    lines always start exactly at their ``timestamp_s``. The only hard
+    boundaries are a following locked highlight and the end of the clip; a line
+    hitting one is first sped up (tempo ≤ _MAX_STRETCH) and only the remainder
+    is trimmed via allowed_duration. Words are never deleted from the text.
     """
-    starts: list[float] = []
+    n = len(starts_wanted)
+    plan: list[tuple[float, float, float]] = []
     prev_end = 0.0
-    for ts, dur, is_hi in zip(starts_wanted, durations, highlights):
+    for i in range(n):
+        ts, dur, is_hi = starts_wanted[i], durations[i], highlights[i]
         start = max(ts, 0.0) if is_hi else max(ts, prev_end)
-        starts.append(start)
-        prev_end = start + dur
 
-    plan: list[tuple[float, float]] = []
-    for i, start in enumerate(starts):
-        next_start = starts[i + 1] if i + 1 < len(starts) else total_duration_s
-        allowed = min(durations[i], max(next_start - start, 0.0))
-        plan.append((start, allowed))
+        boundary: Optional[float] = None
+        if i + 1 < n and highlights[i + 1]:
+            boundary = starts_wanted[i + 1]
+        elif i + 1 == n:
+            boundary = total_duration_s
+
+        tempo = 1.0
+        allowed = dur
+        if boundary is not None and start + dur > boundary:
+            room = max(boundary - start, 0.0)
+            allowed = room
+            if room > 0:
+                tempo = min(dur / room, _MAX_STRETCH)
+
+        eff_dur = min(dur / tempo, allowed)
+        plan.append((start, tempo, allowed))
+        prev_end = start + eff_dur
     return plan
 
 
@@ -222,14 +255,19 @@ def assemble_timeline(
 
     filters: list[str] = ["[0]acopy[base]"]
     mix_inputs = ["[base]"]
-    for idx, ((start, allowed), (_, _, dur, _)) in enumerate(zip(plan, valid)):
+    for idx, ((start, tempo, allowed), (_, _, dur, _)) in enumerate(zip(plan, valid)):
         if allowed <= 0.05:
             continue
         inp = idx + 1
         label = f"d{idx}"
         chain = f"[{inp}]"
-        # Trim + fade out only when the line must be cut short to avoid overlap.
-        if allowed < dur - 0.01:
+        eff_dur = dur
+        if tempo > 1.01:
+            chain += f"atempo={tempo:.3f},"
+            eff_dur = dur / tempo
+        # Trim + fade only for what tempo could not absorb (locked highlight
+        # or clip end ahead).
+        if eff_dur > allowed + 0.01:
             fade = min(_FADE_S, allowed / 2)
             chain += f"atrim=0:{allowed:.3f},afade=t=out:st={max(allowed - fade, 0):.3f}:d={fade:.3f},"
         delay_ms = int(round(start * 1000))

@@ -6,13 +6,14 @@ __pycache__/
 
 tmp
 pretrained_models
+codes/CosyVoice/
 
 *.txt
 *.pth
 *.csv
 datasets
 outputs
-tests
+/tests/
 
 # Deformable attention compiled files
 *.so

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Pipeline Stage 3 only: visual effects overlay → annotated_video.mp4 for ONE clip.
-# Reads:  <output_dir>/events.json (Stage 2)
+# Reads:  <output_dir>/events.json (Stage 2B)
 #         <output_dir>/predictions.json (Stage 1)
 #         optional: <output_dir>/homography_per_frame.json
 #         <clip_dir>/img1/*.jpg
 # Writes: <output_dir>/annotated_video.mp4
 #
-# Does NOT touch Stage 1–2 JSON outputs or Stage 4+ (commentary, TTS, final_video).
+# Does NOT touch Stage 1–2B JSON outputs or Stage 5 (commentary, TTS, final_video).
 #
 # Usage:
 #   bash scripts/run_stage3.sh
@@ -39,7 +39,7 @@ else
 fi
 
 if [[ ! -f "$OUTPUT_DIR/events.json" ]]; then
-  echo "ERROR: $OUTPUT_DIR/events.json not found — run Stage 2 first (scripts/run_stage2.sh)." >&2
+  echo "ERROR: $OUTPUT_DIR/events.json not found — run Stage 2B first (scripts/run_stage2b.sh)." >&2
   exit 1
 fi
 
