@@ -1,28 +1,24 @@
 # Pipeline Cleanup Design
 
-**Goal:** Reduce the repository to the active Stage 1 → Stage 2B → Stage 5 workflow while preserving Stage 3 visual effects and topology as optional runnable capabilities.
+**Date:** 2026-07-10
+**Status:** Revised after joint cleanup/hybrid design review
 
-**Decision:** Stage 2B replaces the former Stage 2 and Stage 4 path. The repository has one canonical Python package under `pipeline/`, one canonical launcher directory under `scripts/`, and one output directory per sequence.
+## Goal
 
-## Scope
+Reduce the repository to one canonical Stage 1 → Stage 2B → Stage 3 TTS → optional Stage 4 Effects workflow, while preserving the minimum relations/topology capabilities required by hybrid commentary.
 
-Retain:
+## Final Decisions
 
-- Stage 1 inference and its live calibration, CPU, and Torch compatibility guards.
-- Stage 2B direct video-to-commentary generation.
-- Stage 3 visual effects, excluding the unused isolated preview renderer.
-- Stage 5 Edge TTS preview and CosyVoice final synthesis.
-- Formation topology analysis and rendering support.
-- The external model repositories and data under `codes/`.
-
-Remove:
-
-- The former Stage 2 detector/classifier pipeline.
-- The former Stage 4 commentary pipeline.
-- Root-level mirrors of canonical packages and scripts.
-- Manual probes, obsolete launchers, unused adapters, and test-only code.
-- Generated run artifacts stored below `pipeline/`.
-- The `tests/` directory, per the explicit project decision.
+- Canonical numbered packages are `pipeline/stage1_inference`, `pipeline/stage2b`, `pipeline/stage3_tts`, and `pipeline/stage4_effects`.
+- There is no Stage 5 package or launcher.
+- Stage 2B supports only `direct` and `hybrid`; hybrid is the default.
+- Sequence artifacts are separated into root, `comments/`, and `voice/`.
+- Stage 3 always produces a playable `voice/final_video*.mp4`.
+- Optional Stage 4 replaces that final video safely after rendering effects.
+- Only CosyVoice is retained for TTS. Edge and Doubao TTS are removed.
+- Only two repository tests remain: the Stage 1 calibration guard and one offline hybrid smoke test.
+- Existing outputs are migrated once; production code has no legacy path fallback.
+- All implementation work is committed once, after the two implementation plans and all verification gates pass.
 
 ## Canonical Structure
 
@@ -33,20 +29,26 @@ pipeline/
 ├── stage1_inference/
 ├── stage2b/
 │   ├── __init__.py
+│   ├── concepts.yaml
 │   ├── digest.py
-│   ├── generate_direct.py
+│   ├── events.py
+│   ├── generate.py
+│   ├── hybrid.py
 │   ├── run.py
 │   └── video.py
-├── stage3_effects/
-├── stage5_tts/
-│   ├── adapters/
-│   │   ├── cosyvoice_adapter.py
-│   │   └── edge_tts_adapter.py
+├── stage3_tts/
+│   ├── __init__.py
+│   ├── cosyvoice.py
 │   ├── mux.py
-│   ├── pace_filter.py
 │   ├── run.py
-│   ├── synthesize.py
-│   └── tts_adapter.py
+│   └── synthesize.py
+├── stage4_effects/
+├── relations/
+│   ├── build.py
+│   ├── kinematics.py
+│   ├── query.py
+│   ├── radar.py
+│   └── snapshots.py
 ├── topology/
 └── utils/
     ├── labels.py
@@ -57,172 +59,206 @@ scripts/
 ├── run_stage1.sh
 ├── run_stage2b.sh
 ├── run_stage3.sh
+├── run_stage4.sh
 └── setup_cosyvoice.sh
+
+tests/
+├── test_calibration_guard.py
+└── test_hybrid_smoke.py
 ```
 
-No additional shared-helper package is introduced. Helpers with one retained caller stay beside that caller.
+No shared-helper or adapter-factory package is introduced. Single-caller helpers stay beside their caller.
 
-## Helper Extraction
+## Stage Responsibilities
 
-### Stage 2B tracking digest
+### Stage 1 Inference
 
-Move the minimal retained behavior from the former Stage 2 into `pipeline/stage2b/digest.py`:
+Stage 1 retains tracking, calibration, CPU/Torch compatibility guards, and the current production entry point. Its shared outputs remain at the sequence root:
 
-- `FrameData` and `PossessionSegment` data containers.
-- `load_frames` for reading Stage 1 `predictions.json`.
-- Team and role majority voting.
-- Nearest-player possession resolution and possession segmentation.
+- `predictions.json`
+- `homography_per_frame.json`
+- Stage 1 logs and intermediate data
 
-Preserve current behavior during the move. Do not retain candidate detection, classification, evidence-frame creation, event enrichment, schema objects, or verification code.
+### Stage 2B Commentary
 
-### Stage 2B ARK and JSON handling
+Stage 2B receives the sequence root and writes commentary artifacts below `comments/`.
 
-Move the minimal retained behavior from the former Stage 4 into `pipeline/stage2b/generate_direct.py`:
+`direct` produces event-first video commentary. `hybrid` first produces the same direct baseline, then adds only verified tactical observations. Hybrid writes:
 
-- Base64 `video_url` request construction for ARK.
-- The closed Stage 2B event menu and concise descriptions.
-- Commentary segment normalization.
-- Pacing validation.
-- `events.json` and `commentary.json` writing.
-- One retry after malformed JSON or pacing violations.
+- `comments/events.json`
+- `comments/event_spine.json`
+- `comments/commentary_direct.json`
+- `comments/tactical_candidates.json`
+- `comments/commentary.json`
+- `comments/relations.json`
+- `comments/radar/`
 
-Use one direct ARK call function. Do not retain the generic `LLMAdapter`, backend factory, image-sampling path, OpenAI adapter, Qwen adapter, mock adapter, or prompt-builder hierarchy.
+Direct mode omits relations, radar, and tactical candidates, and writes its accepted result to `comments/commentary.json`.
 
-### Environment loading
+The clip stays at `<sequence>/clip.mp4`.
 
-Rename the existing repository `.env` loader to a backend-neutral helper in `pipeline/config.py`. Stage 2B and Stage 5 reuse it. Existing environment variables continue to take priority over `.env` values.
+### Stage 3 TTS
 
-## Stage 5 Consolidation
+Stage 3 reads only `comments/commentary.json` and uses Fun-CosyVoice3 for `default`, `clone`, or `both`.
 
-Replace `make_raw_final_video.py` and `make_final_video.py` with:
+- `default` uses `codes/CosyVoice/asset/zero_shot_prompt.wav` and its known transcript.
+- `clone` defaults to repository-root `voice_sample.wav`.
+- Clone mode uses `inference_zero_shot` when a matching prompt transcript is supplied, otherwise `inference_cross_lingual`.
+- `--prompt-wav` overrides the default clone sample.
+- `--language zh|en` is supported; one language is generated per invocation.
 
-```bash
-python -m pipeline.stage5_tts.run --output-dir outputs/SNGS-116 --voice preview
-python -m pipeline.stage5_tts.run --output-dir outputs/SNGS-116 --voice clone
-python -m pipeline.stage5_tts.run --output-dir outputs/SNGS-116 --voice both
-```
+For each segment, Stage 3 synthesizes normal text and measures the actual duration with FFprobe. On overflow it retries once with the pre-generated `fallback_text_zh` or `fallback_text_en`. A second overflow fails explicitly; audio is never silently truncated.
 
-The runner reuses the existing synthesis, pacing, mux, Edge TTS, and CosyVoice code. It does not add an adapter factory.
+Stage 3 writes all audio, caches, and videos below `voice/`. It always creates a no-effects baseline and a default deliverable:
 
-Base-video selection is:
+- `voice/commentary_<language>_default.mp3` for default mode
+- `voice/commentary_<language>.mp3` for clone mode
+- `voice/tts_segments/`
+- `voice/raw_final_video[_en].mp4`
+- `voice/final_video[_en].mp4`
 
-1. Explicit `--video`, when supplied.
-2. `outputs/SNGS-116/annotated_video.mp4`, when present.
-3. `outputs/SNGS-116/clip.mp4` otherwise.
+When clone is requested, clone audio owns the final video. Default-only mode uses the default voice for both baseline and final video.
 
-`--voice both` runs the inexpensive Edge preview first and CosyVoice second. Existing per-segment caches remain in use unless `--force` is supplied.
+### Stage 4 Effects
 
-Remove the Doubao TTS adapter, its smoke script, the HTML/terminal preview helper, and legacy TTS launchers.
+Stage 4 reads Stage 1 tracking/homography plus `comments/events.json`, writes root `annotated_video.mp4`, then muxes the existing Stage 3 audio into a temporary final video. Only after FFmpeg succeeds does a same-filesystem rename replace `voice/final_video[_en].mp4`.
 
-## Runtime Data Flow
+The Stage 3 `raw_final_video[_en].mp4` remains unchanged for comparison and rollback.
 
-All stages use one output directory now that there is no A/B arm:
+## Minimal Legacy Extraction
 
-```text
-Stage 1
-  predictions.json
-  homography_per_frame.json
+Before deleting former stages:
 
-Stage 2B
-  clip.mp4
-  events.json
-  commentary.json
+- Move `FrameData`, frame loading, team/role majority voting, nearest-player possession, and possession segmentation into `stage2b/digest.py`.
+- Replace the CSV-backed schema with a closed event catalog in `stage2b/events.py`. It includes `football.corner`, descriptions, and `importance_base`.
+- Move the single ARK request path, direct-video prompt, JSON parsing, pacing validation, and commentary writing into `stage2b/generate.py`.
+- Move supported relation quantities, aggregations, and predicate evaluation into `relations/query.py`.
+- Move the tactical glossary to `stage2b/concepts.yaml`.
+- Implement candidate generation, scheduling, composition, auditing, and event-only fallback in `stage2b/hybrid.py`.
 
-Optional Stage 3
-  annotated_video.mp4
-
-Stage 5
-  commentary_<language>_default.mp3
-  commentary_<language>.mp3
-  raw_final_video[_en].mp4
-  final_video[_en].mp4
-  tts_segments/
-```
-
-`scripts/run_stage2b.sh` writes into the Stage 1 output directory instead of an A/B sibling such as `outputs/SNGS-116-2b`. Optional Stage 3 can therefore read Stage 1 predictions/homography and Stage 2B events without copying artifacts.
-
-## Canonical-Copy Reconciliation
-
-The root mirrors are not blindly deleted because several contain newer behavior than their canonical `pipeline/` counterparts. Before removal, reconcile only the retained behavior:
-
-- Preserve Stage 1 timing, batch override, path override, and visualization-control changes from the newer root `stage1_inference/run_gsr.py`.
-- Preserve the Stage 3 FFmpeg fallback behavior from the newer root renderer.
-- Preserve Stage 2B video input, segment normalization, Stage 5 `--video`, English output naming, and direct preview-link simplifications through the new canonical Stage 2B and Stage 5 implementations.
-- Discard differences that belong only to the removed Stage 2 or Stage 4 paths.
-
-All user-owned unrelated working-tree changes remain untouched.
+Do not migrate detector candidates, classification, evidence-frame creation, event enrichment, former event verification, generic LLM adapters, adapter factories, or full-clip tactical narration.
 
 ## Deletion Inventory
 
-Delete the following canonical obsolete areas:
+Delete these canonical obsolete areas after retained behavior is extracted:
 
 - `pipeline/stage2_events/`
 - `pipeline/stage4_commentary/`
+- `pipeline/tactics/`
 - `pipeline/stage3_effects/render_preview.py`
-- `pipeline/stage5_tts/adapters/doubao_tts.py`
-- `pipeline/stage5_tts/make_raw_final_video.py`
-- `pipeline/stage5_tts/make_final_video.py`
-- `pipeline/stage5_tts/preview.py`
-- `pipeline/stage1_inference/probe_concat_tracklets_by_reid.py`
-- `pipeline/stage1_inference/probe_heatmap_peaks.py`
-- `pipeline/stage1_inference/check_recompute.py`
-- `pipeline/stage1_inference/recompute_calibration.sh`
-- `pipeline/utils/clip_index_to_events.py`
-- `pipeline/utils/validate_clip_index.py`
-- `pipeline/SNGS-117-2b/`
+- former `pipeline/stage5_tts/` after its retained files are moved to `stage3_tts/`
 - `reference_football.csv`
-- `tests/`
+- `pitch_distances.py`
+- obsolete Stage 1 probes and recompute scripts
+- obsolete clip-index utilities
+- generated artifacts and `__pycache__` below source directories
 
-Delete obsolete canonical scripts:
+Delete obsolete scripts:
 
-- `scripts/run_caption_verify.sh`
 - `scripts/run_stage2.sh`
-- `scripts/run_stage4.sh`
 - `scripts/run_stage5.sh`
 - `scripts/run_tts.sh`
 - `scripts/smoke_doubao_tts.py`
+- former Stage 2/4/caption verification and one-off probe launchers
 
-Delete root-only or mirrored application code:
+Delete all repository tests except:
 
-- `__init__.py`, `config.py`, `run.py`, and `video.py` at repository root.
-- Root `stage1_inference/`, `stage2_events/`, `stage2b/`, `stage3_effects/`, `stage4_commentary/`, `stage5_tts/`, `topology/`, and `utils/` directories.
-- Root `run_caption_verify.sh`, `run_stage1.sh`, `run_stage2.sh`, `run_stage2b.sh`, `run_stage3.sh`, `run_stage4.sh`, `run_stage5.sh`, `run_tts.sh`, `setup_cosyvoice.sh`, `smoke_doubao_tts.py`, and `probe_ark_video.py` after the retained Stage 2B launcher is placed under `scripts/`.
+- `tests/test_calibration_guard.py`
+- new `tests/test_hybrid_smoke.py`
 
-Keep the current deletions of obsolete standalone minimap/distance tools and former Stage 2 tests.
+Delete empty test package markers and shared fixtures.
+
+External model repositories, model weights, datasets, `.omc/`, `AccessKey.txt`, and `voice_sample.wav` are user-owned and are not committed. No credential file is read by tests or included in Git staging.
+
+## Output Layout
+
+```text
+outputs/<SEQ>/
+├── predictions.json
+├── homography_per_frame.json
+├── clip.mp4
+├── annotated_video.mp4
+├── comments/
+│   ├── events.json
+│   ├── event_spine.json
+│   ├── commentary_direct.json
+│   ├── tactical_candidates.json
+│   ├── commentary.json
+│   ├── relations.json
+│   └── radar/
+└── voice/
+    ├── tts_segments/
+    ├── commentary_zh_default.mp3
+    ├── commentary_zh.mp3
+    ├── raw_final_video.mp4
+    └── final_video.mp4
+```
+
+English audio/video names use `_en`.
+
+## Existing Output Migration
+
+Migrate `SNGS-116`, `SNGS-117`, and `SNGS-148`. Merge `SNGS-116-2b` and `SNGS-117-2b` into their base sequence directories.
+
+- Shared videos and Stage 1 artifacts remain at the sequence root.
+- Commentary, relations, and radar data move to `comments/`.
+- Audio, segment caches, and final videos move to `voice/`.
+- Existing direct `-2b` commentary is preserved as the baseline where available.
+- Verify every migrated target exists and is non-empty before deleting the two `-2b` directories.
+- Migration is a one-time execution step and is not implemented as a permanent compatibility layer.
+- Output artifacts remain ignored and uncommitted.
+
+## Launchers
+
+The five retained scripts are thin wrappers. They set defaults, translate environment variables into CLI arguments, and call `python -m ...`. Python CLIs own validation and actionable errors.
+
+- `run_stage1.sh`
+- `run_stage2b.sh`
+- `run_stage3.sh`
+- `run_stage4.sh`
+- `setup_cosyvoice.sh`
 
 ## Error Handling
 
-- Missing Stage 1 artifacts, clip frames, FFmpeg/FFprobe, ARK credentials, ARK video support, commentary, or base video fail with a direct actionable error.
-- ARK output receives one retry for malformed JSON or pacing violations, then fails.
-- There is no frame-sampling fallback when ARK video input fails.
-- Stage 5 preserves cached TTS files unless forced.
-- Stage 3 falls back to OpenCV MP4 output when FFmpeg is unavailable and logs that the result may not be browser-safe.
+- Missing Stage 1 artifacts, video frames, FFmpeg/FFprobe, ARK credentials, CosyVoice model files, clone reference audio, commentary, or base video fail with direct actionable errors.
+- ARK JSON receives one schema-guided retry, then fails.
+- Hybrid failures fall back to the direct event commentary.
+- Missing relations/radar data removes tactical candidates but does not block direct commentary.
+- TTS overflow receives one fallback-text retry, then fails without truncation.
+- Stage 4 keeps the previous final video unless its complete replacement succeeds.
 
 ## Verification
 
-No tests or test-only self-checks remain, per explicit decision. Verification is limited to production-code loading and static checks:
+Automated verification is intentionally small:
 
 ```bash
 python -m compileall -q pipeline
-bash -n scripts/run_stage1.sh scripts/run_stage2b.sh scripts/run_stage3.sh scripts/setup_cosyvoice.sh
+bash -n scripts/run_stage1.sh scripts/run_stage2b.sh scripts/run_stage3.sh scripts/run_stage4.sh scripts/setup_cosyvoice.sh
+pytest -q tests/test_calibration_guard.py tests/test_hybrid_smoke.py
 python -m pipeline.stage2b.run --help
-python -m pipeline.stage5_tts.run --help
-rg -n "pipeline\.stage2_events|pipeline\.stage4_commentary" pipeline scripts
+python -m pipeline.stage3_tts.run --help
+python -m pipeline.stage4_effects.run --help
 ```
 
-The final `rg` command must return no matches. A live Stage 1 GPU run, ARK Stage 2B run, optional Stage 3 render, and CosyVoice run remain manual checks because they require large models, hardware, credentials, or network access.
+A real SNGS-116 run is a hard pre-commit gate:
+
+1. Stage 2B direct and hybrid complete.
+2. The corner sequence and later key events remain present.
+3. CosyVoice default and clone complete without audio truncation.
+4. Stage 3 produces baseline and final videos.
+5. Stage 4 safely updates the final video.
+6. Only then may the single implementation commit be created.
+
+The 50-clip blinded A/B protocol remains a future release gate. No evaluation package is built in this work.
 
 ## Acceptance Criteria
 
-- Only one canonical copy of application code exists.
-- Stage 2B has no imports from the removed Stage 2 or Stage 4 packages.
-- Stage 1, Stage 2B, optional Stage 3, and Stage 5 command entry points load successfully.
-- Stage 3 visual effects and `pipeline/topology/` remain present and runnable.
-- Stage 5 supports Edge preview, CosyVoice clone, or both through one runner.
-- A sequence uses one output directory from Stage 1 through Stage 5.
-- No test directory or test-only code remains.
-- No unrelated working-tree edits are included in the cleanup.
-
-## Ponytail Review Summary
-
-The cleanup removes duplicate packages, two replaced pipeline stages, unused diagnostics, one-off probes, redundant wrappers, obsolete adapters, and test-only files. The estimated result is approximately 13,000 fewer Python and shell lines, after accounting for the small helper extraction and consolidated Stage 5 runner.
+- Only the approved numbered stage packages remain.
+- No retained code imports former Stage 2, Stage 4 commentary, tactics, Stage 5, Edge TTS, or Doubao TTS modules.
+- Stage 2B defaults to hybrid and retains explicit direct mode.
+- Sequence outputs follow the root/comments/voice contract with no legacy fallback.
+- Stage 3 uses only Fun-CosyVoice3 and supports default, clone, both, Chinese, and English.
+- Stage 4 never leaves a partial final video.
+- Only the two approved test files remain.
+- SNGS-116 passes the real end-to-end gate.
+- User-owned credentials, models, assets, and unrelated working-tree changes remain untouched.

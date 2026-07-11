@@ -53,7 +53,7 @@ experiment_subname: "step_3_sn500_10001_10002"
 
 # Path definitions
 home_dir: "${oc.env:HOME}"
-sn_gamestate_root: "/home/luoguoqing/SoccerMaster/codes/sn-gamestate"
+sn_gamestate_root: "${hydra:runtime.cwd}"
 data_dir: "${sn_gamestate_root}/datasets"
 model_dir: "${sn_gamestate_root}/pretrained_models"
 qwen_7b_model_path: "${model_dir}/jn/Qwen2.5-VL-7B-Instruct"

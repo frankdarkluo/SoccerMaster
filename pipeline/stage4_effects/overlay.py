@@ -5,10 +5,10 @@ import math
 from typing import Dict, List, Optional, Tuple
 
 from pipeline.config import PipelineConfig
-from pipeline.stage3_effects.beam_targets import foot_point_from_bbox, resolve_beam_points
-from pipeline.stage3_effects.light_beam import compute_beam_alpha, draw_cone_beam, draw_foot_marker
-from pipeline.stage3_effects.projection import get_h_inv_for_frame, pitch_to_image
-from pipeline.stage3_effects.tactical_lines import (
+from pipeline.stage4_effects.beam_targets import foot_point_from_bbox, resolve_beam_points
+from pipeline.stage4_effects.light_beam import compute_beam_alpha, draw_cone_beam, draw_foot_marker
+from pipeline.stage4_effects.projection import get_h_inv_for_frame, pitch_to_image
+from pipeline.stage4_effects.tactical_lines import (
     delaunay_adjacency,
     draw_formation_lines,
     draw_player_marker,

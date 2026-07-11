@@ -1,0 +1,2 @@
+_target_: tracklab.engine.OfflineTrackingEngine
+num_workers: ${num_cores}

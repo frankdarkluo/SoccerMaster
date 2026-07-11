@@ -4,3 +4,8 @@ defaults:
 _target_: tracklab.wrappers.ExternalVideo
 
 video_path: "https://www.youtube.com/watch?v=jvvbqqM3k6g"
+
+# TrackEval configuration used by the gs_hota evaluator
+track_eval:
+  dataset_class: MotChallenge2DBox
+

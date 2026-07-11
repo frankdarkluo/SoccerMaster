@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -10,12 +9,11 @@ from typing import Optional
 import cv2
 
 from pipeline.config import PipelineConfig
+from pipeline.stage2b.events import get_event
 from pipeline.utils.video import reencode_to_h264
-from pipeline.stage3_effects.beam_targets import load_predictions_index
-from pipeline.stage3_effects.overlay import apply_frame_overlays
-from pipeline.stage3_effects.projection import load_homography
-
-log = logging.getLogger(__name__)
+from pipeline.stage4_effects.beam_targets import load_predictions_index
+from pipeline.stage4_effects.overlay import apply_frame_overlays
+from pipeline.stage4_effects.projection import load_homography
 
 
 def _sorted_frame_paths(frames_dir: Path) -> list[Path]:
@@ -24,6 +22,25 @@ def _sorted_frame_paths(frames_dir: Path) -> list[Path]:
 
 def _frame_number_from_path(path: Path) -> int:
     return int(path.stem)
+
+
+def load_effect_events(path: Path) -> list[dict]:
+    """Read Stage 2B events and normalize the effects fields once."""
+    with Path(path).open(encoding="utf-8") as handle:
+        payload = json.load(handle)
+    events = payload if isinstance(payload, list) else payload.get("events", [])
+    normalized = []
+    for source in events:
+        if not isinstance(source, dict):
+            continue
+        event = dict(source)
+        definition = get_event(event.get("event_code"))
+        event["importance"] = definition.importance_base if definition else 0.0
+        event["timestamp_s"] = (
+            float(event.get("start_s", 0.0)) + float(event.get("end_s", 0.0))
+        ) / 2.0
+        normalized.append(event)
+    return normalized
 
 
 def render_annotated_video(
@@ -44,8 +61,7 @@ def render_annotated_video(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(events_json_path, encoding="utf-8") as f:
-        events_data = json.load(f)
+    events = load_effect_events(events_json_path)
 
     frame_to_image_id, anns_by_image = load_predictions_index(predictions_json_path)
     homo_frames = None
@@ -69,7 +85,6 @@ def render_annotated_video(
         (w, h),
     )
 
-    events = events_data.get("events", [])
     for frame_path in frame_paths:
         frame_num = _frame_number_from_path(frame_path)
         frame = cv2.imread(str(frame_path))
@@ -88,12 +103,15 @@ def render_annotated_video(
 
     writer.release()
 
-    if reencode_h264 and shutil.which("ffmpeg"):
+    if reencode_h264:
+        if not shutil.which("ffmpeg"):
+            tmp_path.unlink(missing_ok=True)
+            raise RuntimeError(
+                "ffmpeg is required to produce H.264 annotated_video.mp4 for IDE playback"
+            )
         reencode_to_h264(tmp_path, output_path)
         tmp_path.unlink(missing_ok=True)
     else:
-        if reencode_h264:
-            log.warning("ffmpeg not found; keeping OpenCV mp4v output at %s", output_path)
-        tmp_path.replace(output_path)
+        tmp_path.rename(output_path)
 
     return output_path

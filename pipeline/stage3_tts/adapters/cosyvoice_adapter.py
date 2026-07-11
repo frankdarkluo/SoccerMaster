@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 from pipeline.config import REPO_ROOT
-from pipeline.stage5_tts.tts_adapter import (
+from pipeline.stage3_tts.tts_adapter import (
     ENERGY_ENGAGED,
     ENERGY_EXCITED,
     ENERGY_EXPLOSIVE,

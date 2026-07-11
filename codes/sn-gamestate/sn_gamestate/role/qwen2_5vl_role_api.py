@@ -7,7 +7,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models, transforms
 
-from transformers import Qwen2_5_VLForConditionalGeneration, Qwen3VLMoeForConditionalGeneration, AutoProcessor
+from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+
+try:
+    from transformers import Qwen3VLMoeForConditionalGeneration
+except ImportError:  # pragma: no cover
+    Qwen3VLMoeForConditionalGeneration = None
 from qwen_vl_utils import process_vision_info
 
 from tracklab.utils.collate import default_collate, Unbatchable
@@ -32,6 +37,8 @@ class QWEN2_5VL_ROLE_BATCH(DetectionLevelModule):
         if '2.5' in self.model_path:
             model_api = Qwen2_5_VLForConditionalGeneration
         elif '3' in self.model_path:
+            if Qwen3VLMoeForConditionalGeneration is None:
+                raise ImportError("transformers does not provide Qwen3VLMoeForConditionalGeneration. Upgrade transformers to a version that supports Qwen3 models.")
             model_api = Qwen3VLMoeForConditionalGeneration
         else:
             raise ValueError(f"Model path {self.model_path} is not supported")

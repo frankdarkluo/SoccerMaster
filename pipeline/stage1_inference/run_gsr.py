@@ -6,7 +6,6 @@ import os
 import re
 import subprocess
 import sys
-import time
 import zipfile
 from pathlib import Path
 
@@ -62,81 +61,12 @@ def _rel_to_gsr(path: Path) -> str:
     return os.path.relpath(path.resolve(), GSR_ROOT.resolve())
 
 
-def _format_duration(seconds: float) -> str:
-    seconds_i = int(round(seconds))
-    hours, rem = divmod(seconds_i, 3600)
-    minutes, secs = divmod(rem, 60)
-    if hours:
-        return f"{hours}h {minutes:02d}m {secs:02d}s"
-    if minutes:
-        return f"{minutes}m {secs:02d}s"
-    return f"{secs}s"
-
-
-def _timed_step(name: str, func, *args, **kwargs):
-    start = time.perf_counter()
-    log.info("Timer start: %s", name)
-    try:
-        return func(*args, **kwargs)
-    finally:
-        log.info("Timer done:  %s took %s", name, _format_duration(time.perf_counter() - start))
-
-
-def _env_int(name: str) -> str | None:
-    value = os.environ.get(name)
-    if value in (None, ""):
-        return None
-    try:
-        valid = int(value) >= 1
-    except ValueError:
-        valid = False
-    if not valid:
-        raise ValueError(f"{name} must be a positive integer, got {value!r}")
-    return value
-
-
-def gsr_batch_overrides(step: int) -> list[str]:
-    overrides: list[str] = []
-    if step == 1:
-        shared = _env_int("GSR_STEP1_BATCH")
-        for module, env_name in (
-            ("bbox_detector", "GSR_BBOX_BATCH"),
-            ("pose_bottomup", "GSR_POSE_BATCH"),
-            ("reid", "GSR_REID_BATCH"),
-            ("track", "GSR_TRACK_BATCH"),
-            ("legibility", "GSR_LEGIBILITY_BATCH"),
-            ("jersey_number_detect", "GSR_JERSEY_BATCH"),
-            ("role", "GSR_ROLE_BATCH"),
-        ):
-            value = _env_int(env_name) or shared
-            if value:
-                overrides.append(f"modules.{module}.batch_size={value}")
-    elif step == 3:
-        for module, env_name in (
-            ("legibility", "GSR_STEP3_LEGIBILITY_BATCH"),
-            ("jersey_and_role", "GSR_VLLM_BATCH"),
-        ):
-            value = _env_int(env_name)
-            if value:
-                overrides.append(f"modules.{module}.batch_size={value}")
-        if (use_vllm := os.environ.get("GSR_USE_VLLM")) is not None:
-            overrides.append(f"modules.jersey_and_role.cfg.use_vllm={use_vllm.lower()}")
-        for env_name, key in (
-            ("GSR_HF_MODEL", "model_path"),
-            ("GSR_VLLM_MODEL", "vllm_model_path"),
-        ):
-            if value := os.environ.get(env_name):
-                model_path = Path(value)
-                if not model_path.is_absolute():
-                    model_path = GSR_ROOT / "pretrained_models" / "jn" / value
-                overrides.append(f"modules.jersey_and_role.cfg.{key}={model_path}")
-        if gpu_mem := os.environ.get("GSR_VLLM_GPU_MEMORY_UTILIZATION"):
-            overrides.append(f"modules.jersey_and_role.cfg.vllm_gpu_memory_utilization={gpu_mem}")
-    return overrides
-
-
 def _artifact_ready(path: Path, min_bytes: int = 1) -> bool:
     return path.is_file() and path.stat().st_size >= min_bytes
+
+
+def _is_hf_model_id(value: str) -> bool:
+    return value.startswith("facebook/") or value.startswith("hf://facebook/")
 
 
 def _pklz_has_video(pklz: Path, video_id: str) -> bool:
@@ -154,9 +84,12 @@ def _subprocess_env() -> dict[str, str]:
     """Repo PYTHONPATH + conservative CPU/thread limits for child processes."""
     env = apply_cpu_limits(os.environ.copy())
     repo = str(REPO_ROOT)
+    repo_codes = str(REPO_ROOT / "codes")
     prev = env.get("PYTHONPATH", "")
-    env["PYTHONPATH"] = repo + (os.pathsep + prev if prev else "")
-    env.setdefault("CUDA_VISIBLE_DEVICES", env.get("GPU_LIST", "0"))
+    pythonpath_parts = [repo, repo_codes]
+    if prev:
+        pythonpath_parts.append(prev)
+    env["PYTHONPATH"] = os.pathsep.join(part for part in pythonpath_parts if part)
     return env
 
 
@@ -176,6 +109,16 @@ def _run(cmd: list[str], cwd: Path, dry_run: bool = False) -> None:
         return
 
     env = _subprocess_env()
+    # SAM2 launcher runs from within the repo root and can misresolve "sam2"
+    # if repo-level "codes" is on PYTHONPATH, so keep only the minimum path.
+    sam2_step2 = (REPO_ROOT / "codes" / "sam2" / "step_2").resolve()
+    if Path(cwd).resolve() == sam2_step2:
+        current_paths = [
+            p
+            for p in env.get("PYTHONPATH", "").split(os.pathsep)
+            if p and Path(p).resolve() != (REPO_ROOT / "codes").resolve()
+        ]
+        env["PYTHONPATH"] = os.pathsep.join(current_paths)
 
     # PyTorch >= 2.6 defaults torch.load(weights_only=True), which breaks YOLO
     # and other full-pickle GSR checkpoints. Patch before launching tracklab.
@@ -223,7 +166,6 @@ def run_step1(config: PipelineConfig, dry_run: bool = False) -> Path:
         f"hydra.run.dir={_rel_to_gsr(out_dir)}",
         f"use_rich={os.environ.get('GSR_USE_RICH', 'false')}",
         *hydra_cpu_overrides(),
-        *gsr_batch_overrides(step=1),
     ]
     _run(cmd, GSR_ROOT, dry_run=dry_run)
     return states_dir
@@ -236,6 +178,44 @@ def run_step2(config: PipelineConfig, dry_run: bool = False) -> Path:
     seq_id = _sequence_id(config)
 
     sam2_dir = GSR_ROOT.parent / "sam2" / "step_2"
+    raw_checkpoint = os.environ.get(
+        "SAM2_CHECKPOINT", "../checkpoints/sam2.1_hiera_large.pt"
+    )
+    if _is_hf_model_id(raw_checkpoint):
+        sam_checkpoint = raw_checkpoint
+    else:
+        checkpoint = Path(raw_checkpoint)
+        if checkpoint.is_absolute():
+            candidate_checkpoint = checkpoint
+        else:
+            candidate_checkpoint = (sam2_dir / checkpoint).resolve()
+
+        if candidate_checkpoint.exists():
+            sam_checkpoint = str(candidate_checkpoint)
+        else:
+            # Keep compatibility with existing environment variable usage.
+            # If no local file exists, fallback to the canonical HF checkpoint id.
+            sam_checkpoint = "facebook/sam2.1-hiera-large"
+            if raw_checkpoint not in {"", "../checkpoints/sam2.1_hiera_large.pt"}:
+                log.warning(
+                    "SAM2 checkpoint not found locally: %s. Falling back to %s",
+                    raw_checkpoint,
+                    sam_checkpoint,
+                )
+            else:
+                log.info("Using default SAM2 checkpoint from Hugging Face id: %s", sam_checkpoint)
+
+    if not _is_hf_model_id(sam_checkpoint):
+        resolved = Path(sam_checkpoint)
+        if not resolved.is_absolute():
+            resolved = (sam2_dir / resolved).resolve()
+        sam_checkpoint = str(resolved)
+
+    if not _is_hf_model_id(sam_checkpoint) and not Path(sam_checkpoint).exists():
+        raise FileNotFoundError(
+            f"Invalid SAM2 checkpoint path: {sam_checkpoint} (set SAM2_CHECKPOINT to an existing checkpoint file or a Hugging Face model id)."
+        )
+
     input_pklz = _step1_dir(config) / "states" / "sn-gamestate.pklz"
     output_dir = _step2_dir(config)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -244,11 +224,24 @@ def run_step2(config: PipelineConfig, dry_run: bool = False) -> Path:
         log.info("Step 2 already done, skipping: %s", save_pklz)
         return output_dir
 
-    log.info("Running GSR Step 2 (SAM2) on %s/%s → %s", split, seq_name, output_dir)
+    if _is_hf_model_id(sam_checkpoint):
+        log.info(
+            "Running GSR Step 2 (SAM2) on %s/%s with checkpoint model: %s",
+            split,
+            seq_name,
+            sam_checkpoint,
+        )
+    else:
+        log.info(
+            "Running GSR Step 2 (SAM2) on %s/%s with checkpoint: %s",
+            split,
+            seq_name,
+            sam_checkpoint,
+        )
 
     infer_cmd = [
         "python", "inference.py",
-        "--sam_checkpoint", "../checkpoints/sam2.1_hiera_large.pt",
+        "--sam_checkpoint", sam_checkpoint,
         "--sam_config", "configs/sam2.1/sam2.1_hiera_l.yaml",
         "--input_pklz", str(input_pklz),
         "--dataset_root", str(GSR_ROOT / "datasets" / "SoccerNetGS"),
@@ -270,6 +263,12 @@ def run_step2(config: PipelineConfig, dry_run: bool = False) -> Path:
     ]
     _run(infer_cmd, sam2_dir, dry_run=dry_run)
 
+    expected_result = output_dir / "video_results" / f"{seq_id}_result.pkl"
+    if not _artifact_ready(expected_result, min_bytes=1):
+        raise RuntimeError(
+            "SAM2 Step 2 did not produce expected result file: " + str(expected_result)
+        )
+
     merge_cmd = [
         "python", "merge_pkl.py",
         "--input_pklz", str(input_pklz),
@@ -285,7 +284,6 @@ def run_step2(config: PipelineConfig, dry_run: bool = False) -> Path:
     ]
     _run(merge_cmd, sam2_dir, dry_run=dry_run)
     return output_dir
-
 
 def run_step3(config: PipelineConfig, dry_run: bool = False) -> Path:
     """Run calibration + jersey + team for one sequence. Returns final pklz path."""
@@ -309,15 +307,9 @@ def run_step3(config: PipelineConfig, dry_run: bool = False) -> Path:
         f"dataset.start_vid={seq_id}",
         f"dataset.end_vid={seq_id}",
         f"state.load_file={load_file}",
-        "data_dir=${project_dir}/datasets",
-        "model_dir=${project_dir}/pretrained_models",
-        "dataset.dataset_path=${data_dir}/SoccerNetGS",
         f"hydra.run.dir={_rel_to_gsr(out_dir)}",
         f"use_rich={os.environ.get('GSR_USE_RICH', 'false')}",
-        f"visualization.cfg.save_videos={os.environ.get('GSR_SAVE_VIDEOS', 'false')}",
-        f"visualization.cfg.save_images={os.environ.get('GSR_SAVE_IMAGES', 'false')}",
         *hydra_cpu_overrides(),
-        *gsr_batch_overrides(step=3),
     ]
     _run(cmd, GSR_ROOT, dry_run=dry_run)
 
@@ -331,13 +323,7 @@ def run_step3(config: PipelineConfig, dry_run: bool = False) -> Path:
 
 def run_full_gsr(config: PipelineConfig, dry_run: bool = False) -> Path:
     """Run all 3 GSR steps for the sequence in config.clip_dir. Returns final pklz."""
-    total_start = time.perf_counter()
-    try:
-        _timed_step("GSR Step 1 detection/tracking", run_step1, config, dry_run=dry_run)
-        if config.skip_sam2:
-            log.info("Timer skip:  GSR Step 2 SAM2 refinement")
-        else:
-            _timed_step("GSR Step 2 SAM2 refinement", run_step2, config, dry_run=dry_run)
-        return _timed_step("GSR Step 3 calibration/identity", run_step3, config, dry_run=dry_run)
-    finally:
-        log.info("Timer total: GSR Stage 1 took %s", _format_duration(time.perf_counter() - total_start))
+    run_step1(config, dry_run=dry_run)
+    if not config.skip_sam2:
+        run_step2(config, dry_run=dry_run)
+    return run_step3(config, dry_run=dry_run)

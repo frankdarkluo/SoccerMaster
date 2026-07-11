@@ -1,0 +1,6 @@
+_target_: tracklab.wrappers.dataset.SoccerNetGameState
+
+# TrackEval configuration used by the gs_hota evaluator
+track_eval:
+  dataset_class: MotChallenge2DBox
+

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import torch
+from uuid import uuid4
 
 from omegaconf import OmegaConf
 from yacs.config import CfgNode as CN
@@ -84,7 +85,7 @@ class PRTReId(DetectionLevelModule):
         # set parts information (number of parts K and each part name),
         # depending on the original loaded masks size or the transformation applied:
         self.cfg.data.save_dir = save_path
-        self.cfg.project.job_id = job_id
+        self.cfg.project.job_id = int(job_id) if str(job_id) not in {"0", "None", ""} and str(job_id).isdigit() else int(uuid4().int % 1000000007) or 1
         self.cfg.use_gpu = torch.cuda.is_available()
         self.cfg = build_config(config=self.cfg)
         self.test_embeddings = self.cfg.model.bpbreid.test_embeddings

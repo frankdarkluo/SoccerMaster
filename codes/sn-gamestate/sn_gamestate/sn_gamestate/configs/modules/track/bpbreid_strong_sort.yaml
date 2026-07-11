@@ -1,0 +1,23 @@
+_target_: tracklab.wrappers.BPBReIDStrongSORT
+
+cfg:
+  ema_alpha: 0.9
+  mc_lambda: 0.995
+  max_dist: 0.5 # fallback alias
+  motion_criterium: iou
+  max_iou_distance: 0.7
+  max_oks_distance: 0.7
+  max_distance: 5
+  max_age: 300
+  n_init: 0
+  nn_budget: 100
+  min_bbox_confidence: 0.
+  only_position_for_kf_gating: false
+  max_kalman_prediction_without_update: 7
+  matching_strategy: strong_sort_matching
+  gating_thres_factor: 1.5
+  w_kfgd: 1
+  w_reid: 1
+  w_st: 1
+  # Optional camera-motion compensation flag in BPBReIDStrongSORT
+  ecc: false

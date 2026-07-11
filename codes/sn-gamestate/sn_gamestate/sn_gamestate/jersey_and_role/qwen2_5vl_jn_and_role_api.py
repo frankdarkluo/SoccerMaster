@@ -80,9 +80,16 @@ class QWEN2_5VL_JN_AND_ROLE_BATCH(DetectionLevelModule):
         self.role_list = ["player", "referee", "goalkeeper", "other"]
 
         if self.use_vllm:
-            self._init_vllm(cfg)
-            self.model = None
-            log.info("jersey_and_role backend: vLLM (%s)", self.vllm_model_path)
+            self.vllm_model_path = getattr(cfg, "vllm_model_path", None) or self.model_path
+            try:
+                self._init_vllm(cfg)
+                self.model = None
+                log.info("jersey_and_role backend: vLLM (%s)", self.vllm_model_path)
+            except Exception:
+                self.use_vllm = False
+                log.warning("vLLM init failed, fallback to HuggingFace. vllm_model=%s", self.vllm_model_path, exc_info=True)
+                self._init_hf()
+                log.info("jersey_and_role backend: HuggingFace (%s) (fallback)", self.model_path)
         else:
             self._init_hf()
             log.info("jersey_and_role backend: HuggingFace (%s)", self.model_path)
@@ -97,7 +104,7 @@ class QWEN2_5VL_JN_AND_ROLE_BATCH(DetectionLevelModule):
 
         self.model = model_api.from_pretrained(
             self.model_path,
-            dtype=torch.bfloat16,
+            torch_dtype=torch.bfloat16,
             attn_implementation="sdpa",
             device_map="auto",
         )

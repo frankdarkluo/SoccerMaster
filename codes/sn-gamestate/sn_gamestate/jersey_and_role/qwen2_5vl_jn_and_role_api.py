@@ -5,11 +5,12 @@ import pandas as pd
 import torch
 from PIL import Image
 from qwen_vl_utils import process_vision_info
-from transformers import (
-    AutoProcessor,
-    Qwen2_5_VLForConditionalGeneration,
-    Qwen3VLMoeForConditionalGeneration,
-)
+from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+
+try:
+    from transformers import Qwen3VLMoeForConditionalGeneration
+except ImportError:  # pragma: no cover
+    Qwen3VLMoeForConditionalGeneration = None
 
 from tracklab.pipeline.detectionlevel_module import DetectionLevelModule
 from tracklab.utils.collate import Unbatchable, default_collate
@@ -80,9 +81,21 @@ class QWEN2_5VL_JN_AND_ROLE_BATCH(DetectionLevelModule):
         self.role_list = ["player", "referee", "goalkeeper", "other"]
 
         if self.use_vllm:
-            self._init_vllm(cfg)
-            self.model = None
-            log.info("jersey_and_role backend: vLLM (%s)", self.vllm_model_path)
+            try:
+                self._init_vllm(cfg)
+                self.model = None
+                log.info("jersey_and_role backend: vLLM (%s)", self.vllm_model_path)
+            except Exception:
+                self.use_vllm = False
+                log.warning(
+                    "vLLM initialization failed; falling back to HuggingFace backend for this run.",
+                    exc_info=True,
+                )
+                self._init_hf()
+                log.info(
+                    "jersey_and_role backend: HuggingFace (%s) (fallback)",
+                    self.model_path,
+                )
         else:
             self._init_hf()
             log.info("jersey_and_role backend: HuggingFace (%s)", self.model_path)
@@ -91,6 +104,8 @@ class QWEN2_5VL_JN_AND_ROLE_BATCH(DetectionLevelModule):
         if "2.5" in self.model_path:
             model_api = Qwen2_5_VLForConditionalGeneration
         elif "3" in self.model_path:
+            if Qwen3VLMoeForConditionalGeneration is None:
+                raise ImportError("transformers does not provide Qwen3VLMoeForConditionalGeneration. Upgrade transformers to a version that supports Qwen3 models.")
             model_api = Qwen3VLMoeForConditionalGeneration
         else:
             raise ValueError(f"Model path {self.model_path} is not supported")

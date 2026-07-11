@@ -3,9 +3,9 @@
 # Detection + tracking → SAM2 → calibration / jersey / team → predictions.json
 #
 # Writes only: predictions.json, homography_per_frame.json, and step{1,2,3}/ GSR artifacts.
-# Does NOT touch downstream outputs (events.json, annotated_video.mp4, commentary, final_video).
+# Does NOT touch downstream outputs from Stage 2B, Stage 3 TTS, or optional Stage 4 Effects.
 # Step 3 uses vLLM + Qwen2.5-VL-7B-Instruct-AWQ (gsr_step_3_example_accelerate_vllm).
-# Run Stage 2B next; Stage 3 is optional and Stage 5 is driven by Stage 2B.
+# Re-run Stage 2B, Stage 3 TTS, and optional Stage 4 Effects manually to refresh those.
 #
 # The clip_dir path selects both the split and the sequence, e.g.:
 #   .../test/SNGS-148  → only test/SNGS-148
@@ -61,6 +61,19 @@ fi
 export PYTHONPATH="${PWD}${PYTHONPATH:+:$PYTHONPATH}"
 
 # nohup/non-interactive shells often leave conda on base (no torch). Activate tracklab.
+if [[ -z "${GSR_PYTHON:-}" ]]; then
+  for _tracklab_python in \
+    "${HOME}/guoqing/miniconda3/envs/tracklab/bin/python" \
+    "${HOME}/miniconda3/envs/tracklab/bin/python" \
+    "${HOME}/anaconda3/envs/tracklab/bin/python"
+  do
+    if [[ -x "$_tracklab_python" ]]; then
+      export GSR_PYTHON="$_tracklab_python"
+      break
+    fi
+  done
+fi
+
 if [[ -z "${CONDA_DEFAULT_ENV:-}" || "${CONDA_DEFAULT_ENV}" == "base" ]]; then
   for _conda_sh in \
     "${HOME}/miniconda3/etc/profile.d/conda.sh" \
