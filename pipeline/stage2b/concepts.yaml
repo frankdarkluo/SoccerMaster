@@ -1,0 +1,37 @@
+concepts:
+  - id: positional_attack
+    name_zh: 阵地战
+    name_en: positional attack
+    description: 进攻方长时间控球、对手落位防守后的有组织进攻，通过传导与跑位寻找空当。
+  - id: counter_attack
+    name_zh: 快速反击
+    name_en: counter attack
+    description: 由守转攻后立即向前推进，趁对方防线未落位时打击身后空间。
+  - id: high_press
+    name_zh: 高位逼抢
+    name_en: high press
+    description: 无球方在对方半场就地围抢，压缩持球人出球空间。
+  - id: low_block
+    name_zh: 低位防守
+    name_en: low block
+    description: 防守方整体退守己方半场，压缩身后空间。
+  - id: overlap_run
+    name_zh: 套边（套上）
+    name_en: overlapping run
+    description: 无球队员从持球队友身后沿边路外侧超越持球人，制造边路人数优势。
+  - id: depth_run
+    name_zh: 前插身后（打身后）
+    name_en: run in behind
+    description: 进攻队员冲击对方防线身后的纵深空间。
+  - id: width_run
+    name_zh: 拉边跑动
+    name_en: width run
+    description: 进攻队员移动到边路拉开场地宽度，牵扯防守。
+  - id: numerical_superiority
+    name_zh: 局部人数优势
+    name_en: local numerical superiority
+    description: 球周围区域一方人数多于另一方，形成以多打少。
+  - id: switch_play
+    name_zh: 弱侧转移（大范围转移）
+    name_en: switch of play
+    description: 用长传把球从一侧快速转移到防守薄弱的另一侧。

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from pipeline.config import PipelineConfig
+from pipeline.atomic import atomic_copy
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -104,222 +105,61 @@ def run_stage1(config: PipelineConfig) -> None:
         ball_labels_path=labels_path if labels_path.is_file() else None,
     )
 
-
-def run_stage2(config: PipelineConfig) -> int:
-    from pipeline.stage2_events.detector import (
-        EventDetector,
-        compose_assists,
-        dedup_events,
-        load_frames,
-        write_events_json,
-    )
-    from pipeline.stage2_events.enricher import enrich_events
-    from pipeline.stage2_events.schema import EventSchema
-
-    schema = EventSchema()
-    frames = load_frames(str(config.predictions_json))
-    detector = EventDetector(
-        schema, fps=config.fps,
-        shot_speed_threshold=config.ball_speed_shot_threshold_mps,
-        min_gap_s=config.min_event_gap_s,
-    )
-    events = detector.detect(str(config.predictions_json))
-
-    video_info = {
-        "source": str(config.frames_dir), "fps": config.fps,
-        "duration_s": 30.0, "total_frames": config.fps * 30,
-    }
-    write_events_json(events, config.output_dir / "events_detected.json", video_info)
-
-    if config.verify_events:
-        from pipeline.stage2_events.verify import cleanup_verify_artifacts, verify_events
-        adapter = _build_verify_adapter(config)
-        log.info("Verifying events with %s ...", config.verify_backend)
-        candidates = dedup_events(events)
-        log.info("Dedup before verify: %d raw -> %d candidates", len(events), len(candidates))
-        events, audit = verify_events(
-            candidates, str(config.predictions_json), config.frames_dir, config.output_dir,
-            adapter, str(config.homography_json), fps=config.fps,
-            window_s=config.verify_window_s,
-        )
-        dropped = sum(1 for a in audit if not a["kept"])
-        log.info("Verification: %d checked, %d dropped", len(audit), dropped)
-        cleanup_verify_artifacts(config.output_dir)
-
-    events = enrich_events(dedup_events(compose_assists(events)), frames)
-    write_events_json(events, config.output_dir / "events.json", video_info)
-    return len(events)
-
-
-def _build_verify_adapter(config: PipelineConfig):
-    if config.verify_backend == "qwen_local":
-        from pipeline.stage4_commentary.adapters.qwen_local import QwenLocalAdapter
-
-        return QwenLocalAdapter(model_path=config.verify_model_path)
-    if config.verify_backend == "doubao":
-        from pipeline.stage4_commentary.adapters.doubao_api import DoubaoAPIAdapter
-        from pipeline.stage4_commentary.generate import load_ark_env
-
-        load_ark_env()
-        return DoubaoAPIAdapter()
-    raise ValueError(f"Unknown verify backend: {config.verify_backend}")
-
-
-def run_stage3(config: PipelineConfig) -> None:
-    from pipeline.stage3_effects.render import render_annotated_video
-    from pipeline.stage3_effects.topology_analysis import run_topology_analysis
-
-    homography_path = config.homography_json if config.homography_json.exists() else None
-    render_annotated_video(
-        frames_dir=config.frames_dir,
-        events_json_path=config.events_json,
-        predictions_json_path=config.predictions_json,
-        output_path=config.annotated_video,
-        config=config,
-        homography_json_path=homography_path,
-    )
-
-    if config.force or not config.topology_json.exists():
-        run_topology_analysis(
-            config.predictions_json,
-            config.topology_json,
-            fps=config.fps,
-        )
-
-
-def run_stage4(config: PipelineConfig) -> None:
-    from pipeline.stage4_commentary.generate import generate_commentary
-
-    visual = config.annotated_video if config.annotated_video.exists() else None
-    if visual is None and config.topdown_video.exists():
-        visual = config.topdown_video
-
-    verification_audit_path = config.events_verification_json
-    generate_commentary(
-        config.events_json,
-        config.commentary_json,
-        config=config,
-        visual_input=visual,
-        topo_json_path=config.topology_json if config.topology_json.exists() else None,
-        verification_audit_path=verification_audit_path if verification_audit_path.exists() else None,
-    )
-
-
-def run_stage5(config: PipelineConfig) -> None:
-    from pipeline.stage5_tts.synthesize import synthesize_commentary
-    from pipeline.stage5_tts.mux import mux_audio_video
-
-    adapter = _build_tts_adapter(config)
-
-    for lang in config.languages:
-        audio = config.output_dir / f"commentary_{lang}.mp3"
-        if config.force or not audio.exists():
-            lang_adapter = adapter
-            if config.tts_backend == "edge_tts":
-                from pipeline.stage5_tts.adapters.edge_tts_adapter import EdgeTTSAdapter
-                lang_adapter = EdgeTTSAdapter(language=lang)
-            synthesize_commentary(
-                config.commentary_json,
-                config.output_dir,
-                language=lang,
-                adapter=lang_adapter,
-            )
-            log.info("TTS audio: %s", audio)
-
-    primary_audio = config.commentary_audio
-    if primary_audio.exists() and config.annotated_video.exists():
-        mux_audio_video(config.annotated_video, primary_audio, config.final_video)
-
-
-def _build_tts_adapter(config: PipelineConfig):
-    from pipeline.stage4_commentary.generate import load_ark_env
-    load_ark_env()
-
-    if config.tts_backend == "doubao_tts":
-        from pipeline.stage5_tts.adapters.doubao_tts import DoubaoTTSAdapter
-        return DoubaoTTSAdapter()
-    if config.tts_backend == "edge_tts":
-        from pipeline.stage5_tts.adapters.edge_tts_adapter import EdgeTTSAdapter
-        return EdgeTTSAdapter(language=config.tts_language)
-    raise ValueError(f"Unknown TTS backend: {config.tts_backend}")
-
-
-def run_pipeline(config: PipelineConfig) -> None:
+def run_pipeline(config: PipelineConfig, effects: bool = False) -> Path:
     config.output_dir.mkdir(parents=True, exist_ok=True)
-
     if config.should_run_stage1():
         log.info("=== Stage 1: SoccerMaster Inference ===")
         run_stage1(config)
-        log.info("Stage 1 complete: %s", config.predictions_json)
     else:
         log.info("Stage 1 skipped: predictions at %s", config.predictions_json)
 
-    if config.should_run_stage2():
-        log.info("=== Stage 2: Event Detection ===")
-        n_events = run_stage2(config)
-        log.info("Stage 2 complete: %d events → %s", n_events, config.events_json)
-    else:
-        log.info("Stage 2 skipped: events at %s", config.events_json)
+    if config.existing_predictions_json:
+        source = Path(config.existing_predictions_json)
+        target = config.output_dir / "predictions.json"
+        if source.resolve() != target.resolve():
+            atomic_copy(source, target)
 
-    if config.should_run_stage3():
-        log.info("=== Stage 3: Visual Effects ===")
-        run_stage3(config)
-        log.info("Stage 3 complete: %s", config.annotated_video)
-    else:
-        log.info("Stage 3 skipped: %s exists", config.annotated_video)
 
-    if config.should_run_stage4():
-        log.info("=== Stage 4: LLM Commentary ===")
-        run_stage4(config)
-        log.info("Stage 4 complete: %s", config.commentary_json)
-    else:
-        log.info("Stage 4 skipped: %s exists", config.commentary_json)
 
-    if config.should_run_stage5():
-        log.info("=== Stage 5: TTS Voice Synthesis ===")
-        run_stage5(config)
-        log.info("Stage 5 complete: %s", config.final_video)
-    else:
-        log.info("Stage 5 skipped: %s exists", config.final_video)
+    from pipeline.stage2b.run import run_stage2b
+    from pipeline.stage3_tts.run import run_stage3_tts
+    from pipeline.stage4_effects.run import run_stage4
 
-    log.info("Pipeline complete. Outputs in %s", config.output_dir)
+    result = run_stage2b(
+        config.output_dir,
+        config.clip_dir,
+        mode=config.commentary_mode,
+        force=config.force,
+    )
+    for language in config.languages:
+        result = run_stage3_tts(
+            config.output_dir,
+            language=language,
+            force=config.force,
+        )
+        if effects:
+            result = run_stage4(
+                config.output_dir,
+                language=language,
+                config=config,
+            )
+    return result
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="AI Football Commentary Pipeline")
-    parser.add_argument("--clip-dir", type=Path, required=True, help="Clip directory containing img1/")
+    parser = argparse.ArgumentParser(description="SoccerMaster inference and commentary pipeline")
+    parser.add_argument("--clip-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/pipeline_run"))
-    parser.add_argument("--input-video", type=Path, default=None, help="Raw video for Stage 1 preprocess")
-    parser.add_argument("--existing-predictions-json", type=Path, default=None, help="Skip Stage 1")
-    parser.add_argument("--existing-homography-json", type=Path, default=None)
-    parser.add_argument("--existing-pklz-path", type=Path, default=None, help="Skip GSR inference")
-    parser.add_argument("--existing-events-json", type=Path, default=None, help="Skip Stage 2")
-    parser.add_argument("--pklz-video-id", type=str, default=None, help="Video id inside pklz (default: from clip name)")
-    parser.add_argument(
-        "--llm-backend",
-        default="doubao",
-        choices=["mock", "qwen_local", "doubao", "openai"],
-    )
-    parser.add_argument("--roster", type=Path, default=None)
-    parser.add_argument("--lang", nargs="+", default=["en", "zh"])
+    parser.add_argument("--input-video", type=Path)
+    parser.add_argument("--existing-predictions-json", type=Path)
+    parser.add_argument("--existing-homography-json", type=Path)
+    parser.add_argument("--existing-pklz-path", type=Path)
+    parser.add_argument("--pklz-video-id")
     parser.add_argument("--fps", type=int, default=25)
+    parser.add_argument("--lang", nargs="+", default=["en", "zh"])
+    parser.add_argument("--mode", choices=["direct", "hybrid"], default="hybrid")
     parser.add_argument("--force", action="store_true")
-    parser.add_argument(
-        "--verify-events",
-        action="store_true",
-        help="Verify interception/pass events with the configured VLM backend",
-    )
-    parser.add_argument(
-        "--verify-backend", default="doubao", choices=["doubao", "qwen_local"],
-        help="VLM backend for event verification (default: doubao)",
-    )
-    parser.add_argument("--no-topology-lines", action="store_true")
-    parser.add_argument(
-        "--tts-backend",
-        default="doubao_tts",
-        choices=["doubao_tts", "edge_tts"],
-    )
-    parser.add_argument("--tts-language", default="zh", choices=["zh", "en"])
+    parser.add_argument("--effects", action="store_true")
     return parser
 
 
@@ -331,25 +171,17 @@ def config_from_args(args: argparse.Namespace) -> PipelineConfig:
         existing_predictions_json=args.existing_predictions_json,
         existing_homography_json=args.existing_homography_json,
         existing_pklz_path=args.existing_pklz_path,
-        existing_events_json=args.existing_events_json,
         pklz_video_id=args.pklz_video_id,
-        llm_backend=args.llm_backend,
-        roster_json=args.roster,
-        languages=args.lang,
         fps=args.fps,
+        languages=args.lang,
+        commentary_mode=args.mode,
         force=args.force,
-        verify_events=args.verify_events,
-        verify_backend=args.verify_backend,
-        topology_lines_enabled=not args.no_topology_lines,
-        tts_backend=args.tts_backend,
-        tts_language=args.tts_language,
     )
 
 
 def main(argv: Optional[list[str]] = None) -> None:
-    parser = build_arg_parser()
-    args = parser.parse_args(argv)
-    run_pipeline(config_from_args(args))
+    args = build_arg_parser().parse_args(argv)
+    run_pipeline(config_from_args(args), effects=args.effects)
 
 
 if __name__ == "__main__":

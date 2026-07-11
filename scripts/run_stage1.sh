@@ -3,9 +3,9 @@
 # Detection + tracking → SAM2 → calibration / jersey / team → predictions.json
 #
 # Writes only: predictions.json, homography_per_frame.json, and step{1,2,3}/ GSR artifacts.
-# Does NOT touch downstream outputs (events.json, annotated_video.mp4, commentary, final_video).
+# Does NOT touch downstream outputs from Stage 2B, Stage 3 TTS, or optional Stage 4 Effects.
 # Step 3 uses vLLM + Qwen2.5-VL-7B-Instruct-AWQ (gsr_step_3_example_accelerate_vllm).
-# Re-run Stage 2–5 manually when you want to refresh those.
+# Re-run Stage 2B, Stage 3 TTS, and optional Stage 4 Effects manually to refresh those.
 #
 # The clip_dir path selects both the split and the sequence, e.g.:
 #   .../test/SNGS-148  → only test/SNGS-148
