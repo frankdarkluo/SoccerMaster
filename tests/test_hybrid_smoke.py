@@ -19,8 +19,7 @@ from pipeline.stage2b.run import run_stage2b
 from pipeline.config import PipelineConfig
 from pipeline.run import run_pipeline
 from pipeline.relations.query import predicate_passes, resolve_query
-from pipeline.stage2b.hybrid import (audit_commentary, candidate_windows, compose_hybrid,
-                                     verify_candidates)
+from pipeline.stage2b.hybrid import audit_commentary
 from pipeline.stage3_tts import run as stage3_tts_run
 from pipeline.stage3_tts.cosyvoice import CosyVoiceSynthesizer, MODEL_ARTIFACTS
 
@@ -314,7 +313,7 @@ def test_atomic_fallback_copy_failure_preserves_previous_commentary(tmp_path, mo
         raise OSError("injected copy failure")
 
     _stub_event_verification(monkeypatch)
-    monkeypatch.setattr(stage2b_run, "build_relations", fail_relations)
+    monkeypatch.setattr(stage2b_run, "generate_tactical_artifacts", fail_relations)
     monkeypatch.setattr(shutil, "copyfile", fail_copy)
     with pytest.raises(OSError, match="injected copy failure"):
         run_stage2b(
@@ -461,47 +460,6 @@ def test_relation_predicates_are_computed_by_code():
     assert resolve_query(relations, {**query, "agg": "median"})["value"] is None
 
 
-def test_sngs116_corner_survives_and_failed_tactic_is_removed():
-    events = [{
-        "event_id": "evt_001", "start_s": 0.0, "end_s": 5.0,
-        "event_code": "football.corner", "player_team": "left",
-        "outcome": "corner_taken", "confidence": "high",
-    }]
-    proposed = [{
-        "candidate_id": "tac_001",
-        "window": {"start_s": 0.0, "end_s": 5.0},
-        "concept_id": "high_press", "phase_scope": "local",
-        "evidence_queries": [{
-            "query": {
-                "t0": 0.0, "t1": 5.0, "team": "right",
-                "quantity": "n_within_15m_of_ball", "agg": "mean",
-            },
-            "predicate": {"op": ">=", "threshold": 5.0},
-        }],
-    }]
-    relations = {"snapshots": [{
-        "t": 2.0, "ball": {"speed": 0.0}, "players": [],
-        "teams": {"right": {"n_within_15m_of_ball": 2, "opp_line_x": -20.0}},
-    }]}
-    assert verify_candidates(relations, proposed) == []
-
-    segments = [{
-        "kind": "event", "timestamp_s": 0.0, "end_s": 5.0,
-        "text_zh": "左侧球队准备主罚角球。",
-        "text_en": "The left team prepares the corner.",
-        "fallback_text_zh": "左侧球队主罚角球。",
-        "fallback_text_en": "The left team takes the corner.",
-        "energy": "engaged", "events_referenced": ["evt_001"],
-        "tactical_candidates_referenced": [],
-        "event_claims": [{
-            "event_id": "evt_001", "event_code": "football.corner",
-            "player_team": "left", "outcome": "corner_taken",
-            "assertion_strength": "certain",
-        }],
-    }]
-    assert audit_commentary(segments, events, [], 30.0) == []
-
-
 def _required_corner(start=5.0, end=10.0):
     return {
         "event_id": "evt_001", "start_s": start, "end_s": end,
@@ -512,10 +470,6 @@ def _required_corner(start=5.0, end=10.0):
     }
 
 
-def _verified_candidate(candidate_id="tac_001", phase_scope="complete_attack"):
-    return {"candidate_id": candidate_id, "phase_scope": phase_scope, "verified": True}
-
-
 def _segment(kind="event", tactic_refs=None, fallback_zh="左侧主罚角球。",
              fallback_en="The left team takes the corner."):
     return {
@@ -523,170 +477,13 @@ def _segment(kind="event", tactic_refs=None, fallback_zh="左侧主罚角球。"
         "text_zh": "左侧主罚角球。", "text_en": "The left team takes the corner.",
         "fallback_text_zh": fallback_zh, "fallback_text_en": fallback_en,
         "energy": "engaged", "events_referenced": ["evt_001"],
-        "tactical_candidates_referenced": tactic_refs or [],
+        "tactical_facts_referenced": [], "tactical_claims": [],
         "event_claims": [{
             "event_id": "evt_001", "event_code": "football.corner",
             "player_team": "left", "outcome": "corner_taken",
             "assertion_strength": "certain",
         }],
     }
-
-
-def test_candidate_windows_expose_all_three_kinds_with_semantic_priority():
-    windows = candidate_windows([_required_corner()], 20.0, "complete_attack")
-    assert [window["kind"] for window in windows] == [
-        "causal_attachment", "completed_phase", "event_free_gap",
-    ]
-    assert windows[0]["event_id"] == "evt_001"
-    assert windows[1]["start_s"] == 10.0
-
-
-@pytest.mark.parametrize(("scope", "duration", "expected"), [
-    ("complete_attack", 40.0, 3),
-    ("incomplete_attack", 40.0, 1),
-    ("fragmented", 30.0, 1),
-])
-def test_candidate_window_limits_count_insertions(scope, duration, expected):
-    assert len(candidate_windows([_required_corner()], duration, scope)) == expected
-
-
-def test_verify_candidates_rejects_duplicate_candidate_ids():
-    proposed = [{
-        "candidate_id": "tac_001", "concept_id": "high_press",
-        "window": {"start_s": 0.0, "end_s": 5.0}, "phase_scope": "local",
-        "evidence_queries": [{
-            "query": {"t0": 0.0, "t1": 5.0, "team": "right",
-                      "quantity": "n_within_15m_of_ball", "agg": "mean"},
-            "predicate": {"op": ">=", "threshold": 2.0},
-        }],
-    }]
-    relations = {"snapshots": [{
-        "t": 2.0, "ball": {}, "players": [],
-        "teams": {"right": {"n_within_15m_of_ball": 2}},
-    }]}
-    assert verify_candidates(relations, proposed * 2) == []
-
-
-def test_audit_rejects_unsupported_tactical_segment():
-    errors = audit_commentary([_segment(kind="tactical")], [_required_corner()], [], 20.0)
-    assert any("verified candidate" in error for error in errors)
-
-
-def test_audit_counts_repeated_candidate_insertions_not_unique_ids():
-    segments = []
-    for start in (0.0, 5.0):
-        segment = _segment(kind="tactical", tactic_refs=["tac_001"])
-        segment.update(timestamp_s=start, end_s=start + 5.0)
-        segments.append(segment)
-    errors = audit_commentary(
-        segments, [_required_corner(0.0, 5.0)],
-        [_verified_candidate(phase_scope="incomplete_attack")], 20.0,
-    )
-    assert any("reused" in error for error in errors)
-    assert any("tactical count" in error for error in errors)
-
-
-
-def test_audit_rejects_verbose_fallback():
-    segment = _segment(fallback_zh="左侧球队现在准备开始主罚这个角球。",
-                       fallback_en="The left team is now preparing to take this corner kick.")
-    errors = audit_commentary([segment], [_required_corner()], [], 20.0)
-    assert any("fallback must be concise" in error for error in errors)
-
-
-def test_audit_rejects_fallback_that_mixes_event_and_tactics():
-    segment = _segment(kind="hybrid", tactic_refs=["tac_001"],
-                       fallback_zh="左侧主罚角球并保持高压。",
-                       fallback_en="The left team takes the corner under high press.")
-    errors = audit_commentary(
-        [segment], [_required_corner()], [_verified_candidate()], 20.0,
-    )
-    assert any("fallback must be event-only" in error for error in errors)
-
-def test_audit_rejects_tactical_fallback_that_drops_event():
-    segment = _segment(
-        kind="hybrid", tactic_refs=["tac_001"],
-        fallback_zh="他们继续保持高位压迫。",
-        fallback_en="They continue the high press.",
-    )
-    errors = audit_commentary(
-        [segment], [_required_corner()], [_verified_candidate()], 20.0,
-    )
-    assert any("fallback must preserve referenced events" in error for error in errors)
-
-
-def test_compose_hybrid_retries_then_accepts_valid_response():
-    invalid = [_segment(kind="tactical")]
-    valid = [_segment()]
-    replies = iter([json.dumps(invalid), json.dumps(valid)])
-    prompts = []
-
-    def fake_call(prompt, **kwargs):
-        prompts.append(prompt)
-        return next(replies)
-
-    assert compose_hybrid([_required_corner()], valid, [], [], 20.0, call=fake_call) == valid
-    assert len(prompts) == 2
-    assert "Previous response errors" in prompts[1]
-
-
-def test_compose_hybrid_returns_direct_commentary_unchanged_after_two_failures():
-    direct = [_segment()]
-    calls = []
-
-    def fake_call(prompt, **kwargs):
-        calls.append(prompt)
-        return json.dumps([_segment(kind="tactical")])
-
-    result = compose_hybrid([_required_corner()], direct, [], [], 20.0, call=fake_call)
-    assert result is direct
-    assert len(calls) == 2
-
-
-def test_causal_windows_never_overlap_close_required_events():
-    first = _required_corner(0.0, 5.0)
-    second = {**_required_corner(6.0, 10.0), "event_id": "evt_002"}
-    windows = candidate_windows([first, second], 20.0, "complete_attack")
-    required_intervals = [(0.0, 5.0), (6.0, 10.0)]
-    for window in windows:
-        if window["kind"] != "causal_attachment":
-            continue
-        assert all(
-            window["end_s"] <= start or window["start_s"] >= end
-            for start, end in required_intervals
-        )
-
-
-def test_audit_rejects_context_only_fallback_without_structured_event_fact():
-    event = {
-        **_required_corner(),
-        "suggested_wording_zh": "左侧主罚角球，双方球员密集站位。",
-        "suggested_wording_en": "The left team takes the corner, players densely positioned.",
-    }
-    segment = _segment(
-        fallback_zh="双方球员密集站位。",
-        fallback_en="Players densely positioned.",
-    )
-    errors = audit_commentary([segment], [event], [], 20.0)
-    assert any("structured event facts" in error for error in errors)
-
-
-@pytest.mark.parametrize(("event_code", "suggested_en", "fallback_en", "text_zh", "outcome"), [
-    ("football.shoot", "The left player takes a shot", "Left shot", "左侧射门", "shot_taken"),
-    ("football.goal_kick", "The left team takes a goal kick", "Left goal kick", "左侧开大脚", "restart_taken"),
-    ("football.save", "The left goalkeeper makes a save", "Left save", "左侧扑救", "shot_saved"),
-    ("football.buildup", "The left team starts a build-up", "Left build-up", "左侧组织推进", "attack_built"),
-])
-def test_audit_accepts_closed_catalog_natural_event_aliases(
-        event_code, suggested_en, fallback_en, text_zh, outcome):
-    event = {
-        **_required_corner(), "event_code": event_code, "outcome": outcome,
-        "suggested_wording_zh": text_zh, "suggested_wording_en": suggested_en,
-    }
-    segment = _segment(fallback_zh=text_zh, fallback_en=fallback_en)
-    segment.update(text_zh=text_zh, text_en=suggested_en)
-    segment["event_claims"][0].update(event_code=event_code, outcome=outcome)
-    assert audit_commentary([segment], [event], [], 20.0) == []
 
 
 from pipeline.stage3_tts.synthesize import synthesize_fitting_segment
@@ -700,7 +497,6 @@ class FakeSynthesizer:
         self.texts.append(text)
         output_path.write_bytes(b"audio")
         return output_path
-
 
 def test_tts_retries_once_with_event_fallback(tmp_path):
     segment = {
@@ -789,68 +585,6 @@ def test_effects_load_canonical_stage2b_events(tmp_path):
     }]
 
 
-def test_candidate_verification_requires_an_approved_window():
-    windows = candidate_windows([_required_corner()], 20.0, "complete_attack")
-    assert [window["window_id"] for window in windows] == [
-        "window_001", "window_002", "window_003",
-    ]
-    relations = {"snapshots": [{
-        "t": 12.0, "ball": {}, "players": [],
-        "teams": {"right": {"opp_line_x": -24.0}},
-    }]}
-    approved = windows[1]
-    candidate = {
-        "candidate_id": "tac_001", "concept_id": "low_block",
-        "window_id": approved["window_id"],
-        "window": {"start_s": 11.0, "end_s": 14.0},
-        "phase_scope": "complete_attack",
-        "evidence_queries": [{
-            "query": {"t0": 11.0, "t1": 14.0, "team": "right",
-                      "quantity": "opp_line_x", "agg": "mean"},
-            "predicate": {"op": "<=", "threshold": -20.0},
-        }],
-    }
-    assert verify_candidates(relations, [candidate], windows)[0]["verified"] is True
-    assert verify_candidates(
-        relations, [{**candidate, "window_id": "window_999"}], windows,
-    ) == []
-    assert verify_candidates(
-        relations,
-        [{**candidate, "window": {"start_s": 9.0, "end_s": 14.0}}],
-        windows,
-    ) == []
-
-
-def test_candidate_proposal_receives_approved_windows_before_selection():
-    windows = candidate_windows([_required_corner()], 20.0, "complete_attack")
-    seen = {}
-
-    def fake_call(prompt, **kwargs):
-        seen.update(json.loads(prompt.split("\n", 1)[1]))
-        window = seen["approved_windows"][1]
-        return json.dumps([{
-            "candidate_id": "tac_001", "concept_id": "low_block",
-            "window_id": window["window_id"],
-            "window": {"start_s": 11.0, "end_s": 14.0},
-            "phase_scope": "complete_attack",
-            "evidence_queries": [{
-                "query": {"t0": 11.0, "t1": 14.0, "team": "right",
-                          "quantity": "opp_line_x", "agg": "mean"},
-                "predicate": {"op": "<=", "threshold": -20.0},
-            }],
-        }])
-
-    relations = {"snapshots": [{
-        "t": 12.0, "ball": {}, "players": [],
-        "teams": {"right": {"opp_line_x": -24.0}},
-    }]}
-    candidates = stage2b_run._propose_candidates(
-        relations, [_required_corner()], windows, 20.0, fake_call,
-    )
-    assert candidates[0]["window_id"] == "window_002"
-    assert seen["approved_windows"] == windows
-
-
 def test_stage2b_runner_verifies_key_event_and_applies_state_conflict(tmp_path, monkeypatch):
     output = tmp_path / "SNGS-116"
     output.mkdir()
@@ -909,11 +643,6 @@ def test_stage2b_hybrid_fallback_cannot_restore_post_verification_low_event(
         return direct_reply(player_team="right", confidence="high")
 
     monkeypatch.setattr(generate, "extract_window", fake_extract)
-    monkeypatch.setattr(stage2b_run, "build_relations", lambda *args, **kwargs: {
-        "snapshots": [],
-    })
-    monkeypatch.setattr(stage2b_run, "render_radar_frames", lambda *args, **kwargs: None)
-    monkeypatch.setattr(stage2b_run, "_propose_candidates", lambda *args, **kwargs: [])
     monkeypatch.setattr(
         stage2b_run, "compose_hybrid",
         lambda events, direct, *args, **kwargs: direct,
@@ -1006,7 +735,7 @@ def test_direct_reconciliation_uses_short_structured_fallback_for_required_event
     assert segment["fallback_text_en"] != segment["text_en"]
     assert len(segment["fallback_text_zh"]) < len(segment["text_zh"])
     assert len(segment["fallback_text_en"]) < len(segment["text_en"])
-    assert not audit_commentary(reconciled, [event], [], 10.0)
+    assert not audit_commentary(reconciled, [event], [], set(), 10.0)
     for token in ("左", "9", "角球"):
         assert token in segment["fallback_text_zh"]
     for token in ("left", "9", "corner"):
@@ -1123,7 +852,7 @@ def test_direct_reconciliation_merges_fully_occupied_overlapping_required_events
     assert segment["fallback_text_en"] != segment["text_en"]
     assert len(segment["fallback_text_zh"]) < len(segment["text_zh"])
     assert len(segment["fallback_text_en"]) < len(segment["text_en"])
-    assert not audit_commentary(reconciled, [first, second, third], [], 10.0)
+    assert not audit_commentary(reconciled, [first, second, third], [], set(), 10.0)
     for token in ("角球", "传球", "解围"):
         assert token in segment["fallback_text_zh"]
     for token in ("corner", "pass", "clearance"):
@@ -1138,7 +867,9 @@ def test_stage2b_cache_reuse_is_mode_aware(tmp_path, monkeypatch):
     (output / "clip.mp4").write_bytes(b"fake")
     (comments / "commentary.json").write_text("[]", encoding="utf-8")
     (comments / "commentary_direct.json").write_text("[]", encoding="utf-8")
-    (comments / "tactical_candidates.json").write_text("[]", encoding="utf-8")
+    (comments / "tactical_state.json").write_text("{}", encoding="utf-8")
+    (comments / "tactical_proposals.json").write_text("[]", encoding="utf-8")
+    (comments / "verified_tactical_facts.json").write_text("[]", encoding="utf-8")
     (comments / "relations.json").write_text("{}", encoding="utf-8")
     observed = []
 

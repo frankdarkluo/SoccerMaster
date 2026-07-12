@@ -103,8 +103,16 @@ class PipelineConfig:
         return self.comments_dir / "commentary_direct.json"
 
     @property
-    def tactical_candidates_json(self) -> Path:
-        return self.comments_dir / "tactical_candidates.json"
+    def tactical_state_json(self) -> Path:
+        return self.comments_dir / "tactical_state.json"
+
+    @property
+    def tactical_proposals_json(self) -> Path:
+        return self.comments_dir / "tactical_proposals.json"
+
+    @property
+    def verified_tactical_facts_json(self) -> Path:
+        return self.comments_dir / "verified_tactical_facts.json"
 
     @property
     def commentary_json(self) -> Path:

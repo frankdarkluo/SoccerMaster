@@ -9,16 +9,20 @@ from typing import Callable
 
 from pipeline.atomic import atomic_copy, atomic_write_json
 from pipeline.config import PipelineConfig
-from pipeline.relations.build import build_relations
-from pipeline.relations.radar import render_radar_frames
+from pipeline.relations.state import (
+    build_tactical_state,
+    project_proposal_events,
+    project_proposal_state,
+)
 from pipeline.stage2b.digest import build_tracking_digest, load_frames
 from pipeline.stage2b.events import get_event
 from pipeline.stage2b.generate import ark_chat, observe_direct, verify_event_window
 from pipeline.stage2b.hybrid import (
     _fallback_preserves_event, assign_confidence, audit_commentary,
-    candidate_windows, compose_hybrid, concise_event_wording, structured_wording,
-    verify_candidates,
+    commentary_windows, compose_hybrid, concise_event_wording, structured_wording,
 )
+from pipeline.stage2b.kb import load_catalog, project_public_catalog
+from pipeline.stage2b.tactics import CHECKERS, process_tactical_proposals
 from pipeline.stage2b.video import video_duration_s
 
 log = logging.getLogger(__name__)
@@ -31,17 +35,50 @@ def _clip_path(output_dir: Path, clip_dir: Path) -> Path:
     raise FileNotFoundError("clip.mp4 not found in output or clip directory")
 
 
-def _propose_candidates(relations: dict, events: list[dict], windows: list[dict], duration_s: float,
-                        call: Callable) -> list[dict]:
-    prompt = "Propose sparse tactical candidates from these computed relations. Return a JSON array only.\n"
-    prompt += json.dumps({"events": events, "relations": relations,
-                          "approved_windows": windows,
-                          "duration_s": duration_s}, ensure_ascii=False)
+def _request_tactical_proposals(payload: dict, call: Callable) -> object:
+    prompt = (
+        "Propose sparse observable tactical patterns. Return a JSON array only. "
+        "Use only the supplied public concepts and canonical team IDs.\\n"
+    )
+    prompt += json.dumps(payload, ensure_ascii=False)
     try:
-        proposed = json.loads(call(prompt, temperature=0.2))
+        return json.loads(call(prompt, temperature=0.2))
     except (TypeError, json.JSONDecodeError):
-        proposed = []
-    return verify_candidates(relations, proposed, windows)
+        return []
+
+
+def generate_tactical_artifacts(
+    tracking_json,
+    *,
+    clip_id,
+    state_source,
+    duration_s,
+    events,
+    catalog,
+    allowed_concept_ids,
+    call,
+):
+    """Build private state, audit public proposals, and return verified facts."""
+    tracking_json = Path(tracking_json)
+    metadata = json.loads(tracking_json.read_text()).get("info", {})
+    fps = float(metadata.get("frame_rate", 25.0))
+    state = build_tactical_state(
+        load_frames(tracking_json), fps=fps, clip_id=clip_id, state_source=state_source,
+    )
+    if not allowed_concept_ids:
+        return state, [], []
+    payload = {
+        "catalog": project_public_catalog(catalog, concept_ids=allowed_concept_ids),
+        "tactical_state": project_proposal_state(state),
+        "events": project_proposal_events(events, state=state),
+        "duration_s": duration_s,
+    }
+    raw = _request_tactical_proposals(payload, call)
+    audits, facts = process_tactical_proposals(
+        raw, catalog=catalog, tactical_state=state, duration_s=duration_s,
+        allowed_concept_ids=allowed_concept_ids, checkers=CHECKERS,
+    )
+    return state, audits, facts
 
 
 def _cache_complete(config: PipelineConfig, mode: str) -> bool:
@@ -49,8 +86,9 @@ def _cache_complete(config: PipelineConfig, mode: str) -> bool:
         return False
     hybrid = (
         config.commentary_direct_json.is_file()
-        and config.tactical_candidates_json.is_file()
-        and config.relations_json.is_file()
+        and config.tactical_state_json.is_file()
+        and config.tactical_proposals_json.is_file()
+        and config.verified_tactical_facts_json.is_file()
     )
     return hybrid if mode == "hybrid" else not hybrid
 
@@ -155,7 +193,8 @@ def _reconcile_direct(events: list[dict], direct: list[dict], duration_s=None) -
             fallback_text_zh="".join(wording[2] for wording in wordings),
             fallback_text_en=" ".join(wording[3] for wording in wordings),
             events_referenced=refs,
-            tactical_candidates_referenced=[],
+            tactical_facts_referenced=[],
+            tactical_claims=[],
             event_claims=[{
                 "event_id": ref,
                 "event_code": required[ref].get("event_code"),
@@ -233,7 +272,8 @@ def _reconcile_direct(events: list[dict], direct: list[dict], duration_s=None) -
             "text_zh": zh, "text_en": en,
             "fallback_text_zh": fallback_zh, "fallback_text_en": fallback_en,
             "energy": event.get("energy", "engaged"),
-            "events_referenced": [event_id], "tactical_candidates_referenced": [],
+            "events_referenced": [event_id], "tactical_facts_referenced": [],
+            "tactical_claims": [],
             "event_claims": [claim],
         })
         reconciled.sort(key=lambda segment: segment["timestamp_s"])
@@ -241,7 +281,7 @@ def _reconcile_direct(events: list[dict], direct: list[dict], duration_s=None) -
     duration = float(duration_s) if duration_s is not None else max(
         [segment["end_s"] for segment in reconciled] or [0.1]
     )
-    errors = audit_commentary(reconciled, events, [], duration)
+    errors = audit_commentary(reconciled, events, [], set(), duration)
     if errors:
         raise ValueError("invalid reconciled direct commentary: " + "; ".join(errors))
     return reconciled
@@ -273,28 +313,47 @@ def run_stage2b(output_dir, clip_dir, mode="hybrid", force=False,
     atomic_write_json(config.event_spine_json, events)
 
     if mode == "direct":
-        for path in (config.commentary_direct_json, config.tactical_candidates_json,
-                     config.relations_json):
+        for path in (
+            config.commentary_direct_json,
+            config.tactical_state_json,
+            config.tactical_proposals_json,
+            config.verified_tactical_facts_json,
+            config.relations_json,
+        ):
             path.unlink(missing_ok=True)
         return atomic_write_json(config.commentary_json, direct)
 
     atomic_write_json(config.commentary_direct_json, direct)
+    catalog = load_catalog(checker_names=frozenset(CHECKERS))
+    enabled_ids = {
+        concept["id"]
+        for concept in catalog["concepts"]
+        if concept["production_enabled"]
+    }
     try:
-        relations = build_relations(
-            frames, fps=float(config.fps), snapshot_hz=config.snapshot_hz,
+        state, proposals, facts = generate_tactical_artifacts(
+            predictions,
+            clip_id=clip_dir.name,
+            state_source="gsr_prediction",
+            duration_s=duration,
+            events=events,
+            catalog=catalog,
+            allowed_concept_ids=enabled_ids,
+            call=call,
         )
-        atomic_write_json(config.relations_json, relations)
-        render_radar_frames(relations, config.radar_dir, hz=config.radar_hz)
+        atomic_write_json(config.tactical_state_json, state)
+        atomic_write_json(config.tactical_proposals_json, proposals)
+        atomic_write_json(config.verified_tactical_facts_json, facts)
     except Exception:
-        log.exception("Stage 2B relations/radar failed; using direct commentary")
+        log.exception("Stage 2B tactical verification failed; using direct commentary")
         atomic_copy(config.commentary_direct_json, config.commentary_json)
         return config.commentary_json
 
-    windows = candidate_windows(events, duration, "incomplete_attack")
-    candidates = _propose_candidates(relations, events, windows, duration, call)
-    atomic_write_json(config.tactical_candidates_json, candidates)
+    if not enabled_ids:
+        return atomic_copy(config.commentary_direct_json, config.commentary_json)
+    windows = commentary_windows(facts, duration)
     commentary = compose_hybrid(
-        events, direct, candidates, windows, duration, call=call,
+        events, direct, facts, enabled_ids, windows, duration, call=call,
     )
     return atomic_write_json(config.commentary_json, commentary)
 

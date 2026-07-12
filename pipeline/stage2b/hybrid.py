@@ -1,13 +1,10 @@
-"""Verified tactical candidates and event-first hybrid commentary."""
+"""Verified tactical facts and event-first hybrid commentary."""
 from __future__ import annotations
 
-import copy
 import json
 import math
-from pathlib import Path
 from typing import Callable
 
-from pipeline.relations.query import predicate_passes, resolve_query
 from pipeline.stage2b.generate import ark_chat
 from pipeline.stage2b.events import get_event
 
@@ -75,66 +72,6 @@ def assign_confidence(event, verification, state_ok):
     return "high" if high else "medium"
 
 
-def _concept_ids():
-    path = Path(__file__).with_name("concepts.yaml")
-    return {
-        line.split(":", 1)[1].strip()
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip().startswith("- id:")
-    }
-
-
-def verify_candidates(relations, proposed, approved_windows=None):
-    """Resolve candidate evidence in code and retain only passing candidates."""
-    verified = []
-    id_counts = {}
-    for source in proposed if isinstance(proposed, list) else []:
-        if isinstance(source, dict) and isinstance(source.get("candidate_id"), str):
-            candidate_id = source["candidate_id"]
-            id_counts[candidate_id] = id_counts.get(candidate_id, 0) + 1
-    concepts = _concept_ids()
-    approved_by_id = {
-        window.get("window_id"): window
-        for window in approved_windows if isinstance(window, dict)
-    } if isinstance(approved_windows, list) else {}
-    for source in proposed if isinstance(proposed, list) else []:
-        if (not isinstance(source, dict) or source.get("concept_id") not in concepts
-                or id_counts.get(source.get("candidate_id"), 0) != 1):
-            continue
-        candidate = copy.deepcopy(source)
-        window = candidate.get("window")
-        approved = approved_by_id.get(candidate.get("window_id"))
-        queries = candidate.get("evidence_queries")
-        if (not isinstance(window, dict) or not isinstance(approved, dict)
-                or not isinstance(queries, list) or not 1 <= len(queries) <= 3):
-            continue
-        start, end = window.get("start_s"), window.get("end_s")
-        if (not _finite(start) or not _finite(end) or start > end
-                or start < approved.get("start_s", math.inf)
-                or end > approved.get("end_s", -math.inf)):
-            continue
-        valid = True
-        for evidence in queries:
-            if not isinstance(evidence, dict) or not isinstance(evidence.get("query"), dict):
-                valid = False
-                break
-            query = evidence["query"]
-            if (not _finite(query.get("t0")) or not _finite(query.get("t1"))
-                    or query["t0"] < start or query["t1"] > end
-                    or query["t0"] > query["t1"]):
-                valid = False
-                break
-            result = resolve_query(relations, query)
-            passed = predicate_passes(result, evidence.get("predicate"))
-            evidence["result"] = result
-            evidence["predicate_passed"] = passed
-            valid = valid and passed
-        candidate["verified"] = valid
-        if valid:
-            verified.append(candidate)
-    return verified
-
-
 def _required_event(event):
     if event.get("confidence") == "high":
         return True
@@ -145,74 +82,31 @@ def _required_event(event):
     )
 
 
-def _scope_name(phase_scope):
-    if isinstance(phase_scope, str):
-        return phase_scope
-    if isinstance(phase_scope, dict):
-        if phase_scope.get("fragmented"):
-            return "fragmented"
-        if phase_scope.get("complete") or phase_scope.get("completed"):
-            return "complete_attack"
-        return str(phase_scope.get("scope", "incomplete_attack"))
-    return "incomplete_attack"
-
-
-def _window_limit(duration_s, phase_scope):
-    scope = _scope_name(phase_scope)
-    if scope == "fragmented" and duration_s <= 30.0:
-        return 1
-    if scope in {"complete", "complete_attack", "completed_phase"}:
-        return 3
-    if scope in {"incomplete", "incomplete_attack", "local"}:
-        return 1
-    return 2
-
-
-def candidate_windows(events, duration_s, phase_scope):
-    """Return sparse event-free windows eligible for tactical composition."""
+def commentary_windows(facts, duration_s):
+    """Schedule speech after fact decision times without changing evidence windows."""
     if not _finite(duration_s) or duration_s <= 0:
         return []
-    required = []
-    for event in events if isinstance(events, list) else []:
-        if not isinstance(event, dict) or not _required_event(event):
-            continue
-        start, end = event.get("start_s"), event.get("end_s")
-        if _finite(start) and _finite(end) and 0 <= start <= end <= duration_s:
-            required.append((float(start), float(end), event.get("event_id")))
-    required.sort()
-    free = []
-    cursor = 0.0
-    for start, end, _ in required:
-        if start - cursor >= 4.0:
-            free.append((cursor, start))
-        cursor = max(cursor, end)
-    if duration_s - cursor >= 4.0:
-        free.append((cursor, float(duration_s)))
-
+    eligible = [
+        fact for fact in facts if isinstance(fact, dict)
+        and isinstance(fact.get("fact_id"), str)
+        and _finite(fact.get("decision_time_s"))
+    ] if isinstance(facts, list) else []
+    eligible.sort(key=lambda fact: (fact["decision_time_s"], fact["fact_id"]))
     windows = []
-    # Semantic priority is deliberate: attach context to a required event first,
-    # then summarize a completed phase, then use standalone event-free gaps.
-    previous_required_end = 0.0
-    for start, end, event_id in required:
-        causal_start = max(0.0, start - 5.0, previous_required_end)
-        if start > causal_start:
-            windows.append({"kind": "causal_attachment", "start_s": causal_start,
-                            "end_s": start, "event_id": event_id})
-        previous_required_end = max(previous_required_end, end)
-    scope = _scope_name(phase_scope)
-    if scope in {"complete", "complete_attack", "completed_phase"} and required:
-        last_end = required[-1][1]
-        if duration_s - last_end >= 1.0:
-            windows.append({"kind": "completed_phase", "start_s": last_end,
-                            "end_s": min(float(duration_s), last_end + 5.0)})
-    for start, end in free:
-        windows.append({"kind": "event_free_gap", "start_s": start,
-                        "end_s": min(end, start + 5.0)})
-    selected = windows[:_window_limit(float(duration_s), phase_scope)]
-    for index, window in enumerate(selected, 1):
-        window["window_id"] = f"window_{index:03d}"
-    return selected
-
+    cursor = 0.0
+    for fact in eligible:
+        start = max(cursor, float(fact["decision_time_s"]))
+        end = min(float(duration_s), start + 5.0)
+        if end <= start:
+            continue
+        windows.append({
+            "window_id": f"window_{len(windows) + 1:03d}",
+            "fact_id": fact["fact_id"],
+            "start_s": start,
+            "end_s": end,
+        })
+        cursor = end
+    return windows
 
 def _event_map(events):
     return {
@@ -306,34 +200,50 @@ def _fallback_event_only(segment, event, referenced_events=None):
     fallback_zh = zh_chars([segment.get("fallback_text_zh", "")])
     return ((not en_words(gating_en) or fallback_en <= en_words(allowed_en))
             and (not zh_chars(gating_zh) or fallback_zh <= zh_chars(allowed_zh)))
-def _candidate_map(candidates):
+def _fact_map(facts):
     return {
-        candidate.get("candidate_id"): candidate for candidate in candidates
-        if isinstance(candidate, dict) and isinstance(candidate.get("candidate_id"), str)
+        fact.get("fact_id"): fact for fact in facts
+        if isinstance(fact, dict) and isinstance(fact.get("fact_id"), str)
     }
 
 
-def audit_commentary(segments, events, candidates, duration_s):
-    """Return mechanical composition errors; an empty list accepts output."""
+def audit_commentary(
+    segments,
+    events,
+    facts,
+    enabled_concept_ids,
+    duration_s,
+):
+    """Return mechanical event, fact, claim, and scheduling errors."""
     errors = []
     if not isinstance(segments, list):
         return ["commentary must be an array"]
+    if not isinstance(enabled_concept_ids, set):
+        return ["enabled_concept_ids must be a set"]
     event_by_id = _event_map(events if isinstance(events, list) else [])
-    candidate_list = candidates if isinstance(candidates, list) else []
-    candidate_ids = [candidate.get("candidate_id") for candidate in candidate_list
-                     if isinstance(candidate, dict) and isinstance(candidate.get("candidate_id"), str)]
-    candidate_by_id = _candidate_map(candidate_list)
-    if len(candidate_ids) != len(set(candidate_ids)):
-        errors.append("candidate ids must be unique")
+    fact_list = facts if isinstance(facts, list) else []
+    fact_ids = [
+        fact.get("fact_id") for fact in fact_list
+        if isinstance(fact, dict) and isinstance(fact.get("fact_id"), str)
+    ]
+    fact_by_id = _fact_map(fact_list)
+    if len(fact_ids) != len(set(fact_ids)):
+        errors.append("fact ids must be unique")
+
     seen_events = set()
-    tactical_ref_counts = {}
-    tactical_insertions = 0
+    fact_ref_counts = {}
     previous_end = 0.0
     for index, segment in enumerate(segments):
         label = f"segments[{index}]"
         if not isinstance(segment, dict):
             errors.append(f"{label} must be an object")
             continue
+        if any(field in segment for field in (
+            "tactical_proposals_referenced",
+            "proposals_referenced",
+        )):
+            errors.append(f"{label} contains a raw proposal reference")
+
         start, end = segment.get("timestamp_s"), segment.get("end_s")
         if not _finite(start) or not _finite(end):
             errors.append(f"{label} times must be finite numbers")
@@ -350,32 +260,56 @@ def audit_commentary(segments, events, candidates, duration_s):
         for field in ("text_zh", "text_en", "fallback_text_zh", "fallback_text_en"):
             if not isinstance(segment.get(field), str) or not segment[field].strip():
                 errors.append(f"{label}.{field} must be non-empty text")
-        if (all(isinstance(segment.get(field), str) for field in
-                ("text_zh", "text_en", "fallback_text_zh", "fallback_text_en"))
-                and (len(segment["fallback_text_zh"].strip()) > len(segment["text_zh"].strip())
-                     or len(segment["fallback_text_en"].strip()) > len(segment["text_en"].strip()))):
+        if (
+            all(
+                isinstance(segment.get(field), str)
+                for field in (
+                    "text_zh",
+                    "text_en",
+                    "fallback_text_zh",
+                    "fallback_text_en",
+                )
+            )
+            and (
+                len(segment["fallback_text_zh"].strip())
+                > len(segment["text_zh"].strip())
+                or len(segment["fallback_text_en"].strip())
+                > len(segment["text_en"].strip())
+            )
+        ):
             errors.append(f"{label} fallback must be concise")
+
         event_refs = segment.get("events_referenced")
-        tactic_refs = segment.get("tactical_candidates_referenced")
-        claims = segment.get("event_claims")
-        if not isinstance(event_refs, list) or any(not isinstance(ref, str) for ref in event_refs):
+        fact_refs = segment.get("tactical_facts_referenced")
+        event_claims = segment.get("event_claims")
+        tactical_claims = segment.get("tactical_claims")
+        if not isinstance(event_refs, list) or any(
+            not isinstance(ref, str) for ref in event_refs
+        ):
             errors.append(f"{label}.events_referenced must be a text array")
             event_refs = []
-        if not isinstance(tactic_refs, list) or any(not isinstance(ref, str) for ref in tactic_refs):
-            errors.append(f"{label}.tactical_candidates_referenced must be a text array")
-            tactic_refs = []
-        if not isinstance(claims, list):
+        if not isinstance(fact_refs, list) or any(
+            not isinstance(ref, str) for ref in fact_refs
+        ):
+            errors.append(f"{label}.tactical_facts_referenced must be a text array")
+            fact_refs = []
+        if not isinstance(event_claims, list):
             errors.append(f"{label}.event_claims must be an array")
-            claims = []
+            event_claims = []
+        if not isinstance(tactical_claims, list):
+            errors.append(f"{label}.tactical_claims must be an array")
+            tactical_claims = []
+
         is_tactical = segment.get("kind") in {"hybrid", "tactical"}
-        if is_tactical:
-            tactical_insertions += 1
-            if not tactic_refs:
-                errors.append(f"{label} must reference a verified candidate")
-            if not event_refs:
-                errors.append(f"{label} fallback must preserve referenced events using structured event facts")
-        claims_by_id = {
-            claim.get("event_id"): claim for claim in claims if isinstance(claim, dict)
+        if is_tactical and not fact_refs:
+            errors.append(f"{label} must reference a verified fact")
+        if not is_tactical and fact_refs:
+            errors.append(f"{label} event commentary cannot reference tactical facts")
+
+        claims_by_event = {
+            claim.get("event_id"): claim
+            for claim in event_claims
+            if isinstance(claim, dict)
         }
         for ref in event_refs:
             event = event_by_id.get(ref)
@@ -386,14 +320,19 @@ def audit_commentary(segments, events, candidates, duration_s):
                 errors.append(f"{label} references low-confidence event {ref}")
                 continue
             seen_events.add(ref)
-            claim = claims_by_id.get(ref)
-            exact = (claim is not None
-                     and claim.get("event_code") == event.get("event_code")
-                     and claim.get("player_team") == event.get("player_team")
-                     and claim.get("outcome") == event.get("outcome")
-                     and claim.get("assertion_strength") in ASSERTION_STRENGTHS)
+            claim = claims_by_event.get(ref)
+            exact = (
+                claim is not None
+                and claim.get("event_code") == event.get("event_code")
+                and claim.get("player_team") == event.get("player_team")
+                and claim.get("outcome") == event.get("outcome")
+                and claim.get("assertion_strength") in ASSERTION_STRENGTHS
+            )
             if not _fallback_preserves_event(segment, event):
-                errors.append(f"{label} fallback must preserve referenced events using structured event facts")
+                errors.append(
+                    f"{label} fallback must preserve referenced events "
+                    "using structured event facts"
+                )
             referenced_events = [
                 event_by_id[item] for item in event_refs if item in event_by_id
             ]
@@ -401,25 +340,54 @@ def audit_commentary(segments, events, candidates, duration_s):
                 errors.append(f"{label} fallback must be event-only")
             if not exact:
                 errors.append(f"{label} lacks an exact claim for event {ref}")
-        for ref in tactic_refs:
-            candidate = candidate_by_id.get(ref)
-            if candidate is None or candidate.get("verified") is not True:
-                errors.append(f"{label} references unverified tactic {ref}")
-            else:
-                tactical_ref_counts[ref] = tactical_ref_counts.get(ref, 0) + 1
+
+        claims_by_fact = {
+            claim.get("fact_id"): claim
+            for claim in tactical_claims
+            if isinstance(claim, dict)
+        }
+        for ref in fact_refs:
+            fact = fact_by_id.get(ref)
+            if fact is None:
+                errors.append(f"{label} references missing fact {ref}")
+                continue
+            concept_id = fact.get("concept_id")
+            if concept_id not in enabled_concept_ids:
+                errors.append(f"{label} references disabled concept {concept_id}")
+            if fact.get("verified_claim_levels") != ["observation"]:
+                errors.append(f"{label} fact is not observation-only")
+            if _finite(start) and (
+                not _finite(fact.get("decision_time_s"))
+                or start < fact["decision_time_s"]
+            ):
+                errors.append(f"{label} starts before fact decision_time_s")
+            claim = claims_by_fact.get(ref)
+            if (
+                not isinstance(claim, dict)
+                or claim.get("concept_id") != concept_id
+                or claim.get("claim_level") != "observation"
+            ):
+                errors.append(
+                    f"{label} tactical claim must bind the fact and "
+                    "use observation claim level"
+                )
+            fact_ref_counts[ref] = fact_ref_counts.get(ref, 0) + 1
+
+        for claim in tactical_claims:
+            if (
+                isinstance(claim, dict)
+                and claim.get("fact_id") not in fact_refs
+            ):
+                errors.append(f"{label} tactical claim references an unlisted fact")
+
     for event_id, event in event_by_id.items():
         if _required_event(event) and event_id not in seen_events:
             errors.append(f"required event {event_id} is absent")
         if event.get("confidence") == "low" and event_id in seen_events:
             errors.append(f"low-confidence event {event_id} must be absent")
-    if any(count > 1 for count in tactical_ref_counts.values()):
-        errors.append("verified tactical candidate is reused")
-    scopes = [candidate.get("phase_scope") for candidate in candidate_by_id.values()]
-    phase_scope = scopes[0] if scopes else "incomplete_attack"
-    if tactical_insertions > _window_limit(float(duration_s), phase_scope):
-        errors.append("tactical count exceeds the sparse scheduling limit")
+    if any(count > 1 for count in fact_ref_counts.values()):
+        errors.append("verified tactical fact is reused")
     return errors
-
 
 def _parse_composition(raw):
     try:
@@ -457,12 +425,20 @@ def _semantic_errors(segments, events, call):
     return errors
 
 
-def compose_hybrid(events, direct_commentary, candidates, windows, duration_s,
-                   call: Callable = ark_chat):
+def compose_hybrid(
+    events,
+    direct_commentary,
+    facts,
+    enabled_concept_ids,
+    windows,
+    duration_s,
+    call: Callable = ark_chat,
+):
     """Compose twice at most, then return the accepted direct baseline unchanged."""
     prompt = "Compose event-first bilingual football commentary and return JSON only.\n"
     prompt += json.dumps({"events": events, "direct_commentary": direct_commentary,
-                          "verified_candidates": candidates, "candidate_windows": windows,
+                          "verified_tactical_facts": facts, "commentary_windows": windows,
+                          "enabled_concept_ids": sorted(enabled_concept_ids),
                           "duration_s": duration_s}, ensure_ascii=False)
     errors = []
     for _ in range(2):
@@ -471,7 +447,7 @@ def compose_hybrid(events, direct_commentary, candidates, windows, duration_s,
             request += "\nPrevious response errors: " + json.dumps(errors, ensure_ascii=False)
         try:
             segments = _parse_composition(call(request, temperature=0.7))
-            errors = audit_commentary(segments, events, candidates, duration_s)
+            errors = audit_commentary(segments, events, facts, enabled_concept_ids, duration_s)
             if not errors:
                 errors = _semantic_errors(segments, events, call)
             if not errors:
