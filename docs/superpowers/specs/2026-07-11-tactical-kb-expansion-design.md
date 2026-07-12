@@ -18,8 +18,8 @@ The release is precision-first: missing a tactic is preferable to inserting a fa
 
 1. GenTac is the primary external reference for hierarchical match-phase and event context, not the canonical taxonomy of verifiable tactical concepts.
 2. `tactical_state` remains concept-neutral. It contains reproducible measurements, context, quality, and provenance, not final tactical labels.
-3. Doubao proposes a concept, evidence window, team, and actor `track_id` bindings. It cannot propose the acceptance test.
-4. Code verifies proposals with a private, fixed, versioned recipe/checker and rebuilds a verified fact from whitelisted fields.
+3. Doubao proposes a concept, proposed window, canonical team, and actor `track_id` bindings. It cannot propose the acceptance test.
+4. Code verifies proposals with a proposal-model-private, fixed, versioned recipe/checker and rebuilds a verified fact from whitelisted fields. “Private” means not exposed to Doubao at runtime, not secret outside the repository.
 5. Doubao realizes Chinese commentary only from verified facts and allowed claim levels.
 6. KB v2 supports observation claims only. Effect and intention remain disabled unless separately verified in a later version.
 7. There is no general query DSL, production quota, per-clip threshold, or full possession-engine rewrite in KB v2.
@@ -45,7 +45,7 @@ Repairing train/valid from the authoritative SoccerNetGS distribution is a prere
 
 ## Taxonomy boundary
 
-GenTac source labels remain available as a compatibility layer:
+GenTac source labels remain available as a compatibility layer. The normalized context contract is fixed rather than open-ended:
 
 ```yaml
 source_labels:
@@ -54,9 +54,26 @@ source_labels:
     subtype: progression
     confidence: 0.82
     provenance: rule_v1
+
+normalized_context:
+  possession_phase:
+    team_id: team_0
+    value: transition
+    allowed: [build_up, transition, settled_attack, settled_defense, unknown]
+  restart_state:
+    value: open_play
+    allowed: [open_play, set_piece, interruption, unknown]
+  progression_state:
+    team_id: team_0
+    value: progressing
+    allowed: [stable, progressing, penetrating, unknown]
+  danger_state:
+    team_id: team_0
+    value: neutral
+    allowed: [neutral, threat, unknown]
 ```
 
-SoccerMaster may normalize context into orthogonal fields such as possession phase, restart state, progression state, and danger state. These fields answer “what match situation is this?” and remain outside the tactical concept catalog.
+Team-relative fields always carry a canonical `team_id`. `settled_defense` applies only to the out-of-possession team. These fields answer “what match situation is this?” and remain outside the tactical concept catalog.
 
 The KB answers “what independently verifiable tactical pattern occurred?” Examples include overlap, switch of play, line break, or a compact block.
 
@@ -69,9 +86,9 @@ The initial feasibility pool is:
 - `compact_block`
 - `line_break`
 
-Additional catalog entries may include `underlap_run`, `side_overload`, `halfspace_occupation`, `width_depth_stretch`, `one_two`, `third_man_run`, `counter_attack`, `high_press`, and `low_block`. Catalog inclusion does not imply implementation or production eligibility.
+Additional catalog entries may include `underlap_run`, `side_overload`, `halfspace_occupation`, `width_depth_stretch`, `one_two`, `third_man_run`, `high_press`, and `low_block`. Catalog inclusion does not imply implementation or production eligibility.
 
-Legacy IDs are normalized during catalog review. In particular, `positional_attack` moves to match context, `depth_run` becomes an alias of `run_in_behind`, `numerical_superiority` becomes `local_numerical_superiority`, and `switch_play` becomes `switch_of_play`.
+Legacy IDs are normalized during catalog review. `positional_attack` and `counter_attack` move to match context, `depth_run` becomes an alias of `run_in_behind`, `numerical_superiority` becomes `local_numerical_superiority`, and `switch_play` becomes `switch_of_play`. A future narrow `fast_break_pattern` may enter the KB only if it has an independently verifiable recipe; it is not part of KB v2.
 
 ## Runtime architecture
 
@@ -80,9 +97,9 @@ GSR / tracking / calibration / topology
                     ↓
        concept-neutral tactical_state
                     ↓
-Doubao proposal {concept_id, evidence_window, team_id, actor_track_ids}
+Doubao proposal {concept_id, proposed_window, team_id, actor_track_ids}
                     ↓
-        private fixed recipe/checker
+ proposal-model-private fixed recipe/checker
                     ↓
           verified_tactical_facts
                     ↓
@@ -97,31 +114,32 @@ Doubao may return only:
 
 ```yaml
 concept_id: overlap_run
-evidence_window: {start_s: 12.8, end_s: 18.6}
-team_id: left
+proposed_window: {start_s: 12.8, end_s: 18.6}
+team_id: team_0
 actors:
   carrier_track_id: 12
   runner_track_id: 27
 ```
 
-Unknown fields are discarded or rejected. Model-provided `evidence_queries`, predicates, thresholds, recipe IDs, and verification results cannot affect acceptance.
+Unknown fields are rejected and logged. Model-provided `evidence_queries`, predicates, thresholds, recipe IDs, and verification results cannot affect acceptance.
 
-### Private verification contract
+### Proposal-model-private verification contract
 
 The verifier:
 
-1. validates the concept, approved window, team, and required actor bindings;
+1. validates the concept, proposed window, canonical team, and required actor bindings;
 2. loads the fixed recipe/checker and parameters from the KB;
-3. evaluates the candidate against raw measurements and quality gates;
-4. returns `unsupported` when evidence is insufficient;
-5. constructs a new verified fact from whitelisted fields when the recipe passes;
-6. records the recipe version and resolved evidence.
+3. aligns the proposed window to deterministic motion anchors within the recipe's small, versioned tolerance;
+4. evaluates the aligned window against raw measurements and quality gates;
+5. returns `unsupported` when evidence is insufficient;
+6. constructs a new verified fact from whitelisted fields when the recipe passes;
+7. records the proposed and verified windows, resolution method, recipe version, and resolved evidence.
 
 The verifier must not copy the proposal object and add `verified: true`.
 
-Evidence windows are independent of commentary duration and scheduling. KB v2 removes any unified five-second tactical evidence limit. Each selected recipe owns its minimum and maximum evidence duration. Commentary can start only after `decision_time_s`.
+Verified windows are independent of commentary duration and scheduling. KB v2 removes any unified five-second tactical evidence limit. Each selected recipe owns its minimum and maximum evidence duration. Window alignment cannot search the full video: `verified_window` must remain inside the versioned tolerance around `proposed_window`. Commentary can start only after `decision_time_s`.
 
-`analysis_context` may extend before or after an evidence window to resolve ambiguity, but it is not silently counted as recipe evidence. Offline lookahead delays `decision_time_s` until the last required observation is available. Final commentary slots are selected separately after that time.
+`analysis_context` may extend before or after a verified window to resolve ambiguity, but it is not silently counted as recipe evidence. Offline lookahead delays `decision_time_s` until the last required observation is available. Final commentary slots are selected separately after that time.
 
 ### Sampling policy
 
@@ -138,14 +156,54 @@ Evidence windows are independent of commentary duration and scheduling. KB v2 re
 ```yaml
 clip_id: SNGS-xxx
 state_source: ground_truth  # or gsr_prediction
+teams:
+  team_0:
+    source_team_label: left
+    attack_direction: left_to_right
+  team_1:
+    source_team_label: right
+    attack_direction: right_to_left
 source_labels: {}
-normalized_context: {}
+normalized_context:
+  possession_phase: {team_id: team_0, value: transition}
+  restart_state: {value: open_play}
+  progression_state: {team_id: team_0, value: progressing}
+  danger_state: {team_id: team_0, value: neutral}
 measurements: {}
 quality: {}
 provenance: {}
 ```
 
-`tactical_state` must not contain concept candidates or final concepts such as `overlap_candidate` or `likely_counter_attack`.
+`team_0` and `team_1` are stable within the clip/match contract. A boundary canonicalizer maps current source labels such as `left` and `right` to those IDs using stable match metadata or a deterministic recorded mapping, never the current attacking direction. Source labels remain provenance only. Attack direction is stored separately. `tactical_state` must not contain concept candidates or final concepts such as `overlap_candidate` or `likely_counter_attack`.
+
+### Source provenance
+
+The KB has a top-level source registry. Concept entries group references to registry IDs by responsibility rather than storing an undifferentiated citation list:
+
+```yaml
+source_registry: [SourceRecord]
+
+concept_source_refs:
+  terminology: [source_id]
+  formalization: [source_id]
+  calibration: [source_id]
+```
+
+Every `SourceRecord` requires:
+
+```yaml
+source_id: string
+title: string
+authors: [string]
+version: string
+url_or_doi: string
+license: string
+accessed_at: date
+content_hash: sha256
+used_for: [string]
+```
+
+`content_hash` uses `sha256:<hex-digest>`. Terminology sources may define names, aliases, and concept boundaries. Formalization sources may motivate candidate variables and temporal structure. Calibration records identify SoccerMaster development manifests used for recipe parameters, thresholds, and quality gates. External papers or glossaries never determine production thresholds; an external dataset may appear in calibration provenance only as the origin of locally reviewed development windows.
 
 ### Catalog entry
 
@@ -155,8 +213,9 @@ provenance: {}
   observation_definition: 无球队员从持球人身后沿外侧向前超越。
   required_actor_roles: [carrier, runner]
   sources:
-    - citation: "Glossary of association football terms: overlap"
-      use: terminology_and_definition
+    terminology: [football_glossary_overlap]
+    formalization: [overlap_tracking_paper]
+    calibration: [soccermaster_dev_windows_v1]
   allowed_claim_levels: [observation]
   maturity: audited            # planned | audited | production
   production_enabled: false
@@ -183,9 +242,14 @@ fact_id: fact_001
 concept_id: overlap_run
 recipe: overlap_run@1
 state_source: gsr_prediction
-evidence_window: {start_s: 12.8, end_s: 18.6}
+proposed_window: {start_s: 12.8, end_s: 18.6}
+verified_window: {start_s: 13.1, end_s: 18.2}
+window_resolution:
+  method: deterministic_anchor_snap
+  tolerance_s: 0.75
 decision_time_s: 18.6
-team_id: left
+team_id: team_0
+attack_direction: left_to_right
 actors:
   carrier_track_id: 12
   runner_track_id: 27
@@ -219,7 +283,7 @@ Use repaired train/valid clips only. For every candidate:
 
 - locate at least six positive and six targeted hard-negative windows;
 - cover at least two development matches;
-- annotate the evidence window and required actor `track_id` values;
+- annotate the reference window and required actor `track_id` values;
 - record tracking, ball, calibration, and relevant structure quality;
 - measure observability separately on ground-truth and predicted GSR state;
 - record GT-to-GSR degradation and unsupported cases.
@@ -239,9 +303,11 @@ Thresholds are global pitch-distance/time parameters calibrated on train/valid, 
 - precision and false-insertion gates;
 - acceptable GT-to-GSR degradation;
 - data-quality and abstention rules;
-- model and decoding configuration.
+- model and decoding configuration;
+- `proposal_prompt_version`;
+- `public_catalog_projection_version`.
 
-Game 7 remains diagnostic. Games 8 and 11 remain locked, match-disjoint held-out matches. Each recipe is run once after freezing. A failed held-out recipe cannot be retuned against the same held-out matches and retain the same validation claim.
+Game 7 remains diagnostic. Games 8 and 11 remain locked, match-disjoint held-out matches. Their evaluated concepts require exhaustive occurrence annotation plus explicit non-evaluable masks; unlabeled time is not silently treated as negative. After freezing, the complete pipeline runs across every evaluable clip in both matches, retains every proposal and verifier result, and is scored against the full annotation. Each recipe is run once after freezing. A failed held-out recipe cannot be retuned against the same held-out matches and retain the same validation claim.
 
 ## Production gate
 
@@ -251,15 +317,23 @@ A concept may become production-enabled only when all of the following hold:
 production_gate:
   observed_in_multiple_matches: true
   positive_and_hard_negative_coverage: sufficient
-  gt_precision: pass
-  gsr_precision: pass
+  evaluated_state_sources: [ground_truth, gsr_prediction]
+  proposal_recall: pass
+  verifier_conditional_precision: pass
+  end_to_end_precision: pass
+  end_to_end_recall: pass
+  minimum_verified_true_positives: pass
   false_insertions_per_minute: pass
   gt_gsr_degradation: acceptable
   evidence_traceable: true
   observation_only: true
 ```
 
-Exact numerical gates are selected on development data and written to the frozen release manifest before held-out evaluation. Each concept needs at least four positive and four targeted hard-negative windows across held-out games 8 and 11, with both matches represented. Anything smaller yields `not_evaluable`, not a pass.
+Exact numerical gates are selected on development data and written to the frozen release manifest before held-out evaluation. Each concept needs at least four positive and four targeted hard-negative annotated windows across held-out games 8 and 11, with both matches represented. This is an evaluability prerequisite, not a sampled evaluation set. Anything smaller yields `not_evaluable`, not a pass.
+
+The full-clip evaluation separates proposal recall, verifier precision conditional on proposals, and end-to-end precision/recall. It also computes false tactical insertions per minute over all exhaustively annotated evaluable video, including background outside selected positive and hard-negative windows. Minimum recall and verified true-positive gates prevent an always-abstain system from passing.
+
+Passing games 8 and 11 authorizes local KB v2 production enablement only. It does not establish broad cross-match, cross-team, or cross-league generalization.
 
 No category balance is imposed on the winners. If three local-action concepts are the only concepts that pass, all three may be enabled. If only two concepts pass, only two are enabled. If none pass, KB v2 ships its catalog with zero tactical concepts exposed to commentary.
 
@@ -276,8 +350,11 @@ No category balance is imposed on the winners. If three local-action concepts ar
 ### Unit tests
 
 - YAML loading and minimal validation;
+- categorized source registry and required provenance fields;
 - public catalog projection excludes recipes and thresholds;
-- proposal whitelist and stable `track_id` actor binding;
+- proposal whitelist rejects and logs unknown fields;
+- canonical team mapping and stable `track_id` actor binding;
+- deterministic window alignment cannot exceed the recipe tolerance;
 - versioned checker dispatch and fact reconstruction;
 - maturity and production gate invariants.
 
@@ -295,7 +372,7 @@ Each audited concept has at least two known positives and two targeted hard nega
 
 ### Production evaluation
 
-Run the same frozen recipes on paired ground-truth and GSR-predicted state. Report raw TP/FP/FN/TN counts, precision, false insertions per minute, unsupported rate, GT-to-GSR degradation, actor/temporal grounding, and overclaim failures per concept and per match.
+Run the complete pipeline on all evaluable clips using paired ground-truth and GSR-predicted state. Retain all proposals and verifier outputs. Report proposal recall, verifier conditional precision, end-to-end TP/FP/FN/TN and precision/recall, false insertions per minute over full clips, verified true-positive count, unsupported rate, GT-to-GSR degradation, actor/temporal grounding, and overclaim failures per concept and per match.
 
 ## Explicit non-goals
 
@@ -312,10 +389,13 @@ Run the same frozen recipes on paired ground-truth and GSR-predicted state. Repo
 
 - Train/valid labels are repaired and pass the dataset integrity check before formal recipe development.
 - The catalog contains 12–15 normalized entries, all disabled by default.
+- Source records contain categorized terminology, formalization, and calibration provenance with required metadata.
 - The proposal model cannot author or alter verification conditions.
-- Every accepted fact is traceable to a fixed recipe version, evidence window, actor bindings, measurements, and quality state.
+- Proposal and fact contracts use canonical team IDs; source-side `left/right` labels never serve as team keys.
+- Every accepted fact is traceable to a fixed recipe version, proposed and verified windows, actor bindings, measurements, and quality state.
 - Candidate feasibility is assessed across multiple development matches and on both GT and GSR state.
 - Only capabilities required by audited concepts are added.
 - Games 8 and 11 remain untouched until the release manifest is frozen.
+- Held-out production evaluation runs the complete pipeline over all evaluable clips and cannot pass by always abstaining.
 - At most three observation-only concepts become production-enabled, with no minimum quota.
 - Any failure or unsupported evidence falls back to ordinary event commentary.
