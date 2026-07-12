@@ -31,7 +31,6 @@ models/bak
 .cursorignore
 pyrightconfig.json
 soccerbackbone.egg-info
-docs/superpowers/
 
 # Media files outside root images/
 *.jpg
