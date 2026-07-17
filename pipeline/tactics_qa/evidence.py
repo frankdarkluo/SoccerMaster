@@ -5,7 +5,9 @@ import json
 
 RESTART_KINDS = {"kickoff", "goal_kick", "throw_in", "free_kick", "corner"}
 CONTROLLED_REGAIN_KINDS = {"tackle", "interception", "controlled_recovery"}
-CHAOS_KINDS = {"clearance", "header_flick", "aerial_duel"}
+# Ball height is unavailable, so rapid alternating trajectory possession uses
+# a generic chaos event rather than guessing aerial versus ground contact.
+CHAOS_KINDS = {"clearance", "header_flick", "aerial_duel", "contested_touch"}
 OTHER_KINDS = {"pass", "cross", "dribble", "shot"}
 EVENT_KINDS = RESTART_KINDS | CONTROLLED_REGAIN_KINDS | CHAOS_KINDS | OTHER_KINDS
 DELIVERY_KINDS = {

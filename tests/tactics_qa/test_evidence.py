@@ -20,3 +20,11 @@ def test_round_trip():
 def test_unknown_kind_rejected():
     with pytest.raises(ValueError):
         PossessionEvent(t=0.0, team="attacking", kind="bicycle_kick")
+
+
+def test_contested_touch_is_a_chaos_kind():
+    from pipeline.tactics_qa.evidence import CHAOS_KINDS, EVENT_KINDS
+
+    assert "contested_touch" in CHAOS_KINDS
+    assert "contested_touch" in EVENT_KINDS
+    PossessionEvent(t=1.0, team="attacking", kind="contested_touch")
