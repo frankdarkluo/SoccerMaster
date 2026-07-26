@@ -1,7 +1,6 @@
 """Shared frame overlay logic for light beams and tactical lines."""
 from __future__ import annotations
 
-import math
 from typing import Dict, List, Optional, Tuple
 
 from pipeline.config import PipelineConfig

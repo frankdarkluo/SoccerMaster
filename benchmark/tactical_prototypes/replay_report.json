@@ -1,0 +1,1300 @@
+{
+  "per_tactic": {
+    "between-the-lines": {
+      "false_vetoes": [],
+      "flipped_errors": [],
+      "insufficient": [],
+      "n_claims": 2,
+      "precision_after": 0.5,
+      "precision_before": 0.5,
+      "scope": "deferred",
+      "surviving_wrong": [
+        "soccernetgs:SNGS-039"
+      ]
+    },
+    "corner-near-far-post": {
+      "false_vetoes": [],
+      "flipped_errors": [
+        "soccernetgs:SNGS-025",
+        "soccernetgs:SNGS-067",
+        "soccernetgs:SNGS-075",
+        "soccernetgs:SNGS-079",
+        "soccernetgs:SNGS-103",
+        "soccernetgs:SNGS-110",
+        "soccernetgs:SNGS-140"
+      ],
+      "insufficient": [],
+      "n_claims": 14,
+      "precision_after": 1.0,
+      "precision_before": 0.5,
+      "scope": "P0",
+      "surviving_wrong": []
+    },
+    "cutback": {
+      "false_vetoes": [],
+      "flipped_errors": [
+        "soccernetgs:SNGS-106"
+      ],
+      "insufficient": [],
+      "n_claims": 3,
+      "precision_after": 1.0,
+      "precision_before": 0.667,
+      "scope": "P0",
+      "surviving_wrong": []
+    },
+    "dummy-run": {
+      "false_vetoes": [],
+      "flipped_errors": [],
+      "insufficient": [],
+      "n_claims": 1,
+      "precision_after": 0.0,
+      "precision_before": 0.0,
+      "scope": "deferred",
+      "surviving_wrong": [
+        "soccernetgs:SNGS-030"
+      ]
+    },
+    "fast_break_pattern": {
+      "false_vetoes": [],
+      "flipped_errors": [
+        "soccernetgs:SNGS-001",
+        "soccernetgs:SNGS-007",
+        "soccernetgs:SNGS-040",
+        "soccernetgs:SNGS-041",
+        "soccernetgs:SNGS-043",
+        "soccernetgs:SNGS-060",
+        "soccernetgs:SNGS-061",
+        "soccernetgs:SNGS-078",
+        "soccernetgs:SNGS-084",
+        "soccernetgs:SNGS-087",
+        "soccernetgs:SNGS-134"
+      ],
+      "insufficient": [],
+      "n_claims": 23,
+      "precision_after": 0.917,
+      "precision_before": 0.478,
+      "scope": "P0",
+      "surviving_wrong": [
+        "soccernetgs:SNGS-118"
+      ]
+    },
+    "gk-in-buildup": {
+      "false_vetoes": [],
+      "flipped_errors": [],
+      "insufficient": [],
+      "n_claims": 1,
+      "precision_after": 0.0,
+      "precision_before": 0.0,
+      "scope": "deferred",
+      "surviving_wrong": [
+        "soccernetgs:SNGS-022"
+      ]
+    },
+    "halfspace-penetration": {
+      "false_vetoes": [],
+      "flipped_errors": [],
+      "insufficient": [],
+      "n_claims": 3,
+      "precision_after": 0.0,
+      "precision_before": 0.0,
+      "scope": "deferred",
+      "surviving_wrong": [
+        "soccernetgs:SNGS-061",
+        "soccernetgs:SNGS-062",
+        "soccernetgs:SNGS-190"
+      ]
+    },
+    "line_break": {
+      "false_vetoes": [],
+      "flipped_errors": [
+        "soccernetgs:SNGS-003",
+        "soccernetgs:SNGS-020",
+        "soccernetgs:SNGS-097"
+      ],
+      "insufficient": [],
+      "n_claims": 9,
+      "precision_after": 0.5,
+      "precision_before": 0.333,
+      "scope": "P1",
+      "surviving_wrong": [
+        "soccernetgs:SNGS-028",
+        "soccernetgs:SNGS-070",
+        "soccernetgs:SNGS-177"
+      ]
+    },
+    "one_two": {
+      "false_vetoes": [],
+      "flipped_errors": [],
+      "insufficient": [],
+      "n_claims": 1,
+      "precision_after": 0.0,
+      "precision_before": 0.0,
+      "scope": "deferred",
+      "surviving_wrong": [
+        "soccernetgs:SNGS-200"
+      ]
+    },
+    "run_in_behind": {
+      "false_vetoes": [],
+      "flipped_errors": [
+        "event_clips:0013",
+        "event_clips:0014",
+        "soccernetgs:SNGS-023"
+      ],
+      "insufficient": [],
+      "n_claims": 14,
+      "precision_after": 0.818,
+      "precision_before": 0.643,
+      "scope": "P0",
+      "surviving_wrong": [
+        "soccernetgs:SNGS-101",
+        "soccernetgs:SNGS-134"
+      ]
+    },
+    "switch-of-play": {
+      "false_vetoes": [],
+      "flipped_errors": [],
+      "insufficient": [],
+      "n_claims": 1,
+      "precision_after": 0.0,
+      "precision_before": 0.0,
+      "scope": "deferred",
+      "surviving_wrong": [
+        "soccernetgs:SNGS-115"
+      ]
+    }
+  },
+  "rows": [
+    {
+      "checks": [],
+      "clip_uid": "soccernetgs:SNGS-005",
+      "root_cause": null,
+      "tactic_id": "between-the-lines",
+      "verdict": "correct"
+    },
+    {
+      "checks": [],
+      "clip_uid": "soccernetgs:SNGS-039",
+      "root_cause": "role_relation",
+      "tactic_id": "between-the-lines",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact in central zone, not a post zone",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-025",
+      "root_cause": "geometry",
+      "tactic_id": "corner-near-far-post",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact at near_post",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-050",
+      "root_cause": null,
+      "tactic_id": "corner-near-far-post",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact in central zone, not a post zone",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-067",
+      "root_cause": "geometry",
+      "tactic_id": "corner-near-far-post",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact in central zone, not a post zone",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-075",
+      "root_cause": "geometry",
+      "tactic_id": "corner-near-far-post",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact in central zone, not a post zone",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-079",
+      "root_cause": "geometry",
+      "tactic_id": "corner-near-far-post",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact at near_post",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-086",
+      "root_cause": null,
+      "tactic_id": "corner-near-far-post",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact in central zone, not a post zone",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-103",
+      "root_cause": "geometry",
+      "tactic_id": "corner-near-far-post",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact in central zone, not a post zone",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-110",
+      "root_cause": "geometry",
+      "tactic_id": "corner-near-far-post",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact at near_post",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-116",
+      "root_cause": null,
+      "tactic_id": "corner-near-far-post",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact at near_post",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-125",
+      "root_cause": null,
+      "tactic_id": "corner-near-far-post",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact in central zone, not a post zone",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-140",
+      "root_cause": "geometry",
+      "tactic_id": "corner-near-far-post",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact at near_post",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-142",
+      "root_cause": null,
+      "tactic_id": "corner-near-far-post",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact at near_post",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-176",
+      "root_cause": null,
+      "tactic_id": "corner-near-far-post",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact at far_post",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-199",
+      "root_cause": null,
+      "tactic_id": "corner-near-far-post",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-031",
+      "root_cause": null,
+      "tactic_id": "cutback",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-047",
+      "root_cause": null,
+      "tactic_id": "cutback",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "delivery_gate",
+          "reason": "cutback claimed on a corner",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-106",
+      "root_cause": "restart_delivery",
+      "tactic_id": "cutback",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [],
+      "clip_uid": "soccernetgs:SNGS-030",
+      "root_cause": "role_relation",
+      "tactic_id": "dummy-run",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "single controlled regain",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "event_clips:0006",
+      "root_cause": null,
+      "tactic_id": "fast_break_pattern",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "kickoff at t=13.0s starts the window",
+          "verdict": "veto"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "no controlled regain near window start",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-001",
+      "root_cause": "restart_delivery",
+      "tactic_id": "fast_break_pattern",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "no controlled regain near window start",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-007",
+      "root_cause": "normal_progression",
+      "tactic_id": "fast_break_pattern",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "single controlled regain",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-026",
+      "root_cause": null,
+      "tactic_id": "fast_break_pattern",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "single controlled regain",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-037",
+      "root_cause": null,
+      "tactic_id": "fast_break_pattern",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "no controlled regain near window start",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-040",
+      "root_cause": "normal_progression",
+      "tactic_id": "fast_break_pattern",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "goal_kick at t=6.0s starts the window",
+          "verdict": "veto"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "no controlled regain near window start",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-041",
+      "root_cause": "restart_delivery",
+      "tactic_id": "fast_break_pattern",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "chaotic second-ball chain (4 contested touches) around window start",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-043",
+      "root_cause": "chaotic_chain",
+      "tactic_id": "fast_break_pattern",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "single controlled regain",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-054",
+      "root_cause": null,
+      "tactic_id": "fast_break_pattern",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "chaotic second-ball chain (4 contested touches) around window start",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-060",
+      "root_cause": "chaotic_chain",
+      "tactic_id": "fast_break_pattern",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "no controlled regain near window start",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-061",
+      "root_cause": "normal_progression",
+      "tactic_id": "fast_break_pattern",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "no controlled regain near window start",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-078",
+      "root_cause": "normal_progression",
+      "tactic_id": "fast_break_pattern",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "no controlled regain near window start",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-084",
+      "root_cause": "chaotic_chain",
+      "tactic_id": "fast_break_pattern",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "no controlled regain near window start",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-087",
+      "root_cause": "normal_progression",
+      "tactic_id": "fast_break_pattern",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "single controlled regain",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-101",
+      "root_cause": null,
+      "tactic_id": "fast_break_pattern",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "single controlled regain",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-118",
+      "root_cause": "window_partial",
+      "tactic_id": "fast_break_pattern",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "single controlled regain",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-123",
+      "root_cause": null,
+      "tactic_id": "fast_break_pattern",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "single controlled regain",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-129",
+      "root_cause": null,
+      "tactic_id": "fast_break_pattern",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "single controlled regain",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-130",
+      "root_cause": null,
+      "tactic_id": "fast_break_pattern",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "no controlled regain near window start",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-134",
+      "root_cause": "normal_progression",
+      "tactic_id": "fast_break_pattern",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "single controlled regain",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-165",
+      "root_cause": null,
+      "tactic_id": "fast_break_pattern",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "single controlled regain",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-189",
+      "root_cause": null,
+      "tactic_id": "fast_break_pattern",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "clean_regain",
+          "reason": "single controlled regain",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-192",
+      "root_cause": null,
+      "tactic_id": "fast_break_pattern",
+      "verdict": "correct"
+    },
+    {
+      "checks": [],
+      "clip_uid": "soccernetgs:SNGS-022",
+      "root_cause": "restart_delivery",
+      "tactic_id": "gk-in-buildup",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-061",
+      "root_cause": "geometry",
+      "tactic_id": "halfspace-penetration",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-062",
+      "root_cause": "concept_confusion",
+      "tactic_id": "halfspace-penetration",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-190",
+      "root_cause": "concept_confusion",
+      "tactic_id": "halfspace-penetration",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "event_clips:0007",
+      "root_cause": null,
+      "tactic_id": "line_break",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "goal_kick at t=6.0s starts the window",
+          "verdict": "veto"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery is goal_kick, not an open-play penetrating pass",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-003",
+      "root_cause": "restart_delivery",
+      "tactic_id": "line_break",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery is cross, not an open-play penetrating pass",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-020",
+      "root_cause": "restart_delivery",
+      "tactic_id": "line_break",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-028",
+      "root_cause": "geometry",
+      "tactic_id": "line_break",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-070",
+      "root_cause": "geometry",
+      "tactic_id": "line_break",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "throw_in at t=12.0s starts the window",
+          "verdict": "veto"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery is throw_in, not an open-play penetrating pass",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-097",
+      "root_cause": "restart_delivery",
+      "tactic_id": "line_break",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-148",
+      "root_cause": null,
+      "tactic_id": "line_break",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-177",
+      "root_cause": "concept_confusion",
+      "tactic_id": "line_break",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-184",
+      "root_cause": null,
+      "tactic_id": "line_break",
+      "verdict": "correct"
+    },
+    {
+      "checks": [],
+      "clip_uid": "soccernetgs:SNGS-200",
+      "root_cause": "role_relation",
+      "tactic_id": "one_two",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery is cross, not an open-play penetrating pass",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "event_clips:0013",
+      "root_cause": "restart_delivery",
+      "tactic_id": "run_in_behind",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery is cross, not an open-play penetrating pass",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "event_clips:0014",
+      "root_cause": "restart_delivery",
+      "tactic_id": "run_in_behind",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "free_kick at t=20.0s starts the window",
+          "verdict": "veto"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery is free_kick, not an open-play penetrating pass",
+          "verdict": "veto"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-023",
+      "root_cause": "restart_delivery",
+      "tactic_id": "run_in_behind",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-038",
+      "root_cause": null,
+      "tactic_id": "run_in_behind",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-045",
+      "root_cause": null,
+      "tactic_id": "run_in_behind",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-053",
+      "root_cause": null,
+      "tactic_id": "run_in_behind",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-058",
+      "root_cause": null,
+      "tactic_id": "run_in_behind",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-063",
+      "root_cause": null,
+      "tactic_id": "run_in_behind",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-088",
+      "root_cause": null,
+      "tactic_id": "run_in_behind",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-101",
+      "root_cause": "rubric",
+      "tactic_id": "run_in_behind",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-117",
+      "root_cause": null,
+      "tactic_id": "run_in_behind",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-130",
+      "root_cause": null,
+      "tactic_id": "run_in_behind",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-134",
+      "root_cause": "concept_confusion",
+      "tactic_id": "run_in_behind",
+      "verdict": "wrong"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-165",
+      "root_cause": null,
+      "tactic_id": "run_in_behind",
+      "verdict": "correct"
+    },
+    {
+      "checks": [],
+      "clip_uid": "soccernetgs:SNGS-115",
+      "root_cause": "concept_confusion",
+      "tactic_id": "switch-of-play",
+      "verdict": "wrong"
+    }
+  ],
+  "schema_version": "checker-replay-v1"
+}

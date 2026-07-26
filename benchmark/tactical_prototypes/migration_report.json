@@ -1,0 +1,60 @@
+{
+  "aliases": {
+    "下底倒三角": "cutback",
+    "中后卫带球推进": "centre_back_carry",
+    "二过一 / 撞墙配合": "one_two",
+    "区域防守": "zonal_defending",
+    "反抢 / 就地反抢": "counterpress",
+    "后场倒脚控场": "defensive_circulation",
+    "大力手抛球 / 长距离界外球": "long_throw",
+    "大范围转移": "switch_of_play",
+    "套边与内切套上": "overlap_run",
+    "定位球区域防守": "set_piece_zonal_defending",
+    "宽度与纵深": "width_and_depth",
+    "快速反击": "fast_break_pattern",
+    "打身后 / 反越位跑位": "run_in_behind",
+    "混合盯防": "mixed_marking",
+    "破线传球": "line_break",
+    "线间接应": "receive_between_lines",
+    "肋部渗透": "half_space_penetration",
+    "虚跑/假跑扯动": "dummy_run",
+    "角球前点 / 后点战术": "corner_near_far_post",
+    "角球后点/前点战术": "corner_near_far_post",
+    "角球围堵门将": "corner_goalkeeper_block",
+    "逼抢触发器": "pressing_trigger",
+    "长传冲吊": "long_ball",
+    "门将参与出球": "goalkeeper_build_up"
+  },
+  "derived_silver_count": 237,
+  "mvp_positive_count": 88,
+  "mvp_positive_counts": {
+    "cutback": 5,
+    "fast_break_pattern": 39,
+    "line_break": 16,
+    "overlap_run": 3,
+    "run_in_behind": 25
+  },
+  "normalizations": {
+    "end_rounding_clamp_seconds": 1.0,
+    "unicode_time_dash": true
+  },
+  "orphan_videos": [
+    "data/event-clips_L3_all/video.mp4"
+  ],
+  "positive_count": 187,
+  "post_review_status_counts": {
+    "gold": 217,
+    "silver": 207
+  },
+  "post_review_type_counts": {
+    "positive": 187,
+    "targeted_negative": 138,
+    "unobservable": 99
+  },
+  "registered_manifest_sources": {
+    "ivory_ecuador": 154
+  },
+  "schema_version": "tactical-prototype-migration-report-v1",
+  "source_row_count": 783,
+  "unmapped_positive_labels": []
+}

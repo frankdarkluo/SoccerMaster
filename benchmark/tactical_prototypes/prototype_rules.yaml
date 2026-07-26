@@ -1,0 +1,20 @@
+common:
+  min_ball_coverage: 0.5
+  min_pitch_coverage: 0.5
+  min_track_continuity: 0.5
+cutback:
+  bottom_zone_x: 35.0
+  min_backward_change: 1.0
+fast_break_pattern:
+  max_transition_seconds: 10.0
+  min_forward_change: 5.0
+line_break:
+  max_receive_distance: 8.0
+  min_line_crossing: 1.0
+overlap_run:
+  min_lateral_separation: 2.0
+  min_longitudinal_change: 1.0
+private: true
+run_in_behind:
+  min_line_crossing: 1.0
+schema_version: tactical-prototype-rules-v1

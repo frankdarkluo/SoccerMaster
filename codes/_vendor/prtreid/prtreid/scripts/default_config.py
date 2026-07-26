@@ -57,7 +57,7 @@ def get_default_config():
     cfg.model.bpbreid.training_binary_visibility_score = True  # use binary visibility score (0 or 1) instead of continuous visibility score (0 to 1) at training
     cfg.model.bpbreid.testing_binary_visibility_score = True  # use binary visibility score (0 or 1) instead of continuous visibility score (0 to 1) at testing
     cfg.model.bpbreid.shared_parts_id_classifier = False  # if each part branch uses share weights for the identity classifier. Used only when the identity loss is used on part-based embeddings.
-    cfg.model.bpbreid.hrnet_pretrained_path = "pretrained_models/" # path to pretrained weights for HRNet backbone, download on our Google Drive or on https://github.com/HRNet/HRNet-Image-Classification
+    cfg.model.bpbreid.hrnet_pretrained_path = "/data/zhangzheng/pretrained_models/" # path to pretrained weights for HRNet backbone, download on our Google Drive or on https://github.com/HRNet/HRNet-Image-Classification
     # number of horizontal stripes desired. When BPBreID is used, this variable will be automatically filled depending
     # on "data.masks.preprocess"
     cfg.model.bpbreid.masks = CN()

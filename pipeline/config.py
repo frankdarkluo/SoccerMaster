@@ -8,7 +8,7 @@ from typing import List, Optional
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GSR_ROOT = REPO_ROOT / "codes" / "sn-gamestate"
 DATASET_ROOT = GSR_ROOT / "datasets" / "SoccerNetGS"
-PRETRAINED_MODELS = GSR_ROOT / "pretrained_models"
+PRETRAINED_MODELS = Path("/data/zhangzheng/pretrained_models")
 
 PITCH_LENGTH = 105.0
 PITCH_WIDTH = 68.0
@@ -103,8 +103,16 @@ class PipelineConfig:
         return self.comments_dir / "commentary_direct.json"
 
     @property
-    def tactical_candidates_json(self) -> Path:
-        return self.comments_dir / "tactical_candidates.json"
+    def tactical_state_json(self) -> Path:
+        return self.comments_dir / "tactical_state.json"
+
+    @property
+    def tactical_proposals_json(self) -> Path:
+        return self.comments_dir / "tactical_proposals.json"
+
+    @property
+    def verified_tactical_facts_json(self) -> Path:
+        return self.comments_dir / "verified_tactical_facts.json"
 
     @property
     def commentary_json(self) -> Path:

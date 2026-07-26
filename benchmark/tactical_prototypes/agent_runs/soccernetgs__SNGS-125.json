@@ -1,0 +1,236 @@
+{
+  "clip_uid": "soccernetgs:SNGS-125",
+  "contact_sheet_profile": "640",
+  "observations": [
+    {
+      "api_usage": [
+        {
+          "completion_tokens": 1429,
+          "completion_tokens_details": {
+            "reasoning_tokens": 1139
+          },
+          "prompt_tokens": 1892,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 3321
+        },
+        {
+          "completion_tokens": 463,
+          "completion_tokens_details": {
+            "reasoning_tokens": 174
+          },
+          "prompt_tokens": 3717,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 4180
+        }
+      ],
+      "candidates": [
+        {
+          "checker_results": {
+            "trajectory": [],
+            "vlm_claim": [
+              {
+                "checker": "corner_landing",
+                "reason": "first contact at far_post",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "claimed_evidence": {
+            "chaos": null,
+            "corner_landing_zone": "far_post",
+            "delivery_kind": "corner_cross",
+            "regain": null,
+            "restart_at_origin": "corner"
+          },
+          "confidence": "high",
+          "decision": "positive",
+          "evidence": {
+            "trajectory": null,
+            "vlm_claim": {
+              "clip_uid": "soccernetgs:SNGS-125",
+              "corner_landing_zone": "far_post",
+              "delivery_kind": "corner_cross",
+              "events": [
+                {
+                  "kind": "corner",
+                  "t": 0.0,
+                  "team": "attacking"
+                }
+              ],
+              "notes": "",
+              "source": "vlm_claim",
+              "tactic_id": "corner-near-far-post"
+            }
+          },
+          "exclusion_checks": [
+            "The landing zone is not the central penalty area",
+            "This is not an open play cross",
+            "The landing position is clearly visible"
+          ],
+          "missing_evidence": [],
+          "positive_evidence": [
+            "The set piece is a corner kick taken from the pitch corner area",
+            "The corner delivery travels to the far post zone of the goal",
+            "Multiple attacking players move to contest the far post landing point"
+          ],
+          "tactic_id": "corner-near-far-post",
+          "verdict": {
+            "reason": "corner-near-far-post: VLM-claimed evidence checks passed",
+            "tier": "possible"
+          },
+          "window": {
+            "end_s": 7.51,
+            "start_s": 0.0
+          }
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-125",
+      "observer": "doubao"
+    },
+    {
+      "api_usage": [
+        {
+          "completion_tokens": 257,
+          "prompt_tokens": 1693,
+          "total_tokens": 1950
+        },
+        {
+          "completion_tokens": 252,
+          "prompt_tokens": 3317,
+          "total_tokens": 3569
+        }
+      ],
+      "candidates": [
+        {
+          "checker_results": {
+            "trajectory": [],
+            "vlm_claim": [
+              {
+                "checker": "corner_landing",
+                "reason": "first contact at far_post",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "claimed_evidence": {
+            "chaos": null,
+            "corner_landing_zone": "far_post",
+            "delivery_kind": "corner_cross",
+            "regain": null,
+            "restart_at_origin": "corner"
+          },
+          "confidence": "high",
+          "decision": "positive",
+          "evidence": {
+            "trajectory": null,
+            "vlm_claim": {
+              "clip_uid": "soccernetgs:SNGS-125",
+              "corner_landing_zone": "far_post",
+              "delivery_kind": "corner_cross",
+              "events": [
+                {
+                  "kind": "corner",
+                  "t": 0.0,
+                  "team": "attacking"
+                }
+              ],
+              "notes": "",
+              "source": "vlm_claim",
+              "tactic_id": "corner-near-far-post"
+            }
+          },
+          "exclusion_checks": [
+            "The landing zone is clearly directed towards the far post area."
+          ],
+          "missing_evidence": [],
+          "positive_evidence": [
+            "The ball is delivered from the corner arc into the penalty area.",
+            "Multiple attackers are positioned to attack the far post area."
+          ],
+          "tactic_id": "corner-near-far-post",
+          "verdict": {
+            "reason": "corner-near-far-post: VLM-claimed evidence checks passed",
+            "tier": "possible"
+          },
+          "window": {
+            "end_s": 7.51,
+            "start_s": 0.0
+          }
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-125",
+      "observer": "gemini"
+    }
+  ],
+  "prototype_context": {
+    "doubao": [
+      {
+        "evidence_summary": "多角度回放显示角球先进入前点人群并发生第一触，皮球改变线路横向越过门前后由后点白队球员完成第二次处理；不是直接越过所有人传到后点或普通门前混战。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "goal_highlight_package",
+        "prototype_type": "positive",
+        "tactic_id": "corner-near-far-post"
+      },
+      {
+        "evidence_summary": "白队角球开出前多人在小禁区与点球点之间集结；主罚瞬间多名白队球员同步冲向近门柱和门前同一落点；皮球约00:06送入该区域并形成争顶；不是开放比赛中的普通传中。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "corner-near-far-post"
+      },
+      {
+        "evidence_summary": "右队11号从画面下方角旗区主罚；15号、8号与43号从点球点附近同步冲向近门柱和小禁区前点；皮球落向同一区域并在争顶后被解围；不是无明确落点的普通传中。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "corner-near-far-post"
+      }
+    ],
+    "gemini": [
+      {
+        "evidence_summary": "多角度回放显示角球先进入前点人群并发生第一触，皮球改变线路横向越过门前后由后点白队球员完成第二次处理；不是直接越过所有人传到后点或普通门前混战。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "goal_highlight_package",
+        "prototype_type": "positive",
+        "tactic_id": "corner-near-far-post"
+      },
+      {
+        "evidence_summary": "白队角球开出前多人在小禁区与点球点之间集结；主罚瞬间多名白队球员同步冲向近门柱和门前同一落点；皮球约00:06送入该区域并形成争顶；不是开放比赛中的普通传中。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "corner-near-far-post"
+      },
+      {
+        "evidence_summary": "右队11号从画面下方角旗区主罚；15号、8号与43号从点球点附近同步冲向近门柱和小禁区前点；皮球落向同一区域并在争顶后被解围；不是无明确落点的普通传中。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "corner-near-far-post"
+      }
+    ]
+  },
+  "prototype_excluded_counts": {
+    "doubao": 2,
+    "gemini": 2
+  },
+  "schema_version": "tactical-agent-run-v1",
+  "skeptic": {
+    "instruction": "",
+    "reasons": [],
+    "triggered": false
+  },
+  "sol_arbitration": {
+    "triggered": false
+  }
+}

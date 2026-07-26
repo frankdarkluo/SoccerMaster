@@ -1,0 +1,329 @@
+{
+  "auto_missing_causes": [
+    [
+      "no GSR predictions.json",
+      69
+    ],
+    [
+      "key-pass kick not detected",
+      2
+    ]
+  ],
+  "claims": [
+    {
+      "auto_verdicts": [
+        [
+          "corner_landing",
+          "pass"
+        ]
+      ],
+      "chaotic": "match",
+      "checker_verdicts_equal": true,
+      "clip_uid": "soccernetgs:SNGS-116",
+      "corner_landing_zone": "match",
+      "delivery_kind": "match",
+      "hand_verdicts": [
+        [
+          "corner_landing",
+          "pass"
+        ]
+      ],
+      "has_controlled_regain": "match",
+      "restart_at_origin": "mismatch",
+      "tactic_id": "corner-near-far-post"
+    },
+    {
+      "auto_verdicts": [
+        [
+          "delivery_gate",
+          "insufficient"
+        ],
+        [
+          "restart_gate",
+          "pass"
+        ]
+      ],
+      "chaotic": "match",
+      "checker_verdicts_equal": false,
+      "clip_uid": "soccernetgs:SNGS-117",
+      "corner_landing_zone": "both_missing",
+      "delivery_kind": "auto_missing",
+      "hand_verdicts": [
+        [
+          "delivery_gate",
+          "pass"
+        ],
+        [
+          "restart_gate",
+          "pass"
+        ]
+      ],
+      "has_controlled_regain": "match",
+      "restart_at_origin": "both_missing",
+      "tactic_id": "run_in_behind"
+    },
+    {
+      "auto_verdicts": [
+        [
+          "delivery_gate",
+          "insufficient"
+        ],
+        [
+          "restart_gate",
+          "pass"
+        ]
+      ],
+      "chaotic": "match",
+      "checker_verdicts_equal": false,
+      "clip_uid": "soccernetgs:SNGS-148",
+      "corner_landing_zone": "both_missing",
+      "delivery_kind": "auto_missing",
+      "hand_verdicts": [
+        [
+          "delivery_gate",
+          "pass"
+        ],
+        [
+          "restart_gate",
+          "pass"
+        ]
+      ],
+      "has_controlled_regain": "match",
+      "restart_at_origin": "both_missing",
+      "tactic_id": "line_break"
+    }
+  ],
+  "coverage": {
+    "covered": 3,
+    "no_data": 69
+  },
+  "field_agreement": {
+    "chaotic": {
+      "match": 3
+    },
+    "checker_verdicts_equal": {
+      "false": 2,
+      "true": 1
+    },
+    "corner_landing_zone": {
+      "both_missing": 2,
+      "match": 1
+    },
+    "delivery_kind": {
+      "auto_missing": 2,
+      "match": 1
+    },
+    "has_controlled_regain": {
+      "match": 3
+    },
+    "restart_at_origin": {
+      "both_missing": 2,
+      "mismatch": 1
+    }
+  },
+  "replay_auto": {
+    "corner-near-far-post": {
+      "false_vetoes": [],
+      "flipped_errors": [],
+      "insufficient": [],
+      "n_claims": 1,
+      "precision_after": 1.0,
+      "precision_before": 1.0,
+      "scope": "P0",
+      "surviving_wrong": []
+    },
+    "line_break": {
+      "false_vetoes": [],
+      "flipped_errors": [],
+      "insufficient": [
+        "soccernetgs:SNGS-148"
+      ],
+      "n_claims": 1,
+      "precision_after": null,
+      "precision_before": 1.0,
+      "scope": "P1",
+      "surviving_wrong": []
+    },
+    "run_in_behind": {
+      "false_vetoes": [],
+      "flipped_errors": [],
+      "insufficient": [
+        "soccernetgs:SNGS-117"
+      ],
+      "n_claims": 1,
+      "precision_after": null,
+      "precision_before": 1.0,
+      "scope": "P0",
+      "surviving_wrong": []
+    }
+  },
+  "replay_auto_rows": [
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact at near_post",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-116",
+      "root_cause": null,
+      "tactic_id": "corner-near-far-post",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery kind not established",
+          "verdict": "insufficient"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-148",
+      "root_cause": null,
+      "tactic_id": "line_break",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery kind not established",
+          "verdict": "insufficient"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-117",
+      "root_cause": null,
+      "tactic_id": "run_in_behind",
+      "verdict": "correct"
+    }
+  ],
+  "replay_hand_same_subset": {
+    "corner-near-far-post": {
+      "false_vetoes": [],
+      "flipped_errors": [],
+      "insufficient": [],
+      "n_claims": 1,
+      "precision_after": 1.0,
+      "precision_before": 1.0,
+      "scope": "P0",
+      "surviving_wrong": []
+    },
+    "line_break": {
+      "false_vetoes": [],
+      "flipped_errors": [],
+      "insufficient": [],
+      "n_claims": 1,
+      "precision_after": 1.0,
+      "precision_before": 1.0,
+      "scope": "P1",
+      "surviving_wrong": []
+    },
+    "run_in_behind": {
+      "false_vetoes": [],
+      "flipped_errors": [],
+      "insufficient": [],
+      "n_claims": 1,
+      "precision_after": 1.0,
+      "precision_before": 1.0,
+      "scope": "P0",
+      "surviving_wrong": []
+    }
+  },
+  "replay_hand_same_subset_rows": [
+    {
+      "checks": [
+        {
+          "checker": "corner_landing",
+          "reason": "first contact at near_post",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-116",
+      "root_cause": null,
+      "tactic_id": "corner-near-far-post",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-148",
+      "root_cause": null,
+      "tactic_id": "line_break",
+      "verdict": "correct"
+    },
+    {
+      "checks": [
+        {
+          "checker": "restart_gate",
+          "reason": "no restart at window origin",
+          "verdict": "pass"
+        },
+        {
+          "checker": "delivery_gate",
+          "reason": "delivery open_play_pass ok",
+          "verdict": "pass"
+        }
+      ],
+      "clip_uid": "soccernetgs:SNGS-117",
+      "root_cause": null,
+      "tactic_id": "run_in_behind",
+      "verdict": "correct"
+    }
+  ],
+  "schema_version": "evidence-agreement-v1",
+  "thresholds": {
+    "auto_evidence.ATTACK_SIDE_MIN_SHARE": 0.6,
+    "auto_evidence.EVENT_BAND_AFTER_S": 5.0,
+    "auto_evidence.EVENT_BAND_BEFORE_S": 5.0,
+    "auto_evidence.HOLDER_NEAR_BALL_M": 1.5,
+    "auto_evidence.LANDING_SEARCH_S": 4.0,
+    "delivery_infer.BOX_DEPTH_M": 16.5,
+    "delivery_infer.BOX_HALF_WIDTH_M": 20.16,
+    "delivery_infer.CENTER_BAND_M": 2.0,
+    "delivery_infer.CLEARANCE_MIN_DISTANCE_M": 30.0,
+    "delivery_infer.CLEARANCE_MIN_SPEED_MPS": 22.0,
+    "delivery_infer.DEFENSIVE_THIRD_MAX_X_M": -17.5,
+    "delivery_infer.PASS_MIN_FORWARD_M": 3.0,
+    "delivery_infer.WIDE_CHANNEL_MIN_Y_M": 20.0,
+    "kinematics.DEAD_MAX_SPEED_MPS": 0.8,
+    "kinematics.DEAD_MIN_DURATION_S": 1.0,
+    "kinematics.KICK_LOOKBACK_S": 0.4,
+    "kinematics.KICK_MIN_SPEED_MPS": 8.0,
+    "kinematics.KICK_PRE_MAX_SPEED_MPS": 3.0,
+    "kinematics.MAX_STEP_GAP_FRAMES": 3,
+    "kinematics.SMOOTH_WINDOW_FRAMES": 5,
+    "possession_timeline.CONTESTED_RUN_MAX_S": 0.9,
+    "possession_timeline.MERGE_SAME_TEAM_GAP_S": 1.0,
+    "possession_timeline.STABLE_RUN_MIN_S": 2.0,
+    "restart_infer.CENTER_SPOT_RADIUS_M": 3.0,
+    "restart_infer.CORNER_RADIUS_M": 4.0,
+    "restart_infer.DEAD_TO_KICK_MAX_GAP_S": 0.6,
+    "restart_infer.GOAL_AREA_DEPTH_M": 7.0,
+    "restart_infer.GOAL_AREA_HALF_WIDTH_M": 11.0,
+    "restart_infer.OUT_OF_PLAY_TOLERANCE_M": 3.0,
+    "restart_infer.PITCH_HALF_LENGTH_M": 52.5,
+    "restart_infer.PITCH_HALF_WIDTH_M": 34.0,
+    "restart_infer.THROW_IN_BAND_M": 1.5
+  }
+}

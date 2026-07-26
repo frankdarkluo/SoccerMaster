@@ -11,6 +11,7 @@ codes/CosyVoice/
 *.txt
 *.pth
 *.csv
+.env
 datasets
 outputs
 /tests/
@@ -50,3 +51,5 @@ soccerbackbone.egg-info
 .Trashes
 ehthumbs.db
 Thumbs.db
+.env
+.env

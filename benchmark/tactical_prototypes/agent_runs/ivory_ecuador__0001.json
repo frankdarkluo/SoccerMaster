@@ -1,0 +1,486 @@
+{
+  "clip_uid": "ivory_ecuador:0001",
+  "observations": [
+    {
+      "candidates": [
+        {
+          "confidence": "high",
+          "decision": "positive",
+          "exclusion_checks": [
+            "The advance does not occur after stable long-term possession, the clip does not start from the middle of the counter-attack process, the play is not initiated from a fixed set piece, no exclusion conditions are satisfied"
+          ],
+          "missing_evidence": [],
+          "positive_evidence": [
+            "The attacking team regains possession at the start of the clip and immediately launches longitudinal advance towards the opponent's penalty area",
+            "Multiple attacking players make forward insert runs, defending players are clearly performing backtracking defensive actions"
+          ],
+          "tactic_id": "fast_break_pattern",
+          "window": {
+            "end_s": 20.0,
+            "start_s": 0.0
+          }
+        },
+        {
+          "confidence": "medium",
+          "decision": "positive",
+          "exclusion_checks": [
+            "This action is not dribbling across the line, not a clearance pass, not a pass that bypasses the outer side of the defensive line, no exclusion conditions are triggered"
+          ],
+          "missing_evidence": [],
+          "positive_evidence": [
+            "A controlled attacking pass crosses the stably arranged defensive line of the orange team",
+            "The attacking teammate located behind the defensive line successfully receives the pass"
+          ],
+          "tactic_id": "line_break",
+          "window": {
+            "end_s": 16.0,
+            "start_s": 9.0
+          }
+        },
+        {
+          "confidence": "high",
+          "decision": "targeted_negative",
+          "exclusion_checks": [
+            "The attacking player on the ball does not reach the sideline baseline area, which meets the exclusion condition of 'not reaching the baseline area'"
+          ],
+          "missing_evidence": [],
+          "positive_evidence": [],
+          "tactic_id": "cutback",
+          "window": {
+            "end_s": 20.0,
+            "start_s": 16.0
+          }
+        }
+      ],
+      "clip_uid": "ivory_ecuador:0001",
+      "observer": "doubao"
+    },
+    {
+      "candidates": [
+        {
+          "confidence": "high",
+          "decision": "unobservable",
+          "exclusion_checks": [
+            "The clip shows a period of established possession and build-up play rather than an immediate transition following a turnover."
+          ],
+          "missing_evidence": [
+            "No clear moment of ball recovery followed by immediate vertical progression is visible."
+          ],
+          "positive_evidence": [],
+          "tactic_id": "fast_break_pattern",
+          "window": {
+            "end_s": 19.8,
+            "start_s": 0.0
+          }
+        },
+        {
+          "confidence": "high",
+          "decision": "unobservable",
+          "exclusion_checks": [
+            "While passes are made, there is no clear instance of a pass penetrating a stable, visible defensive line to a teammate behind it."
+          ],
+          "missing_evidence": [
+            "Lack of a distinct defensive line being breached by a controlled pass."
+          ],
+          "positive_evidence": [],
+          "tactic_id": "line_break",
+          "window": {
+            "end_s": 18.0,
+            "start_s": 14.4
+          }
+        }
+      ],
+      "clip_uid": "ivory_ecuador:0001",
+      "observer": "gemini"
+    }
+  ],
+  "prototype_context": {
+    "doubao": [
+      {
+        "evidence_summary": "红队从右侧接近底线的位置沿地面斜后回传到禁区中路偏后区域，随后外围队友形成接应；8 FPS连续帧显示球路主动回到后方，不是封堵弹球、解围或向门前横传中。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "big_chance",
+        "prototype_type": "positive",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "蓝队右路持球队员推进到接近底线的位置；他没有直接向门前起高球而是把球低平回送到点球点附近；中路队友迎球完成射门；传球方向由底线侧折返向后而非普通横传。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "黄色队右路持球队员推进到接近底线的位置并吸引防守者回收；随后把球低平斜后回送到点球点附近；中路队友迎球完成射门并得分；球路明显折返而不是向门前起高球。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "红队从右侧推进到禁区边缘后把球送入门前并形成混战；8 FPS复核显示球路更像普通传中，未清楚斜向穿过肋部防线交汇点，也不是底线斜后倒三角。",
+        "failed_conditions": [
+          "红队从右侧推进到禁区边缘后把球送入门前并形成混战；8 FPS复核显示球路更像普通传中，未清楚斜向穿过肋部防线交汇点，也不是底线斜后倒三角。"
+        ],
+        "missing_evidence": [],
+        "phase": "channel_attack",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "本段主要呈现中场转向右路、边路持球推进以及一次送入禁区。现有帧无法确认外线队员从后方完成套边，也无法判断末段来球是否为向后回做，因此不能把普通边路推进和传中升级为套边与内切套上或下底倒三角；持续时间和结构证据也不足以单独确认宽度与纵深。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "无法确认",
+          "不足以",
+          "无法判断"
+        ],
+        "phase": "transition_attack",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "只能确认一次普通边路传中及门前自然拥挤。起脚方向未显示明确的向后回做线路，因此不能判为“下底倒三角”；也未见可验证的套边接应、虚跑牵制、局部人数优势形成并被利用，或其他完整战术链。",
+        "failed_conditions": [
+          "只能确认一次普通边路传中及门前自然拥挤。起脚方向未显示明确的向后回做线路，因此不能判为“下底倒三角”；也未见可验证的套边接应、虚跑牵制、局部人数优势形成并被利用，或其他完整战术链。"
+        ],
+        "missing_evidence": [],
+        "phase": "big_chance",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "红队左路向纵深推进并在禁区左侧处理球，但出球前跑者与最后线关系不清；后续关键球路受远景和比分条遮挡，也无法确认底线斜后回传，打身后与倒三角均不成立。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "无法确认",
+          "不清"
+        ],
+        "phase": "big_chance",
+        "prototype_type": "unobservable",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "右路推进和门前送球可见，但球的具体落点与方向不够清楚，无法满足“下底倒三角”的明确回传链；也看不出从持球人身后越到身前的套边过程。门前拥挤本身不足以判定盯人、区域防守或局部人数优势",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "不够清",
+          "不足以"
+        ],
+        "phase": "big_chance",
+        "prototype_type": "unobservable",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "红队约在开段从本方禁区前争回球权后立即纵向出球和推进，多名队友同步前插，白队连续转身回追；数秒内攻势由后场进入前场危险区，约八秒后才转为阵地处理。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "transition_attack",
+        "prototype_type": "positive",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "白队约在00:01解围黑队的前场进攻并控制第二点，随后多名白队球员立即向前冲刺，黑队整线持续转身回撤；白队没有回传整理，而是把球从本方防守三区直接推进过中线直至片段结束。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "counter_attack",
+        "prototype_type": "positive",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "深色队在右侧前场进攻后，中路争抢导致球权转归白色队，比赛方向随即反转。白色队迅速向左侧纵向推进，多名队友在中路及两侧同步前插；；排除边界：转换瞬间球体和具体触球次数较难辨清，但连续画面完整呈现了前场攻势、争抢换权、方向反转及攻守双方同步跑动链条，可排除开场已在推进、单人孤立带球和普通阵地推进",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "build_up",
+        "prototype_type": "positive",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "红队在白队已落位后长时间围绕禁区前沿和右路短传组织，末段只是向门前处理球；未看到夺回球权后的快速反击、穿过成形防线的接控或底线斜后回传。",
+        "failed_conditions": [
+          "红队在白队已落位后长时间围绕禁区前沿和右路短传组织，末段只是向门前处理球；未看到夺回球权后的快速反击、穿过成形防线的接控或底线斜后回传。"
+        ],
+        "missing_evidence": [],
+        "phase": "positional_attack",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "主要是界外球后的常规后场组织与中场推进。无法连续确认某次传球明确穿透完整防守线；界外球距离普通，也不属于大力手抛球。白色队没有多人同步前压，不能标为高位逼抢；深色队也不是夺回球权后数秒内高速纵向制造威胁，不能标为快速反击。",
+        "failed_conditions": [
+          "主要是界外球后的常规后场组织与中场推进。无法连续确认某次传球明确穿透完整防守线；界外球距离普通，也不属于大力手抛球。白色队没有多人同步前压，不能标为高位逼抢；深色队也不是夺回球权后数秒内高速纵向制造威胁，不能标为快速反击。"
+        ],
+        "missing_evidence": [],
+        "phase": "build_up",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "白队从已有阵地球权开始，经中路转向左侧后完成普通边路传中和射门；没有可见的球权夺回节点，外侧接应者也未清楚地从持球人身后套到身前；不强标反击或套边。",
+        "failed_conditions": [
+          "白队从已有阵地球权开始，经中路转向左侧后完成普通边路传中和射门；没有可见的球权夺回节点，外侧接应者也未清楚地从持球人身后套到身前；不强标反击或套边。"
+        ],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "targeted_negative",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "片段开头红队已处于向前推进状态，未呈现夺回球权的起点；随后传球是否越过成形横向防线并由线后队友控制也不清楚，不能标快速反击或破线传球。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "不清"
+        ],
+        "phase": "counter_attack",
+        "prototype_type": "unobservable",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "约00:00.6比赛时钟从19:05跳到22:07，第二段画面开始时黑队持球者已经接近禁区并随后个人带球射门；传球释放和跑者由线前到线后的起点均缺失，不能据此认定反击或打身后。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "缺失"
+        ],
+        "phase": "big_chance",
+        "prototype_type": "unobservable",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "红队由中场持球点向前送球，球路越过白队一层完整横向防守线，接球队员在线后中路空当迎球并继续控球推进；不是防线身前横传或个人带球穿越。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "transition_attack",
+        "prototype_type": "positive",
+        "tactic_id": "line_break"
+      },
+      {
+        "evidence_summary": "约00:00.1切到连续比赛画面后，黑队在中场已有球权；持球人随即把地面球直接送过白队一条横向防守线，右侧队友在线后接球并继续带入禁区；不是沿边线绕行的普通横传。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "big_chance",
+        "prototype_type": "positive",
+        "tactic_id": "line_break"
+      },
+      {
+        "evidence_summary": "白衣持球者从禁区外中路送出向前传球，球的线路直接越过禁区弧前由多名深色球员构成的完整防守横线；白衣队友在线后禁区内明确接控并继续形成射门，触球、角色关系和结果均连续可见。；排除边界：防线在传球过程中回撤并略有收缩，但传球并非沿边绕开防线，也不是仅把球送入无人区域；",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "goal_highlight_package",
+        "prototype_type": "positive",
+        "tactic_id": "line_break"
+      },
+      {
+        "evidence_summary": "红队在右路受压下继续处理球，最后一脚被限制在外侧并转为普通传中或被封堵；未见倒三角、打身后、破线接控、二过一或第三人跑动的完整起点和结果。",
+        "failed_conditions": [
+          "红队在右路受压下继续处理球，最后一脚被限制在外侧并转为普通传中或被封堵；未见倒三角、打身后、破线接控、二过一或第三人跑动的完整起点和结果。"
+        ],
+        "missing_evidence": [],
+        "phase": "big_chance",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "line_break"
+      },
+      {
+        "evidence_summary": "不成立（破线传球）：可见动作属于外侧转移、普通向前短传和后续带球推进。防守队员的自然回撤容易造成已经越线的错觉，但没有形成“传球前在线前—一脚跨过整线—线后成功接应”的完整链条。 不成立（肋部渗透）：主链是连续侧翼推进、外围组织和普通传中。未见持球或接球队员明确进入边中通道并继续向防线身后产生穿透；末端球被防守群封堵/破坏以及人员自然聚集，均是更直接的替代解释。",
+        "failed_conditions": [
+          "不成立（破线传球）：可见动作属于外侧转移、普通向前短传和后续带球推进。防守队员的自然回撤容易造成已经越线的错觉，但没有形成“传球前在线前—一脚跨过整线—线后成功接应”的完整链条。 不成立（肋部渗透）：主链是连续侧翼推进、外围组织和普通传中。未见持球或接球队员明确进入边中通道并继续向防线身后产生穿透；末端球被防守群封堵/破坏以及人员自然聚集，均是更直接的替代解释。"
+        ],
+        "missing_evidence": [],
+        "phase": "positional_attack",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "line_break"
+      },
+      {
+        "evidence_summary": "终审拒绝“破线传球”：更符合持球突破、混战中的普通向前推进或从防守队员间隙穿行；",
+        "failed_conditions": [
+          "终审拒绝“破线传球”：更符合持球突破、混战中的普通向前推进或从防守队员间隙穿行；"
+        ],
+        "missing_evidence": [],
+        "phase": "big_chance",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "line_break"
+      },
+      {
+        "evidence_summary": "红队在禁区前沿和左侧推进，后段球向左侧纵深发展，但镜头很快切走；出脚时机、跑者相对防线的位置以及线后接控均无法稳定确认，不能补全为破线传球或打身后。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "镜头"
+        ],
+        "phase": "big_chance",
+        "prototype_type": "unobservable",
+        "tactic_id": "line_break"
+      },
+      {
+        "evidence_summary": "该片段主要呈现中前场常规组织和阵线移动。球体较小且抽帧间隔较大，无法建立破线传球、大范围转移、打身后、套边或反抢所需的完整可观察链；9.4秒短片也不足以稳定判定阵型三态、单双后腰或三中卫与四后卫等体系标签",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "不足以"
+        ],
+        "phase": "offside_trap",
+        "prototype_type": "unobservable",
+        "tactic_id": "line_break"
+      }
+    ],
+    "gemini": [
+      {
+        "evidence_summary": "红队约在开段从本方禁区前争回球权后立即纵向出球和推进，多名队友同步前插，白队连续转身回追；数秒内攻势由后场进入前场危险区，约八秒后才转为阵地处理。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "transition_attack",
+        "prototype_type": "positive",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "白队约在00:01解围黑队的前场进攻并控制第二点，随后多名白队球员立即向前冲刺，黑队整线持续转身回撤；白队没有回传整理，而是把球从本方防守三区直接推进过中线直至片段结束。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "counter_attack",
+        "prototype_type": "positive",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "深色队在右侧前场进攻后，中路争抢导致球权转归白色队，比赛方向随即反转。白色队迅速向左侧纵向推进，多名队友在中路及两侧同步前插；；排除边界：转换瞬间球体和具体触球次数较难辨清，但连续画面完整呈现了前场攻势、争抢换权、方向反转及攻守双方同步跑动链条，可排除开场已在推进、单人孤立带球和普通阵地推进",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "build_up",
+        "prototype_type": "positive",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "红队在白队已落位后长时间围绕禁区前沿和右路短传组织，末段只是向门前处理球；未看到夺回球权后的快速反击、穿过成形防线的接控或底线斜后回传。",
+        "failed_conditions": [
+          "红队在白队已落位后长时间围绕禁区前沿和右路短传组织，末段只是向门前处理球；未看到夺回球权后的快速反击、穿过成形防线的接控或底线斜后回传。"
+        ],
+        "missing_evidence": [],
+        "phase": "positional_attack",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "主要是界外球后的常规后场组织与中场推进。无法连续确认某次传球明确穿透完整防守线；界外球距离普通，也不属于大力手抛球。白色队没有多人同步前压，不能标为高位逼抢；深色队也不是夺回球权后数秒内高速纵向制造威胁，不能标为快速反击。",
+        "failed_conditions": [
+          "主要是界外球后的常规后场组织与中场推进。无法连续确认某次传球明确穿透完整防守线；界外球距离普通，也不属于大力手抛球。白色队没有多人同步前压，不能标为高位逼抢；深色队也不是夺回球权后数秒内高速纵向制造威胁，不能标为快速反击。"
+        ],
+        "missing_evidence": [],
+        "phase": "build_up",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "白队从已有阵地球权开始，经中路转向左侧后完成普通边路传中和射门；没有可见的球权夺回节点，外侧接应者也未清楚地从持球人身后套到身前；不强标反击或套边。",
+        "failed_conditions": [
+          "白队从已有阵地球权开始，经中路转向左侧后完成普通边路传中和射门；没有可见的球权夺回节点，外侧接应者也未清楚地从持球人身后套到身前；不强标反击或套边。"
+        ],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "targeted_negative",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "片段开头红队已处于向前推进状态，未呈现夺回球权的起点；随后传球是否越过成形横向防线并由线后队友控制也不清楚，不能标快速反击或破线传球。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "不清"
+        ],
+        "phase": "counter_attack",
+        "prototype_type": "unobservable",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "约00:00.6比赛时钟从19:05跳到22:07，第二段画面开始时黑队持球者已经接近禁区并随后个人带球射门；传球释放和跑者由线前到线后的起点均缺失，不能据此认定反击或打身后。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "缺失"
+        ],
+        "phase": "big_chance",
+        "prototype_type": "unobservable",
+        "tactic_id": "fast_break_pattern"
+      },
+      {
+        "evidence_summary": "红队由中场持球点向前送球，球路越过白队一层完整横向防守线，接球队员在线后中路空当迎球并继续控球推进；不是防线身前横传或个人带球穿越。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "transition_attack",
+        "prototype_type": "positive",
+        "tactic_id": "line_break"
+      },
+      {
+        "evidence_summary": "约00:00.1切到连续比赛画面后，黑队在中场已有球权；持球人随即把地面球直接送过白队一条横向防守线，右侧队友在线后接球并继续带入禁区；不是沿边线绕行的普通横传。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "big_chance",
+        "prototype_type": "positive",
+        "tactic_id": "line_break"
+      },
+      {
+        "evidence_summary": "白衣持球者从禁区外中路送出向前传球，球的线路直接越过禁区弧前由多名深色球员构成的完整防守横线；白衣队友在线后禁区内明确接控并继续形成射门，触球、角色关系和结果均连续可见。；排除边界：防线在传球过程中回撤并略有收缩，但传球并非沿边绕开防线，也不是仅把球送入无人区域；",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "goal_highlight_package",
+        "prototype_type": "positive",
+        "tactic_id": "line_break"
+      },
+      {
+        "evidence_summary": "红队在右路受压下继续处理球，最后一脚被限制在外侧并转为普通传中或被封堵；未见倒三角、打身后、破线接控、二过一或第三人跑动的完整起点和结果。",
+        "failed_conditions": [
+          "红队在右路受压下继续处理球，最后一脚被限制在外侧并转为普通传中或被封堵；未见倒三角、打身后、破线接控、二过一或第三人跑动的完整起点和结果。"
+        ],
+        "missing_evidence": [],
+        "phase": "big_chance",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "line_break"
+      },
+      {
+        "evidence_summary": "不成立（破线传球）：可见动作属于外侧转移、普通向前短传和后续带球推进。防守队员的自然回撤容易造成已经越线的错觉，但没有形成“传球前在线前—一脚跨过整线—线后成功接应”的完整链条。 不成立（肋部渗透）：主链是连续侧翼推进、外围组织和普通传中。未见持球或接球队员明确进入边中通道并继续向防线身后产生穿透；末端球被防守群封堵/破坏以及人员自然聚集，均是更直接的替代解释。",
+        "failed_conditions": [
+          "不成立（破线传球）：可见动作属于外侧转移、普通向前短传和后续带球推进。防守队员的自然回撤容易造成已经越线的错觉，但没有形成“传球前在线前—一脚跨过整线—线后成功接应”的完整链条。 不成立（肋部渗透）：主链是连续侧翼推进、外围组织和普通传中。未见持球或接球队员明确进入边中通道并继续向防线身后产生穿透；末端球被防守群封堵/破坏以及人员自然聚集，均是更直接的替代解释。"
+        ],
+        "missing_evidence": [],
+        "phase": "positional_attack",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "line_break"
+      },
+      {
+        "evidence_summary": "终审拒绝“破线传球”：更符合持球突破、混战中的普通向前推进或从防守队员间隙穿行；",
+        "failed_conditions": [
+          "终审拒绝“破线传球”：更符合持球突破、混战中的普通向前推进或从防守队员间隙穿行；"
+        ],
+        "missing_evidence": [],
+        "phase": "big_chance",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "line_break"
+      },
+      {
+        "evidence_summary": "红队在禁区前沿和左侧推进，后段球向左侧纵深发展，但镜头很快切走；出脚时机、跑者相对防线的位置以及线后接控均无法稳定确认，不能补全为破线传球或打身后。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "镜头"
+        ],
+        "phase": "big_chance",
+        "prototype_type": "unobservable",
+        "tactic_id": "line_break"
+      },
+      {
+        "evidence_summary": "该片段主要呈现中前场常规组织和阵线移动。球体较小且抽帧间隔较大，无法建立破线传球、大范围转移、打身后、套边或反抢所需的完整可观察链；9.4秒短片也不足以稳定判定阵型三态、单双后腰或三中卫与四后卫等体系标签",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "不足以"
+        ],
+        "phase": "offside_trap",
+        "prototype_type": "unobservable",
+        "tactic_id": "line_break"
+      }
+    ]
+  },
+  "schema_version": "tactical-agent-run-v1",
+  "skeptic": {
+    "instruction": "Challenge only the relevant exclusion conditions once.",
+    "reasons": [
+      "candidate_or_decision_disagreement",
+      "low_window_overlap:line_break"
+    ],
+    "triggered": true
+  }
+}

@@ -1,0 +1,49 @@
+{  "schema_version": "deep-commentary-exemplar-v1",
+  "clip_uid": "soccernetgs:SNGS-101",
+  "locked_fact": {
+    "fact_index": 0,
+    "tactic_id": "fast_break_pattern",
+    "tactic_zh": "快速反击",
+    "window": {
+      "start_s": 14.0,
+      "end_s": 24.0
+    },
+    "evidence_text": "灰队在本方防守三区控制球权后立即用向前传递发动进攻；两名灰队球员沿中路同步冲刺且红队整线转身回追；约9秒内从后场推进到禁区并完成进球，中间没有回传落位。"
+  },
+  "response": {
+    "fact_index": 0,
+    "evidence_spans": [
+      {
+        "start_s": 14.0,
+        "end_s": 16.0,
+        "observation": "灰队在本方防守三区控制住球权并立即向前传递。"
+      },
+      {
+        "start_s": 16.0,
+        "end_s": 21.0,
+        "observation": "两名灰队球员沿中路同步前插，红队多名球员转身回追。"
+      },
+      {
+        "start_s": 21.0,
+        "end_s": 24.0,
+        "observation": "灰队在约九秒内进入禁区并完成进球。"
+      }
+    ],
+    "position_or_action": "灰队夺回球权后立即前传，并由两名队友同步纵向冲刺。",
+    "opponent_constraint": "红队仍处于由攻转守的转身回追阶段，尚未形成稳定防守站位。",
+    "space_change": "连续纵向跑动利用了红队防线回撤过程中暴露的前进通道。",
+    "functional_effect": "灰队无需回传等待阵型展开，就能在对手重新落位前推进到禁区。",
+    "execution_result": "success",
+    "confidence": 90,
+    "confidence_reasons": [
+      "夺回球权、同步前插、对手回追和最终进球均在片段中连续可见。",
+      "锁定证据与视频中的攻守转换时序一致。"
+    ],
+    "evidence_gaps": [
+      "无法仅凭短片确认这是赛前预设还是临场选择。"
+    ],
+    "text_zh": "灰队一拿到球就让两名队友同步前插，趁红队还在转身回撤打开纵向通道，在防线落稳前就推进到禁区完成破门。",
+    "fallback_text_zh": "灰队夺球后立即前插，趁红队尚未落位直达禁区。",
+    "energy": "excited"
+  }
+}

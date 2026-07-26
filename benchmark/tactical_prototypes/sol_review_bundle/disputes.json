@@ -1,0 +1,160 @@
+{
+  "disputes": [
+    {
+      "clip_uid": "soccernetgs:SNGS-001",
+      "observations": [
+        {
+          "candidates": [
+            {
+              "confidence": "high",
+              "decision": "positive",
+              "exclusion_checks": [
+                "The attack is not carried out after long-term stable possession, the full process from ball regain to final attacking action is completely visible, this is not a fixed set piece opening"
+              ],
+              "missing_evidence": [],
+              "positive_evidence": [
+                "Blue team regained ball possession at midfield around 15s, immediately launched vertical long pass to push the attack forward, multiple blue attacking players sprint forward, white team players are clearly performing backtracking defense"
+              ],
+              "tactic_id": "fast_break_pattern",
+              "window": {
+                "end_s": 27.537,
+                "start_s": 15.0
+              }
+            },
+            {
+              "confidence": "high",
+              "decision": "positive",
+              "exclusion_checks": [
+                "This action is not dribbling across the line, not a clearance pass, the pass does not travel around the outer side of the opponent's defensive line"
+              ],
+              "missing_evidence": [],
+              "positive_evidence": [
+                "The controlled long pass from the blue midfield player crosses the stable white team midfield defensive line, the blue receiving player successfully controls the ball behind the opponent's defensive line"
+              ],
+              "tactic_id": "line_break",
+              "window": {
+                "end_s": 20.0,
+                "start_s": 15.0
+              }
+            }
+          ],
+          "clip_uid": "soccernetgs:SNGS-001",
+          "observer": "doubao"
+        },
+        {
+          "candidates": [
+            {
+              "confidence": "high",
+              "decision": "positive",
+              "exclusion_checks": [
+                "Not a standard high cross.",
+                "Not a flat sweep across the goal mouth.",
+                "The player clearly reached the byline area."
+              ],
+              "missing_evidence": [],
+              "positive_evidence": [
+                "The attacking player reaches the byline area on the right flank.",
+                "The ball is played back into the penalty area towards a supporting teammate."
+              ],
+              "tactic_id": "cutback",
+              "window": {
+                "end_s": 27.537,
+                "start_s": 22.53
+              }
+            }
+          ],
+          "clip_uid": "soccernetgs:SNGS-001",
+          "observer": "gemini"
+        }
+      ],
+      "prototype_context": {
+        "doubao": [
+          {
+            "evidence_summary": "红队约在开段从本方禁区前争回球权后立即纵向出球和推进，多名队友同步前插，白队连续转身回追；数秒内攻势由后场进入前场危险区，约八秒后才转为阵地处理。",
+            "failed_conditions": [],
+            "missing_evidence": [],
+            "phase": "transition_attack",
+            "prototype_type": "positive",
+            "tactic_id": "fast_break_pattern"
+          },
+          {
+            "evidence_summary": "白队约在00:01解围黑队的前场进攻并控制第二点，随后多名白队球员立即向前冲刺，黑队整线持续转身回撤；白队没有回传整理，而是把球从本方防守三区直接推进过中线直至片段结束。",
+            "failed_conditions": [],
+            "missing_evidence": [],
+            "phase": "counter_attack",
+            "prototype_type": "positive",
+            "tactic_id": "fast_break_pattern"
+          },
+          {
+            "evidence_summary": "深色队在右侧前场进攻后，中路争抢导致球权转归白色队，比赛方向随即反转。白色队迅速向左侧纵向推进，多名队友在中路及两侧同步前插；；排除边界：转换瞬间球体和具体触球次数较难辨清，但连续画面完整呈现了前场攻势、争抢换权、方向反转及攻守双方同步跑动链条，可排除开场已在推进、单人孤立带球和普通阵地推进",
+            "failed_conditions": [],
+            "missing_evidence": [],
+            "phase": "build_up",
+            "prototype_type": "positive",
+            "tactic_id": "fast_break_pattern"
+          },
+          {
+            "evidence_summary": "红队由中场持球点向前送球，球路越过白队一层完整横向防守线，接球队员在线后中路空当迎球并继续控球推进；不是防线身前横传或个人带球穿越。",
+            "failed_conditions": [],
+            "missing_evidence": [],
+            "phase": "transition_attack",
+            "prototype_type": "positive",
+            "tactic_id": "line_break"
+          },
+          {
+            "evidence_summary": "约00:00.1切到连续比赛画面后，黑队在中场已有球权；持球人随即把地面球直接送过白队一条横向防守线，右侧队友在线后接球并继续带入禁区；不是沿边线绕行的普通横传。",
+            "failed_conditions": [],
+            "missing_evidence": [],
+            "phase": "big_chance",
+            "prototype_type": "positive",
+            "tactic_id": "line_break"
+          },
+          {
+            "evidence_summary": "白衣持球者从禁区外中路送出向前传球，球的线路直接越过禁区弧前由多名深色球员构成的完整防守横线；白衣队友在线后禁区内明确接控并继续形成射门，触球、角色关系和结果均连续可见。；排除边界：防线在传球过程中回撤并略有收缩，但传球并非沿边绕开防线，也不是仅把球送入无人区域；",
+            "failed_conditions": [],
+            "missing_evidence": [],
+            "phase": "goal_highlight_package",
+            "prototype_type": "positive",
+            "tactic_id": "line_break"
+          }
+        ],
+        "gemini": [
+          {
+            "evidence_summary": "红队从右侧接近底线的位置沿地面斜后回传到禁区中路偏后区域，随后外围队友形成接应；8 FPS连续帧显示球路主动回到后方，不是封堵弹球、解围或向门前横传中。",
+            "failed_conditions": [],
+            "missing_evidence": [],
+            "phase": "big_chance",
+            "prototype_type": "positive",
+            "tactic_id": "cutback"
+          },
+          {
+            "evidence_summary": "蓝队右路持球队员推进到接近底线的位置；他没有直接向门前起高球而是把球低平回送到点球点附近；中路队友迎球完成射门；传球方向由底线侧折返向后而非普通横传。",
+            "failed_conditions": [],
+            "missing_evidence": [],
+            "phase": null,
+            "prototype_type": "positive",
+            "tactic_id": "cutback"
+          },
+          {
+            "evidence_summary": "黄色队右路持球队员推进到接近底线的位置并吸引防守者回收；随后把球低平斜后回送到点球点附近；中路队友迎球完成射门并得分；球路明显折返而不是向门前起高球。",
+            "failed_conditions": [],
+            "missing_evidence": [],
+            "phase": null,
+            "prototype_type": "positive",
+            "tactic_id": "cutback"
+          }
+        ]
+      },
+      "schema_version": "tactical-agent-run-v1",
+      "skeptic": {
+        "instruction": "Challenge only the relevant exclusion conditions once.",
+        "reasons": [
+          "candidate_or_decision_disagreement"
+        ],
+        "triggered": true
+      }
+    }
+  ],
+  "review_instructions": "Review exclusions once; never promote to gold without a human label.",
+  "schema_version": "tactical-sol-review-v1"
+}

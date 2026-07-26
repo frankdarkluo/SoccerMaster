@@ -112,7 +112,7 @@ class QWEN2_5VL_JN_AND_ROLE_BATCH(DetectionLevelModule):
 
         self.model = model_api.from_pretrained(
             self.model_path,
-            dtype=torch.bfloat16,
+            torch_dtype=torch.bfloat16,
             attn_implementation="sdpa",
             device_map="auto",
         )

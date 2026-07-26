@@ -6,7 +6,7 @@ import torch
 import cv2
 import zipfile
 import pickle
-from sam2.build_sam import build_sam2_video_predictor
+from sam2.build_sam import build_sam2_video_predictor, build_sam2_video_predictor_hf
 from collections import defaultdict
 from tqdm import tqdm
 import argparse
@@ -51,7 +51,7 @@ os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 def parse_args():
     parser = argparse.ArgumentParser(description='SAM2 Based Inference - Multi-GPU Multi-Process')
     parser.add_argument('--sam_checkpoint', type=str, default="../checkpoints/sam2.1_hiera_large.pt", 
-                        help='Path to SAM2 checkpoint')
+                        help='Path to SAM2 checkpoint file, or Hugging Face model id like facebook/sam2.1-hiera-large')
     parser.add_argument('--sam_config', type=str, default="configs/sam2.1/sam2.1_hiera_l.yaml", 
                         help='Path to SAM2 config file')
     parser.add_argument('--input_pklz', type=str, required=True, 
@@ -118,6 +118,20 @@ def parse_args():
                         help='Maximum number of processes per GPU (default: 1)')
     
     return parser.parse_args()
+
+def _is_hf_checkpoint(value: str) -> bool:
+    return value.startswith('facebook/') or value.startswith('hf://facebook/')
+
+
+def _build_sam2_predictor(config_path: str, checkpoint: str, gpu_id: int):
+    if _is_hf_checkpoint(checkpoint):
+        model_id = checkpoint
+        if model_id.startswith('hf://'):
+            model_id = model_id.split('hf://', 1)[1]
+        return build_sam2_video_predictor_hf(model_id, device=f"cuda:{gpu_id}")
+    if not os.path.isfile(checkpoint):
+        raise FileNotFoundError(f"SAM2 checkpoint not found: {checkpoint}. Set --sam_checkpoint to an existing file or a HuggingFace model id.")
+    return build_sam2_video_predictor(config_path, checkpoint, device=f"cuda:{gpu_id}")
 
 # Process-safe result collector
 class ProcessSafeResultCollector:
@@ -250,7 +264,7 @@ def _run_bounded_sam2_propagation(
     )
 
     video_segments = {}
-    with torch.autocast(device_type=f"cuda:{gpu_id}", dtype=torch.bfloat16):
+    with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
         forward_frames = max(1, propagate_end - prompt_frame_idx + 1)
         for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(
             inference_state,
@@ -732,8 +746,8 @@ def process_single_video(video_id, args, gpu_id, progress_manager, result_collec
             propagate_stats = []
 
         gc.collect()
-        predictor = build_sam2_video_predictor(
-            args.sam_config, args.sam_checkpoint, device=f"cuda:{gpu_id}"
+        predictor = _build_sam2_predictor(
+            args.sam_config, args.sam_checkpoint, gpu_id
         )
         torch.cuda.empty_cache()
         print(f"[GPU {gpu_id}] Loading SAM2 inference state for {num_frames} frames...")

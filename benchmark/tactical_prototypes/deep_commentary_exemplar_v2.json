@@ -1,0 +1,61 @@
+{
+ "schema_version": "deep-commentary-exemplar-v2",
+ "clip_uid": "soccernetgs:SNGS-101",
+ "provenance": "由项目人员依据完整训练片段与锁定证据人工编写，不是模型生成。",
+ "locked_fact": {
+  "fact_index": 0,
+  "tactic_id": "fast_break_pattern",
+  "tactic_zh": "快速反击",
+  "window": {
+   "start_s": 0,
+   "end_s": 9
+  },
+  "evidence_text": "灰队夺回球权后多人纵向前插，对手转身回撤，灰队在防线重组前进入禁区并进球。"
+ },
+ "response": {
+  "fact_index": 0,
+  "evidence_spans": [
+   {
+    "start_s": 0.5,
+    "end_s": 2.5,
+    "observation": "灰队夺回球权后立即向前传递，两名队友同步纵向前插。"
+   },
+   {
+    "start_s": 2.5,
+    "end_s": 6.5,
+    "observation": "红队转身回撤时防守间距被拉开，灰队连续向中路推进。"
+   },
+   {
+    "start_s": 6.5,
+    "end_s": 9,
+   "observation": "灰队在红队重新落位前进入禁区并完成破门。"
+   }
+  ],
+  "state_before": "灰队刚夺回球权，红队由进攻转为回防，尚未重新形成紧凑的防守距离。",
+  "position_or_action": "夺回球权后立即向前传递，并由多人同步纵向前插。",
+  "observed_change": "红队球员集体转身回追，前后防守距离在回撤过程中被拉长。",
+  "space_origin": "created",
+  "space_evidence": "灰队连续向前传递和多人前插迫使红队边回撤边调整，画面中防守间距随之扩大。",
+  "opponent_constraint": "对手被迫转身回追，难以及时压缩身前与身后的距离。",
+  "space_change": "回撤过程拉开了防守间距，形成向禁区推进的中路通道。",
+  "functional_effect": "连续前插让持球队员能在防线重组前把球推进到禁区。",
+  "optional_dilemma": null,
+  "terminal_sequence": [
+   "灰队在红队重新落位前进入禁区。",
+   "灰队完成射门并取得进球。"
+  ],
+  "mechanism_chain": "夺球后的快速向前传递和多人前插迫使红队转身回撤并拉长防守距离，灰队由此在防线重组前利用中路通道进入禁区。",
+  "mechanism_result": "effective",
+  "play_result": "success",
+  "confidence": 90,
+  "confidence_reasons": [
+   "夺球、多人前插、对手回撤和破门在片段中连续可见。"
+  ],
+  "evidence_gaps": [],
+  "text_zh": "灰队夺回球权后立即向前传递，两名队友同步纵向前插，迫使红队在转身回追中拉开防守间距。连续跑动由此打通中路推进通道，灰队赶在防线重新落位前进入禁区并完成破门。",
+  "energy": "excited"
+ },
+ "audio_adaptation_example": {
+  "audio_text_zh": "灰队夺球后多人同步前插，利用对手未落位的中路空间完成破门。"
+ }
+}

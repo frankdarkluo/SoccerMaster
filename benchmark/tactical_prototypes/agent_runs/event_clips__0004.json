@@ -1,0 +1,317 @@
+{
+  "clip_uid": "event_clips:0004",
+  "contact_sheet_profile": "640",
+  "observations": [
+    {
+      "api_usage": [
+        {
+          "completion_tokens": 1367,
+          "completion_tokens_details": {
+            "reasoning_tokens": 1122
+          },
+          "prompt_tokens": 1887,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 3254
+        },
+        {
+          "completion_tokens": 455,
+          "completion_tokens_details": {
+            "reasoning_tokens": 196
+          },
+          "prompt_tokens": 4326,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 4781
+        }
+      ],
+      "candidates": [
+        {
+          "checker_results": {
+            "trajectory": [
+              {
+                "checker": "restart_gate",
+                "reason": "no restart at window origin",
+                "verdict": "pass"
+              },
+              {
+                "checker": "delivery_gate",
+                "reason": "delivery kind not established",
+                "verdict": "insufficient"
+              }
+            ],
+            "vlm_claim": [
+              {
+                "checker": "delivery_gate",
+                "reason": "delivery is cross, not an open-play penetrating pass",
+                "verdict": "veto"
+              }
+            ]
+          },
+          "claimed_evidence": {
+            "chaos": null,
+            "corner_landing_zone": null,
+            "delivery_kind": "cross",
+            "regain": null,
+            "restart_at_origin": null
+          },
+          "confidence": "high",
+          "decision": "positive",
+          "evidence": {
+            "trajectory": {
+              "clip_uid": "event_clips:0004",
+              "corner_landing_zone": null,
+              "delivery_kind": null,
+              "events": [],
+              "notes": "attacking side ambiguous: no possession events emitted; no key kick detected",
+              "source": "gsr_trajectory",
+              "tactic_id": "run_in_behind"
+            },
+            "vlm_claim": {
+              "clip_uid": "event_clips:0004",
+              "corner_landing_zone": null,
+              "delivery_kind": "cross",
+              "events": [],
+              "notes": "",
+              "source": "vlm_claim",
+              "tactic_id": "run_in_behind"
+            }
+          },
+          "exclusion_checks": [
+            "无可见证据显示该进攻球员初始位置就在防线身后",
+            "无可见证据显示该越线效果仅由防守防线前压造成"
+          ],
+          "missing_evidence": [],
+          "positive_evidence": [
+            "进攻方无球球员从白色球衣防守方防线身前前插，进入防线身后的禁区区域接应传球完成射门得分"
+          ],
+          "tactic_id": "run_in_behind",
+          "verdict": {
+            "reason": "delivery is cross, not an open-play penetrating pass",
+            "tier": "rejected"
+          },
+          "window": {
+            "end_s": 5.592,
+            "start_s": 0.0
+          }
+        }
+      ],
+      "clip_uid": "event_clips:0004",
+      "observer": "doubao"
+    },
+    {
+      "api_usage": [
+        {
+          "completion_tokens": 266,
+          "prompt_tokens": 1685,
+          "total_tokens": 1951
+        },
+        {
+          "completion_tokens": 266,
+          "prompt_tokens": 3320,
+          "total_tokens": 3586
+        }
+      ],
+      "candidates": [
+        {
+          "checker_results": {
+            "trajectory": [
+              {
+                "checker": "corner_landing",
+                "reason": "landing zone not established",
+                "verdict": "insufficient"
+              }
+            ],
+            "vlm_claim": [
+              {
+                "checker": "corner_landing",
+                "reason": "first contact at far_post",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "claimed_evidence": {
+            "chaos": null,
+            "corner_landing_zone": "far_post",
+            "delivery_kind": "corner_cross",
+            "regain": null,
+            "restart_at_origin": "corner"
+          },
+          "confidence": "high",
+          "decision": "positive",
+          "evidence": {
+            "trajectory": {
+              "clip_uid": "event_clips:0004",
+              "corner_landing_zone": null,
+              "delivery_kind": null,
+              "events": [],
+              "notes": "attacking side ambiguous: no possession events emitted; no key kick detected",
+              "source": "gsr_trajectory",
+              "tactic_id": "corner-near-far-post"
+            },
+            "vlm_claim": {
+              "clip_uid": "event_clips:0004",
+              "corner_landing_zone": "far_post",
+              "delivery_kind": "corner_cross",
+              "events": [
+                {
+                  "kind": "corner",
+                  "t": 0.0,
+                  "team": "attacking"
+                }
+              ],
+              "notes": "",
+              "source": "vlm_claim",
+              "tactic_id": "corner-near-far-post"
+            }
+          },
+          "exclusion_checks": [
+            "The landing zone is clearly directed towards the far post area.",
+            "The delivery is a corner kick."
+          ],
+          "missing_evidence": [],
+          "positive_evidence": [
+            "The ball is delivered from the corner arc into the penalty area.",
+            "Multiple attackers converge towards the far post area to contest the ball."
+          ],
+          "tactic_id": "corner-near-far-post",
+          "verdict": {
+            "reason": "corner-near-far-post: VLM-claimed evidence checks passed",
+            "tier": "possible"
+          },
+          "window": {
+            "end_s": 5.592,
+            "start_s": 0.0
+          }
+        }
+      ],
+      "clip_uid": "event_clips:0004",
+      "observer": "gemini"
+    }
+  ],
+  "prototype_context": {
+    "doubao": [
+      {
+        "evidence_summary": "红队一脚把球送入右路防线身后；出球前右路跑者仍在白队最后线前沿或近似平齐，随后随出球越线追向禁区右侧落点，白队后卫回追且门将进入处理区域。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "counter_attack",
+        "prototype_type": "positive",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "深色队跑者在白队最后线附近启动，队友把球送到防线侧后方而非脚下，白队边路后卫随即转身回追，跑者进入身后空间追球；排除普通顺边脚下传递。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "big_chance",
+        "prototype_type": "positive",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "蓝队主罚前场任意球时多名攻击手从白队防线前沿同步启动；传球越过整条后卫线落向其身后；至少一名蓝队球员越线追球且事件标注在约00:24确认越位。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "红队从已有球权开始进行常规中前场推进，白队大部分时间已有多人位于球后；未见清楚的夺回球权起点、反越位身后球、第三人跑动或穿过完整防线的单次传球。",
+        "failed_conditions": [
+          "红队从已有球权开始进行常规中前场推进，白队大部分时间已有多人位于球后；未见清楚的夺回球权起点、反越位身后球、第三人跑动或穿过完整防线的单次传球。"
+        ],
+        "missing_evidence": [],
+        "phase": "counter_attack",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "主要内容是个人带球、连续地面争抢以及随后的一般推进。不能判为快速反击，因为画面未显示明确夺权后立即纵向冲击未落位防线；不能判为战术犯规，因为倒地铲抢未显示在高威胁转换中故意阻断，且进攻仍在继续；也未出现二过一 / 撞墙配合、第三人跑动、打身后 / 反越位跑位等完整可见链条。",
+        "failed_conditions": [
+          "主要内容是个人带球、连续地面争抢以及随后的一般推进。不能判为快速反击，因为画面未显示明确夺权后立即纵向冲击未落位防线；不能判为战术犯规，因为倒地铲抢未显示在高威胁转换中故意阻断，且进攻仍在继续；也未出现二过一 / 撞墙配合、第三人跑动、打身后 / 反越位跑位等完整可见链条。"
+        ],
+        "missing_evidence": [],
+        "phase": "counter_attack",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "误判为打身后 / 反越位跑位：发任意球长传",
+        "failed_conditions": [
+          "restart_delivery"
+        ],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "targeted_negative",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "片段包含越位判罚和转播越位线回放，但逐帧无法确认进攻者从防线前或平线启动，也没有看到多名后卫在传球瞬间同步前提；静态越位结果不足以标打身后或造越位。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "无法确认",
+          "不足以"
+        ],
+        "phase": "offside_trap",
+        "prototype_type": "unobservable",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "决定性缺口是起跑位置与传球时序不清。现象可由普通向前传配合整体压上解释，无法排除跑者原本已在前方，不能确认“打身后 / 反越位跑位”。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "不能确认",
+          "不清",
+          "时序不清"
+        ],
+        "phase": "big_chance",
+        "prototype_type": "unobservable",
+        "tactic_id": "run_in_behind"
+      }
+    ],
+    "gemini": [
+      {
+        "evidence_summary": "多角度回放显示角球先进入前点人群并发生第一触，皮球改变线路横向越过门前后由后点白队球员完成第二次处理；不是直接越过所有人传到后点或普通门前混战。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "goal_highlight_package",
+        "prototype_type": "positive",
+        "tactic_id": "corner-near-far-post"
+      },
+      {
+        "evidence_summary": "白队角球开出前多人在小禁区与点球点之间集结；主罚瞬间多名白队球员同步冲向近门柱和门前同一落点；皮球约00:06送入该区域并形成争顶；不是开放比赛中的普通传中。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "corner-near-far-post"
+      },
+      {
+        "evidence_summary": "右队11号从画面下方角旗区主罚；15号、8号与43号从点球点附近同步冲向近门柱和小禁区前点；皮球落向同一区域并在争顶后被解围；不是无明确落点的普通传中。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "corner-near-far-post"
+      }
+    ]
+  },
+  "prototype_excluded_counts": {
+    "doubao": 3,
+    "gemini": 0
+  },
+  "schema_version": "tactical-agent-run-v1",
+  "skeptic": {
+    "instruction": "Challenge only the relevant exclusion conditions once.",
+    "reasons": [
+      "candidate_or_decision_disagreement"
+    ],
+    "triggered": true
+  },
+  "sol_arbitration": {
+    "status": "pending_configuration",
+    "triggered": true
+  }
+}

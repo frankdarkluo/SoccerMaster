@@ -9,16 +9,20 @@ from typing import Callable
 
 from pipeline.atomic import atomic_copy, atomic_write_json
 from pipeline.config import PipelineConfig
-from pipeline.relations.build import build_relations
-from pipeline.relations.radar import render_radar_frames
+from pipeline.relations.state import (
+    build_tactical_state,
+    project_proposal_events,
+    project_proposal_state,
+)
 from pipeline.stage2b.digest import build_tracking_digest, load_frames
 from pipeline.stage2b.events import get_event
-from pipeline.stage2b.generate import ark_chat, observe_direct, verify_event_window
+from pipeline.stage2b.generate import ENERGIES, ark_chat, observe_direct, verify_event_window
 from pipeline.stage2b.hybrid import (
     _fallback_preserves_event, assign_confidence, audit_commentary,
-    candidate_windows, compose_hybrid, concise_event_wording, structured_wording,
-    verify_candidates,
+    commentary_windows, compose_hybrid, concise_event_wording, structured_wording,
 )
+from pipeline.stage2b.kb import load_catalog, project_public_catalog
+from pipeline.stage2b.tactics import CHECKERS, process_tactical_proposals
 from pipeline.stage2b.video import video_duration_s
 
 log = logging.getLogger(__name__)
@@ -31,17 +35,50 @@ def _clip_path(output_dir: Path, clip_dir: Path) -> Path:
     raise FileNotFoundError("clip.mp4 not found in output or clip directory")
 
 
-def _propose_candidates(relations: dict, events: list[dict], windows: list[dict], duration_s: float,
-                        call: Callable) -> list[dict]:
-    prompt = "Propose sparse tactical candidates from these computed relations. Return a JSON array only.\n"
-    prompt += json.dumps({"events": events, "relations": relations,
-                          "approved_windows": windows,
-                          "duration_s": duration_s}, ensure_ascii=False)
+def _request_tactical_proposals(payload: dict, call: Callable) -> object:
+    prompt = (
+        "Propose sparse observable tactical patterns. Return a JSON array only. "
+        "Use only the supplied public concepts and canonical team IDs.\\n"
+    )
+    prompt += json.dumps(payload, ensure_ascii=False)
     try:
-        proposed = json.loads(call(prompt, temperature=0.2))
+        return json.loads(call(prompt, temperature=0.2))
     except (TypeError, json.JSONDecodeError):
-        proposed = []
-    return verify_candidates(relations, proposed, windows)
+        return []
+
+
+def generate_tactical_artifacts(
+    tracking_json,
+    *,
+    clip_id,
+    state_source,
+    duration_s,
+    events,
+    catalog,
+    allowed_concept_ids,
+    call,
+):
+    """Build private state, audit public proposals, and return verified facts."""
+    tracking_json = Path(tracking_json)
+    metadata = json.loads(tracking_json.read_text()).get("info", {})
+    fps = float(metadata.get("frame_rate", 25.0))
+    state = build_tactical_state(
+        load_frames(tracking_json), fps=fps, clip_id=clip_id, state_source=state_source,
+    )
+    if not allowed_concept_ids:
+        return state, [], []
+    payload = {
+        "catalog": project_public_catalog(catalog, concept_ids=allowed_concept_ids),
+        "tactical_state": project_proposal_state(state),
+        "events": project_proposal_events(events, state=state),
+        "duration_s": duration_s,
+    }
+    raw = _request_tactical_proposals(payload, call)
+    audits, facts = process_tactical_proposals(
+        raw, catalog=catalog, tactical_state=state, duration_s=duration_s,
+        allowed_concept_ids=allowed_concept_ids, checkers=CHECKERS,
+    )
+    return state, audits, facts
 
 
 def _cache_complete(config: PipelineConfig, mode: str) -> bool:
@@ -49,8 +86,9 @@ def _cache_complete(config: PipelineConfig, mode: str) -> bool:
         return False
     hybrid = (
         config.commentary_direct_json.is_file()
-        and config.tactical_candidates_json.is_file()
-        and config.relations_json.is_file()
+        and config.tactical_state_json.is_file()
+        and config.tactical_proposals_json.is_file()
+        and config.verified_tactical_facts_json.is_file()
     )
     return hybrid if mode == "hybrid" else not hybrid
 
@@ -155,7 +193,8 @@ def _reconcile_direct(events: list[dict], direct: list[dict], duration_s=None) -
             fallback_text_zh="".join(wording[2] for wording in wordings),
             fallback_text_en=" ".join(wording[3] for wording in wordings),
             events_referenced=refs,
-            tactical_candidates_referenced=[],
+            tactical_facts_referenced=[],
+            tactical_claims=[],
             event_claims=[{
                 "event_id": ref,
                 "event_code": required[ref].get("event_code"),
@@ -233,7 +272,8 @@ def _reconcile_direct(events: list[dict], direct: list[dict], duration_s=None) -
             "text_zh": zh, "text_en": en,
             "fallback_text_zh": fallback_zh, "fallback_text_en": fallback_en,
             "energy": event.get("energy", "engaged"),
-            "events_referenced": [event_id], "tactical_candidates_referenced": [],
+            "events_referenced": [event_id], "tactical_facts_referenced": [],
+            "tactical_claims": [],
             "event_claims": [claim],
         })
         reconciled.sort(key=lambda segment: segment["timestamp_s"])
@@ -241,7 +281,7 @@ def _reconcile_direct(events: list[dict], direct: list[dict], duration_s=None) -
     duration = float(duration_s) if duration_s is not None else max(
         [segment["end_s"] for segment in reconciled] or [0.1]
     )
-    errors = audit_commentary(reconciled, events, [], duration)
+    errors = audit_commentary(reconciled, events, [], set(), duration)
     if errors:
         raise ValueError("invalid reconciled direct commentary: " + "; ".join(errors))
     return reconciled
@@ -273,30 +313,123 @@ def run_stage2b(output_dir, clip_dir, mode="hybrid", force=False,
     atomic_write_json(config.event_spine_json, events)
 
     if mode == "direct":
-        for path in (config.commentary_direct_json, config.tactical_candidates_json,
-                     config.relations_json):
+        for path in (
+            config.commentary_direct_json,
+            config.tactical_state_json,
+            config.tactical_proposals_json,
+            config.verified_tactical_facts_json,
+            config.relations_json,
+        ):
             path.unlink(missing_ok=True)
         return atomic_write_json(config.commentary_json, direct)
 
     atomic_write_json(config.commentary_direct_json, direct)
+    catalog = load_catalog(checker_names=frozenset(CHECKERS))
+    enabled_ids = {
+        concept["id"]
+        for concept in catalog["concepts"]
+        if concept["production_enabled"]
+    }
     try:
-        relations = build_relations(
-            frames, fps=float(config.fps), snapshot_hz=config.snapshot_hz,
+        state, proposals, facts = generate_tactical_artifacts(
+            predictions,
+            clip_id=clip_dir.name,
+            state_source="gsr_prediction",
+            duration_s=duration,
+            events=events,
+            catalog=catalog,
+            allowed_concept_ids=enabled_ids,
+            call=call,
         )
-        atomic_write_json(config.relations_json, relations)
-        render_radar_frames(relations, config.radar_dir, hz=config.radar_hz)
+        atomic_write_json(config.tactical_state_json, state)
+        atomic_write_json(config.tactical_proposals_json, proposals)
+        atomic_write_json(config.verified_tactical_facts_json, facts)
     except Exception:
-        log.exception("Stage 2B relations/radar failed; using direct commentary")
+        log.exception("Stage 2B tactical verification failed; using direct commentary")
         atomic_copy(config.commentary_direct_json, config.commentary_json)
         return config.commentary_json
 
-    windows = candidate_windows(events, duration, "incomplete_attack")
-    candidates = _propose_candidates(relations, events, windows, duration, call)
-    atomic_write_json(config.tactical_candidates_json, candidates)
+    if not enabled_ids:
+        return atomic_copy(config.commentary_direct_json, config.commentary_json)
+    windows = commentary_windows(facts, duration)
     commentary = compose_hybrid(
-        events, direct, candidates, windows, duration, call=call,
+        events, direct, facts, enabled_ids, windows, duration, call=call,
     )
     return atomic_write_json(config.commentary_json, commentary)
+
+
+def generate_human_review_commentary(review_path, output_root, clip_uids=None,
+                                      force=False, call=ark_chat) -> list[Path]:
+    """Turn locked human-correct tactical facts into Chinese commentary text."""
+    rows = [
+        json.loads(line) for line in Path(review_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    selected = set(clip_uids or ())
+    grouped = {}
+    for row in rows:
+        if row.get("verdict") != "correct":
+            continue
+        if selected and row.get("clip_uid") not in selected:
+            continue
+        grouped.setdefault(row["clip_uid"], []).append(row)
+    outputs = []
+    for clip_uid, facts in sorted(grouped.items()):
+        clip_id = clip_uid.split(":", 1)[-1]
+        output = Path(output_root) / clip_id / "comments" / "commentary_human_review.json"
+        if not force and output.is_file():
+            outputs.append(output)
+            continue
+        locked = [{
+            "fact_index": index,
+            "tactic_zh": fact["tactic_zh"],
+            "window": fact["window"],
+            "evidence_text": fact["evidence_text"],
+        } for index, fact in enumerate(facts)]
+        prompt = (
+            "你是中文足球解说员。只把以下人工审核为正确的锁定事实改写成自然、简洁的解说，"
+            "不得重新判断战术，不得添加底稿中没有的球员号码、球队、结果或因果。"
+            "返回 JSON 数组，每项只能包含 fact_index、text_zh、energy；fact_index 必须逐项对应输入，"
+            "energy 只能是 calm、engaged、excited、explosive。\n"
+            + json.dumps(locked, ensure_ascii=False)
+        )
+        payload = json.loads(call(prompt, temperature=0.3))
+        if not isinstance(payload, list) or len(payload) != len(facts):
+            raise ValueError(f"{clip_uid}: commentary count does not match human facts")
+        generated = {}
+        for item in payload:
+            if not isinstance(item, dict) or set(item) != {"fact_index", "text_zh", "energy"}:
+                raise ValueError(f"{clip_uid}: invalid commentary item")
+            index, text, energy = item["fact_index"], item["text_zh"], item["energy"]
+            if (not isinstance(index, int) or isinstance(index, bool)
+                    or index in generated or not 0 <= index < len(facts)):
+                raise ValueError(f"{clip_uid}: invalid fact_index")
+            if not isinstance(text, str) or not text.strip() or energy not in ENERGIES:
+                raise ValueError(f"{clip_uid}: invalid text or energy")
+            generated[index] = (text.strip(), energy)
+        segments = []
+        for index, fact in enumerate(facts):
+            text, energy = generated[index]
+            segments.append({
+                "kind": "tactical",
+                "timestamp_s": float(fact["window"]["start_s"]),
+                "end_s": float(fact["window"]["end_s"]),
+                "text_zh": text,
+                "fallback_text_zh": f"{fact['tactic_zh']}。",
+                "energy": energy,
+                "human_review_reference": {
+                    "tactic_id": fact["tactic_id"],
+                    "tactic_zh": fact["tactic_zh"],
+                    "evidence_text": fact["evidence_text"],
+                },
+            })
+        atomic_write_json(output, {
+            "schema_version": "human-review-commentary-v1",
+            "clip_uid": clip_uid,
+            "commentary": segments,
+        })
+        outputs.append(output)
+    return outputs
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -305,11 +438,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--clip-dir", type=Path, default=None)
     parser.add_argument("--mode", choices=["direct", "hybrid"], default="hybrid")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--human-review", type=Path)
+    parser.add_argument("--clip-uid", action="append")
     return parser
 
 
 def main() -> None:
     args = build_arg_parser().parse_args()
+    if args.human_review:
+        for result in generate_human_review_commentary(
+                args.human_review, args.output_dir, args.clip_uid,
+                force=args.force):
+            print(result)
+        return
     clip_dir = args.clip_dir or args.output_dir
     result = run_stage2b(args.output_dir, clip_dir, mode=args.mode, force=args.force)
     print(result)

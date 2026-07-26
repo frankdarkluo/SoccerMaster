@@ -1,0 +1,27 @@
+{
+  "cross_split_group_collisions": [],
+  "gold_count": 217,
+  "group_assignments": {
+    "soccernet_challenge:opaque": "retrieval",
+    "soccernet_game:11": "retrieval",
+    "soccernet_game:2": "retrieval",
+    "soccernet_game:3": "retrieval",
+    "soccernet_game:4": "retrieval",
+    "soccernet_game:5": "retrieval",
+    "soccernet_game:6": "retrieval",
+    "soccernet_game:7": "retrieval",
+    "soccernet_game:8": "retrieval",
+    "soccernet_game:9": "retrieval",
+    "source_video_sha256:32b9f84c6de9376a17c0439b43df7c0463696a64ad411b7eda9acb045d119904": "retrieval",
+    "source_video_sha256:8a24967ae554950ea990576df25be0a677aad95d26bf4c745eec3166e0e56be5": "retrieval",
+    "source_video_sha256:ff8a4ab97babe8f618f85e1710319e589ad99faf88a70265d6e3a08a1b58b07f": "test"
+  },
+  "known_development_groups": [
+    "soccernet_challenge:opaque",
+    "soccernet_game:7"
+  ],
+  "retrieval_group_count": 12,
+  "schema_version": "tactical-source-disjoint-evaluation-v1",
+  "silver_count": 207,
+  "test_group_count": 1
+}

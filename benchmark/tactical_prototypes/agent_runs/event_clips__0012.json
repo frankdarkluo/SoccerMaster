@@ -1,0 +1,576 @@
+{
+  "clip_uid": "event_clips:0012",
+  "contact_sheet_profile": "640",
+  "observations": [
+    {
+      "api_usage": [
+        {
+          "completion_tokens": 2671,
+          "completion_tokens_details": {
+            "reasoning_tokens": 2132
+          },
+          "prompt_tokens": 1887,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 4558
+        },
+        {
+          "completion_tokens": 749,
+          "completion_tokens_details": {
+            "reasoning_tokens": 189
+          },
+          "prompt_tokens": 5709,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 6458
+        }
+      ],
+      "candidates": [
+        {
+          "checker_results": {
+            "trajectory": [
+              {
+                "checker": "restart_gate",
+                "reason": "no restart at window origin",
+                "verdict": "pass"
+              },
+              {
+                "checker": "delivery_gate",
+                "reason": "delivery kind not established",
+                "verdict": "insufficient"
+              }
+            ],
+            "vlm_claim": [
+              {
+                "checker": "delivery_gate",
+                "reason": "delivery open_play_pass ok",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "claimed_evidence": {
+            "chaos": null,
+            "corner_landing_zone": null,
+            "delivery_kind": "open_play_pass",
+            "regain": null,
+            "restart_at_origin": null
+          },
+          "confidence": "high",
+          "decision": "positive",
+          "evidence": {
+            "trajectory": {
+              "clip_uid": "event_clips:0012",
+              "corner_landing_zone": null,
+              "delivery_kind": null,
+              "events": [],
+              "notes": "attacking side ambiguous: no possession events emitted; no key kick detected",
+              "source": "gsr_trajectory",
+              "tactic_id": "run_in_behind"
+            },
+            "vlm_claim": {
+              "clip_uid": "event_clips:0012",
+              "corner_landing_zone": null,
+              "delivery_kind": "open_play_pass",
+              "events": [],
+              "notes": "",
+              "source": "vlm_claim",
+              "tactic_id": "run_in_behind"
+            }
+          },
+          "exclusion_checks": [
+            "跑者初始位置不在防线身后",
+            "不存在仅由防线前压造成的表观越线"
+          ],
+          "missing_evidence": [],
+          "positive_evidence": [
+            "进攻跑者通过自身前插从防守线身前进入防守线身后的空档区域"
+          ],
+          "tactic_id": "run_in_behind",
+          "verdict": {
+            "reason": "run_in_behind: VLM-claimed evidence checks passed",
+            "tier": "possible"
+          },
+          "window": {
+            "end_s": 5.0,
+            "start_s": 0.0
+          }
+        },
+        {
+          "checker_results": {
+            "trajectory": [
+              {
+                "checker": "corner_landing",
+                "reason": "landing zone not established",
+                "verdict": "insufficient"
+              }
+            ],
+            "vlm_claim": []
+          },
+          "claimed_evidence": {
+            "chaos": null,
+            "corner_landing_zone": null,
+            "delivery_kind": null,
+            "regain": null,
+            "restart_at_origin": null
+          },
+          "confidence": "high",
+          "decision": "targeted_negative",
+          "evidence": {
+            "trajectory": {
+              "clip_uid": "event_clips:0012",
+              "corner_landing_zone": null,
+              "delivery_kind": null,
+              "events": [],
+              "notes": "attacking side ambiguous: no possession events emitted; no key kick detected",
+              "source": "gsr_trajectory",
+              "tactic_id": "corner-near-far-post"
+            },
+            "vlm_claim": {
+              "clip_uid": "event_clips:0012",
+              "corner_landing_zone": null,
+              "delivery_kind": null,
+              "events": [],
+              "notes": "",
+              "source": "vlm_claim",
+              "tactic_id": "corner-near-far-post"
+            }
+          },
+          "exclusion_checks": [
+            "全程无角球相关场景，不属于角球战术范畴"
+          ],
+          "missing_evidence": [],
+          "positive_evidence": [],
+          "tactic_id": "corner-near-far-post",
+          "verdict": {
+            "reason": "corner-near-far-post: no evidence source passed all checks",
+            "tier": "insufficient"
+          },
+          "window": {
+            "end_s": 5.0,
+            "start_s": 0.0
+          }
+        },
+        {
+          "checker_results": {
+            "trajectory": [
+              {
+                "checker": "delivery_gate",
+                "reason": "delivery kind not established",
+                "verdict": "insufficient"
+              }
+            ],
+            "vlm_claim": []
+          },
+          "claimed_evidence": {
+            "chaos": null,
+            "corner_landing_zone": null,
+            "delivery_kind": null,
+            "regain": null,
+            "restart_at_origin": null
+          },
+          "confidence": "high",
+          "decision": "targeted_negative",
+          "evidence": {
+            "trajectory": {
+              "clip_uid": "event_clips:0012",
+              "corner_landing_zone": null,
+              "delivery_kind": null,
+              "events": [],
+              "notes": "attacking side ambiguous: no possession events emitted; no key kick detected",
+              "source": "gsr_trajectory",
+              "tactic_id": "cutback"
+            },
+            "vlm_claim": {
+              "clip_uid": "event_clips:0012",
+              "corner_landing_zone": null,
+              "delivery_kind": null,
+              "events": [],
+              "notes": "",
+              "source": "vlm_claim",
+              "tactic_id": "cutback"
+            }
+          },
+          "exclusion_checks": [
+            "进攻球员未抵达边路底线区域，不存在底线附近回做球的动作"
+          ],
+          "missing_evidence": [],
+          "positive_evidence": [],
+          "tactic_id": "cutback",
+          "verdict": {
+            "reason": "cutback: no evidence source passed all checks",
+            "tier": "insufficient"
+          },
+          "window": {
+            "end_s": 5.0,
+            "start_s": 0.0
+          }
+        }
+      ],
+      "clip_uid": "event_clips:0012",
+      "observer": "doubao"
+    },
+    {
+      "api_usage": [
+        {
+          "completion_tokens": 282,
+          "prompt_tokens": 1685,
+          "total_tokens": 1967
+        },
+        {
+          "completion_tokens": 326,
+          "prompt_tokens": 4031,
+          "total_tokens": 4357
+        }
+      ],
+      "candidates": [
+        {
+          "checker_results": {
+            "trajectory": [
+              {
+                "checker": "restart_gate",
+                "reason": "no restart at window origin",
+                "verdict": "pass"
+              },
+              {
+                "checker": "delivery_gate",
+                "reason": "delivery kind not established",
+                "verdict": "insufficient"
+              }
+            ],
+            "vlm_claim": []
+          },
+          "claimed_evidence": {
+            "chaos": false,
+            "corner_landing_zone": null,
+            "delivery_kind": null,
+            "regain": null,
+            "restart_at_origin": null
+          },
+          "confidence": "high",
+          "decision": "positive",
+          "evidence": {
+            "trajectory": {
+              "clip_uid": "event_clips:0012",
+              "corner_landing_zone": null,
+              "delivery_kind": null,
+              "events": [],
+              "notes": "attacking side ambiguous: no possession events emitted; no key kick detected",
+              "source": "gsr_trajectory",
+              "tactic_id": "run_in_behind"
+            },
+            "vlm_claim": {
+              "clip_uid": "event_clips:0012",
+              "corner_landing_zone": null,
+              "delivery_kind": null,
+              "events": [],
+              "notes": "",
+              "source": "vlm_claim",
+              "tactic_id": "run_in_behind"
+            }
+          },
+          "exclusion_checks": [
+            "The runner is not already behind the defensive line at the start of the movement.",
+            "The movement is a clear attempt to penetrate the defensive line via a through ball."
+          ],
+          "missing_evidence": [],
+          "positive_evidence": [
+            "An attacking player in a dark kit initiates a run from a position level with or slightly in front of the defensive line.",
+            "A through ball is played into the space behind the defensive line.",
+            "The attacker successfully enters the space behind the defenders to chase the ball towards the goal."
+          ],
+          "tactic_id": "run_in_behind",
+          "verdict": {
+            "reason": "run_in_behind: no evidence source passed all checks",
+            "tier": "insufficient"
+          },
+          "window": {
+            "end_s": 4.98,
+            "start_s": 0.0
+          }
+        }
+      ],
+      "clip_uid": "event_clips:0012",
+      "observer": "gemini"
+    }
+  ],
+  "prototype_context": {
+    "doubao": [
+      {
+        "evidence_summary": "多角度回放显示角球先进入前点人群并发生第一触，皮球改变线路横向越过门前后由后点白队球员完成第二次处理；不是直接越过所有人传到后点或普通门前混战。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "goal_highlight_package",
+        "prototype_type": "positive",
+        "tactic_id": "corner-near-far-post"
+      },
+      {
+        "evidence_summary": "白队角球开出前多人在小禁区与点球点之间集结；主罚瞬间多名白队球员同步冲向近门柱和门前同一落点；皮球约00:06送入该区域并形成争顶；不是开放比赛中的普通传中。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "corner-near-far-post"
+      },
+      {
+        "evidence_summary": "右队11号从画面下方角旗区主罚；15号、8号与43号从点球点附近同步冲向近门柱和小禁区前点；皮球落向同一区域并在争顶后被解围；不是无明确落点的普通传中。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "corner-near-far-post"
+      },
+      {
+        "evidence_summary": "红队从右侧接近底线的位置沿地面斜后回传到禁区中路偏后区域，随后外围队友形成接应；8 FPS连续帧显示球路主动回到后方，不是封堵弹球、解围或向门前横传中。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "big_chance",
+        "prototype_type": "positive",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "蓝队右路持球队员推进到接近底线的位置；他没有直接向门前起高球而是把球低平回送到点球点附近；中路队友迎球完成射门；传球方向由底线侧折返向后而非普通横传。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "黄色队右路持球队员推进到接近底线的位置并吸引防守者回收；随后把球低平斜后回送到点球点附近；中路队友迎球完成射门并得分；球路明显折返而不是向门前起高球。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "红队从右侧推进到禁区边缘后把球送入门前并形成混战；8 FPS复核显示球路更像普通传中，未清楚斜向穿过肋部防线交汇点，也不是底线斜后倒三角。",
+        "failed_conditions": [
+          "红队从右侧推进到禁区边缘后把球送入门前并形成混战；8 FPS复核显示球路更像普通传中，未清楚斜向穿过肋部防线交汇点，也不是底线斜后倒三角。"
+        ],
+        "missing_evidence": [],
+        "phase": "channel_attack",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "本段主要呈现中场转向右路、边路持球推进以及一次送入禁区。现有帧无法确认外线队员从后方完成套边，也无法判断末段来球是否为向后回做，因此不能把普通边路推进和传中升级为套边与内切套上或下底倒三角；持续时间和结构证据也不足以单独确认宽度与纵深。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "无法确认",
+          "不足以",
+          "无法判断"
+        ],
+        "phase": "transition_attack",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "误判为下底倒三角：这是个角球传中，不是下底传中",
+        "failed_conditions": [
+          "restart_delivery"
+        ],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "targeted_negative",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "红队左路向纵深推进并在禁区左侧处理球，但出球前跑者与最后线关系不清；后续关键球路受远景和比分条遮挡，也无法确认底线斜后回传，打身后与倒三角均不成立。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "无法确认",
+          "不清"
+        ],
+        "phase": "big_chance",
+        "prototype_type": "unobservable",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "右路推进和门前送球可见，但球的具体落点与方向不够清楚，无法满足“下底倒三角”的明确回传链；也看不出从持球人身后越到身前的套边过程。门前拥挤本身不足以判定盯人、区域防守或局部人数优势",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "不够清",
+          "不足以"
+        ],
+        "phase": "big_chance",
+        "prototype_type": "unobservable",
+        "tactic_id": "cutback"
+      },
+      {
+        "evidence_summary": "红队一脚把球送入右路防线身后；出球前右路跑者仍在白队最后线前沿或近似平齐，随后随出球越线追向禁区右侧落点，白队后卫回追且门将进入处理区域。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "counter_attack",
+        "prototype_type": "positive",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "深色队跑者在白队最后线附近启动，队友把球送到防线侧后方而非脚下，白队边路后卫随即转身回追，跑者进入身后空间追球；排除普通顺边脚下传递。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "big_chance",
+        "prototype_type": "positive",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "蓝队主罚前场任意球时多名攻击手从白队防线前沿同步启动；传球越过整条后卫线落向其身后；至少一名蓝队球员越线追球且事件标注在约00:24确认越位。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "红队从已有球权开始进行常规中前场推进，白队大部分时间已有多人位于球后；未见清楚的夺回球权起点、反越位身后球、第三人跑动或穿过完整防线的单次传球。",
+        "failed_conditions": [
+          "红队从已有球权开始进行常规中前场推进，白队大部分时间已有多人位于球后；未见清楚的夺回球权起点、反越位身后球、第三人跑动或穿过完整防线的单次传球。"
+        ],
+        "missing_evidence": [],
+        "phase": "counter_attack",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "主要内容是个人带球、连续地面争抢以及随后的一般推进。不能判为快速反击，因为画面未显示明确夺权后立即纵向冲击未落位防线；不能判为战术犯规，因为倒地铲抢未显示在高威胁转换中故意阻断，且进攻仍在继续；也未出现二过一 / 撞墙配合、第三人跑动、打身后 / 反越位跑位等完整可见链条。",
+        "failed_conditions": [
+          "主要内容是个人带球、连续地面争抢以及随后的一般推进。不能判为快速反击，因为画面未显示明确夺权后立即纵向冲击未落位防线；不能判为战术犯规，因为倒地铲抢未显示在高威胁转换中故意阻断，且进攻仍在继续；也未出现二过一 / 撞墙配合、第三人跑动、打身后 / 反越位跑位等完整可见链条。"
+        ],
+        "missing_evidence": [],
+        "phase": "counter_attack",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "误判为打身后 / 反越位跑位：发任意球长传",
+        "failed_conditions": [
+          "restart_delivery"
+        ],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "targeted_negative",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "片段包含越位判罚和转播越位线回放，但逐帧无法确认进攻者从防线前或平线启动，也没有看到多名后卫在传球瞬间同步前提；静态越位结果不足以标打身后或造越位。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "无法确认",
+          "不足以"
+        ],
+        "phase": "offside_trap",
+        "prototype_type": "unobservable",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "决定性缺口是起跑位置与传球时序不清。现象可由普通向前传配合整体压上解释，无法排除跑者原本已在前方，不能确认“打身后 / 反越位跑位”。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "不能确认",
+          "不清",
+          "时序不清"
+        ],
+        "phase": "big_chance",
+        "prototype_type": "unobservable",
+        "tactic_id": "run_in_behind"
+      }
+    ],
+    "gemini": [
+      {
+        "evidence_summary": "红队一脚把球送入右路防线身后；出球前右路跑者仍在白队最后线前沿或近似平齐，随后随出球越线追向禁区右侧落点，白队后卫回追且门将进入处理区域。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "counter_attack",
+        "prototype_type": "positive",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "深色队跑者在白队最后线附近启动，队友把球送到防线侧后方而非脚下，白队边路后卫随即转身回追，跑者进入身后空间追球；排除普通顺边脚下传递。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": "big_chance",
+        "prototype_type": "positive",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "蓝队主罚前场任意球时多名攻击手从白队防线前沿同步启动；传球越过整条后卫线落向其身后；至少一名蓝队球员越线追球且事件标注在约00:24确认越位。",
+        "failed_conditions": [],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "positive",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "红队从已有球权开始进行常规中前场推进，白队大部分时间已有多人位于球后；未见清楚的夺回球权起点、反越位身后球、第三人跑动或穿过完整防线的单次传球。",
+        "failed_conditions": [
+          "红队从已有球权开始进行常规中前场推进，白队大部分时间已有多人位于球后；未见清楚的夺回球权起点、反越位身后球、第三人跑动或穿过完整防线的单次传球。"
+        ],
+        "missing_evidence": [],
+        "phase": "counter_attack",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "主要内容是个人带球、连续地面争抢以及随后的一般推进。不能判为快速反击，因为画面未显示明确夺权后立即纵向冲击未落位防线；不能判为战术犯规，因为倒地铲抢未显示在高威胁转换中故意阻断，且进攻仍在继续；也未出现二过一 / 撞墙配合、第三人跑动、打身后 / 反越位跑位等完整可见链条。",
+        "failed_conditions": [
+          "主要内容是个人带球、连续地面争抢以及随后的一般推进。不能判为快速反击，因为画面未显示明确夺权后立即纵向冲击未落位防线；不能判为战术犯规，因为倒地铲抢未显示在高威胁转换中故意阻断，且进攻仍在继续；也未出现二过一 / 撞墙配合、第三人跑动、打身后 / 反越位跑位等完整可见链条。"
+        ],
+        "missing_evidence": [],
+        "phase": "counter_attack",
+        "prototype_type": "targeted_negative",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "误判为打身后 / 反越位跑位：发任意球长传",
+        "failed_conditions": [
+          "restart_delivery"
+        ],
+        "missing_evidence": [],
+        "phase": null,
+        "prototype_type": "targeted_negative",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "片段包含越位判罚和转播越位线回放，但逐帧无法确认进攻者从防线前或平线启动，也没有看到多名后卫在传球瞬间同步前提；静态越位结果不足以标打身后或造越位。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "无法确认",
+          "不足以"
+        ],
+        "phase": "offside_trap",
+        "prototype_type": "unobservable",
+        "tactic_id": "run_in_behind"
+      },
+      {
+        "evidence_summary": "决定性缺口是起跑位置与传球时序不清。现象可由普通向前传配合整体压上解释，无法排除跑者原本已在前方，不能确认“打身后 / 反越位跑位”。",
+        "failed_conditions": [],
+        "missing_evidence": [
+          "不能确认",
+          "不清",
+          "时序不清"
+        ],
+        "phase": "big_chance",
+        "prototype_type": "unobservable",
+        "tactic_id": "run_in_behind"
+      }
+    ]
+  },
+  "prototype_excluded_counts": {
+    "doubao": 3,
+    "gemini": 3
+  },
+  "schema_version": "tactical-agent-run-v1",
+  "skeptic": {
+    "instruction": "Challenge only the relevant exclusion conditions once.",
+    "reasons": [
+      "candidate_or_decision_disagreement"
+    ],
+    "triggered": true
+  },
+  "sol_arbitration": {
+    "status": "pending_configuration",
+    "triggered": true
+  }
+}

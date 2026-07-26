@@ -163,6 +163,14 @@ class PitchVisualizationEngine(Callback):
                 float(self.cfg.video_fps),
                 (image.shape[1], image.shape[0]),
             )
+            if not video_writer.isOpened():
+                log.warning("Failed to open VideoWriter with codec avc1, falling back to mp4v.")
+                video_writer = cv2.VideoWriter(
+                    str(filepath),
+                    cv2.VideoWriter_fourcc(*"mp4v"),
+                    float(self.cfg.video_fps),
+                    (image.shape[1], image.shape[0]),
+                )
         with Pool(self.cfg.num_workers) as p:
             for patch, file_name in p.imap(process_frame, args):
                 if self.cfg.save_images:

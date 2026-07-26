@@ -47,6 +47,8 @@ def _synthesize_voice(
     prompt_wav: Optional[Path],
     prompt_text: Optional[str],
     force: bool,
+    prefer_fallback: bool = False,
+    borrow_silence: bool = False,
 ) -> Path:
     from pipeline.stage3_tts.synthesize import assemble_timeline, synthesize_fitting_segment
 
@@ -58,8 +60,19 @@ def _synthesize_voice(
         if force or not path.is_file():
             start = float(segment.get("timestamp_s", 0.0))
             end = float(segment.get("end_s", duration_s))
+            is_locked_tactical = isinstance(
+                segment.get("human_review_reference"), dict
+            )
+            if borrow_silence and is_locked_tactical:
+                later = [
+                    float(item.get("timestamp_s", duration_s))
+                    for item in segments[index + 1:]
+                    if float(item.get("timestamp_s", duration_s)) > start
+                ]
+                end = min(later) if later else duration_s
             synthesize_fitting_segment(
                 segment, language, path, max(end - start, 0.0), synthesizer,
+                prefer_fallback=prefer_fallback and is_locked_tactical,
                 voice=voice, prompt_wav=prompt_wav, prompt_text=prompt_text,
             )
         paths.append(path)
@@ -85,6 +98,8 @@ def run_stage3_tts(
     prompt_wav: Optional[Path] = None,
     prompt_text: Optional[str] = None,
     force: bool = False,
+    prefer_fallback: bool = False,
+    borrow_silence: bool = False,
 ) -> Path:
     from pipeline.stage3_tts.cosyvoice import (
         DEFAULT_PROMPT_TEXT, MODEL_DIR, CosyVoiceSynthesizer,
@@ -114,11 +129,13 @@ def run_stage3_tts(
         selected_audio = _synthesize_voice(
             output_dir, segments, language, "default", default_audio, duration_s,
             synthesizer, prompt_wav, prompt_text or DEFAULT_PROMPT_TEXT, force,
+            prefer_fallback, borrow_silence,
         )
     if voice in {"clone", "both"}:
         selected_audio = _synthesize_voice(
             output_dir, segments, language, "clone", clone_audio, duration_s,
             synthesizer, prompt_wav, prompt_text, force,
+            prefer_fallback, borrow_silence,
         )
     assert selected_audio is not None
     _atomic_mux(clip, selected_audio, baseline)
@@ -134,6 +151,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--prompt-wav", type=Path)
     parser.add_argument("--prompt-text")
+    parser.add_argument(
+        "--prefer-fallback", action="store_true",
+        help="use fallback text for locked tactical segments",
+    )
+    parser.add_argument(
+        "--borrow-silence", action="store_true",
+        help="extend locked tactical segments to the next commentary start",
+    )
     parser.add_argument("--force", action="store_true")
     return parser
 
@@ -146,6 +171,8 @@ def main() -> None:
         voice=args.voice,
         prompt_wav=args.prompt_wav,
         prompt_text=args.prompt_text,
+        prefer_fallback=args.prefer_fallback,
+        borrow_silence=args.borrow_silence,
         force=args.force,
     ))
 

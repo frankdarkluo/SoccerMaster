@@ -30,6 +30,10 @@ def ark_chat(
     image_paths: Iterable[Path] | None = None,
     temperature: float = 0.7,
     max_tokens: int = 4096,
+    usage_callback: Callable[[dict], None] | None = None,
+    timeout_s: float | None = None,
+    max_retries: int | None = None,
+    response_format: dict | None = None,
 ) -> str:
     """Call ARK's OpenAI-compatible chat endpoint with inline media."""
     api_key = os.environ.get("ARK_API_KEY", "")
@@ -45,20 +49,29 @@ def ark_chat(
             "video_url": {"url": _data_url(Path(video_path), "video/mp4")},
         })
     for path in image_paths or ():
+        mime = "image/jpeg" if Path(path).suffix.lower() in {".jpg", ".jpeg"} else "image/png"
         content.append({
             "type": "image_url",
-            "image_url": {"url": _data_url(Path(path), "image/png")},
+            "image_url": {"url": _data_url(Path(path), mime)},
         })
-    client = OpenAI(
-        base_url=os.environ.get("ARK_BASE_URL", DEFAULT_ARK_BASE_URL),
-        api_key=api_key,
-    )
+    client_kwargs = {
+        "base_url": os.environ.get("ARK_BASE_URL", DEFAULT_ARK_BASE_URL),
+        "api_key": api_key,
+    }
+    if timeout_s is not None:
+        client_kwargs["timeout"] = timeout_s
+    if max_retries is not None:
+        client_kwargs["max_retries"] = max_retries
+    client = OpenAI(**client_kwargs)
     response = client.chat.completions.create(
         model=os.environ.get("ARK_RESPONSES_MODEL", DEFAULT_ARK_MODEL),
         messages=[{"role": "user", "content": content}],
         temperature=temperature,
         max_tokens=max_tokens,
+        **({"response_format": response_format} if response_format else {}),
     )
+    if usage_callback and response.usage:
+        usage_callback(response.usage.model_dump(exclude_none=True))
     return response.choices[0].message.content or ""
 
 

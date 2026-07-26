@@ -489,7 +489,11 @@ def load_set(dataset_path, nvid=-1, vids_filter_set=None, start_vid=None, end_vi
 
 def download_dataset(dataset_path, splits=DEFAULT_SPLITS):
     my_soccernet_downloader = SoccerNetDownloader(LocalDirectory=str(dataset_path))
-    download = Confirm.ask(f"Do you want to download the datasets automatically ? [i]({'/'.join(splits)})[/i]")
+    split_choices = "/".join(splits)
+    try:
+        download = Confirm.ask(f"Do you want to download the datasets automatically ? [i]({split_choices})[/i]")
+    except EOFError:
+        download = False
     if download:
         my_soccernet_downloader.downloadDataTask(task="gamestate-2025", split=splits)
         for split in splits:

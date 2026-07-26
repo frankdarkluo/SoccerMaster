@@ -1,0 +1,44 @@
+clip_uid	clip_id	clip_dir	input_video	output_dir
+event_clips:0001	0001	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9001	data/event-clips_L3_all/0001_L3_build_up_0p008-0p030s_77348.mp4	outputs/0001
+event_clips:0002	0002	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9002	data/event-clips_L3_all/0002_L3_big_chance_0p033-0p037s_77323.mp4	outputs/0002
+event_clips:0003	0003	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9003	data/event-clips_L3_all/0003_L3_goal_highlight_package_0p058-0p095s_77378.mp4	outputs/0003
+event_clips:0004	0004	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9004	data/event-clips_L3_all/0004_L3_big_chance_0p063-0p069s_77326.mp4	outputs/0004
+event_clips:0005	0005	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9005	data/event-clips_L3_all/0005_L3_big_chance_0p093-0p097s_77335.mp4	outputs/0005
+event_clips:0006	0006	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9006	data/event-clips_L3_all/0006_L3_counter_attack_0p102-0p114s_77347.mp4	outputs/0006
+event_clips:0007	0007	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9007	data/event-clips_L3_all/0007_L3_big_chance_0p123-0p128s_77351.mp4	outputs/0007
+event_clips:0008	0008	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9008	data/event-clips_L3_all/0008_L3_big_chance_0p152-0p158s_77356.mp4	outputs/0008
+event_clips:0009	0009	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9009	data/event-clips_L3_all/0009_L3_big_chance_0p183-0p187s_77360.mp4	outputs/0009
+event_clips:0010	0010	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9010	data/event-clips_L3_all/0010_L3_goal_highlight_package_0p212-0p233s_77377.mp4	outputs/0010
+event_clips:0011	0011	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9011	data/event-clips_L3_all/0011_L3_big_chance_0p213-0p219s_77364.mp4	outputs/0011
+event_clips:0012	0012	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9012	data/event-clips_L3_all/0012_L3_big_chance_0p243-0p248s_77368.mp4	outputs/0012
+event_clips:0013	0013	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9013	data/event-clips_L3_all/0013_L3_goal_highlight_package_0p268-0p305s_77379.mp4	outputs/0013
+event_clips:0014	0014	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9014	data/event-clips_L3_all/0014_L3_big_chance_0p273-0p280s_77370.mp4	outputs/0014
+event_clips:0015	0015	codes/sn-gamestate/datasets/SoccerNetGS/system_arm_event/SNGS-9015	data/event-clips_L3_all/0015_L3_big_chance_0p280-0p281s_77375.mp4	outputs/0015
+soccernetgs:SNGS-002	SNGS-002	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-002		outputs/SNGS-002
+soccernetgs:SNGS-004	SNGS-004	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-004		outputs/SNGS-004
+soccernetgs:SNGS-006	SNGS-006	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-006		outputs/SNGS-006
+soccernetgs:SNGS-008	SNGS-008	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-008		outputs/SNGS-008
+soccernetgs:SNGS-009	SNGS-009	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-009		outputs/SNGS-009
+soccernetgs:SNGS-010	SNGS-010	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-010		outputs/SNGS-010
+soccernetgs:SNGS-011	SNGS-011	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-011		outputs/SNGS-011
+soccernetgs:SNGS-012	SNGS-012	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-012		outputs/SNGS-012
+soccernetgs:SNGS-013	SNGS-013	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-013		outputs/SNGS-013
+soccernetgs:SNGS-014	SNGS-014	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-014		outputs/SNGS-014
+soccernetgs:SNGS-015	SNGS-015	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-015		outputs/SNGS-015
+soccernetgs:SNGS-016	SNGS-016	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-016		outputs/SNGS-016
+soccernetgs:SNGS-017	SNGS-017	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-017		outputs/SNGS-017
+soccernetgs:SNGS-018	SNGS-018	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-018		outputs/SNGS-018
+soccernetgs:SNGS-019	SNGS-019	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-019		outputs/SNGS-019
+soccernetgs:SNGS-171	SNGS-171	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-171		outputs/SNGS-171
+soccernetgs:SNGS-172	SNGS-172	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-172		outputs/SNGS-172
+soccernetgs:SNGS-173	SNGS-173	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-173		outputs/SNGS-173
+soccernetgs:SNGS-174	SNGS-174	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-174		outputs/SNGS-174
+soccernetgs:SNGS-175	SNGS-175	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-175		outputs/SNGS-175
+soccernetgs:SNGS-178	SNGS-178	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-178		outputs/SNGS-178
+soccernetgs:SNGS-179	SNGS-179	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-179		outputs/SNGS-179
+soccernetgs:SNGS-180	SNGS-180	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-180		outputs/SNGS-180
+soccernetgs:SNGS-181	SNGS-181	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-181		outputs/SNGS-181
+soccernetgs:SNGS-182	SNGS-182	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-182		outputs/SNGS-182
+soccernetgs:SNGS-183	SNGS-183	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-183		outputs/SNGS-183
+soccernetgs:SNGS-185	SNGS-185	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-185		outputs/SNGS-185
+soccernetgs:SNGS-186	SNGS-186	codes/sn-gamestate/datasets/SoccerNetGS/challenge/SNGS-186		outputs/SNGS-186

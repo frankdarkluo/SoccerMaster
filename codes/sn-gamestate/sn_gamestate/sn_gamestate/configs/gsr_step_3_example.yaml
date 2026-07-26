@@ -54,7 +54,7 @@ experiment_subname: "step_3_sn500_10001_10002_ori"
 # Path definitions
 home_dir: "${oc.env:HOME}"
 data_dir: "${project_dir}/datasets"
-model_dir: "${project_dir}/pretrained_models"
+model_dir: "/data/zhangzheng/pretrained_models"
 
 # Machine configuration
 num_cores: 32
