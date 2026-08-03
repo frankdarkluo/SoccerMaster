@@ -8,7 +8,7 @@ from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COSYVOICE_ROOT = REPO_ROOT / "codes" / "CosyVoice"
-MODEL_DIR = REPO_ROOT / "pretrained_models" / "Fun-CosyVoice3-0.5B"
+MODEL_DIR = Path("/data/zhangzheng/pretrained_models") / "Fun-CosyVoice3-0.5B"
 DEFAULT_PROMPT_WAV = COSYVOICE_ROOT / "asset" / "zero_shot_prompt.wav"
 DEFAULT_PROMPT_TEXT = (
     "You are a helpful assistant.<|endofprompt|>"

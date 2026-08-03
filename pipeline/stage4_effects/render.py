@@ -9,23 +9,30 @@ from typing import Optional
 import cv2
 
 from pipeline.config import PipelineConfig
-from pipeline.stage2b.events import get_event
 from pipeline.utils.video import reencode_to_h264
 from pipeline.stage4_effects.beam_targets import load_predictions_index
 from pipeline.stage4_effects.overlay import apply_frame_overlays
 from pipeline.stage4_effects.projection import load_homography
 
-
-def _sorted_frame_paths(frames_dir: Path) -> list[Path]:
-    return sorted(frames_dir.glob("*.jpg"))
-
-
-def _frame_number_from_path(path: Path) -> int:
-    return int(path.stem)
+EVENT_IMPORTANCE = {
+    "football.corner": 0.35,
+    "football.pass": 0.15,
+    "football.assist": 0.85,
+    "football.clearance": 0.40,
+    "football.interception": 0.55,
+    "football.dribble": 0.20,
+    "football.tackle": 0.60,
+    "football.shoot": 0.75,
+    "football.goal": 1.00,
+    "football.save": 0.80,
+    "football.goal_kick": 0.25,
+    "football.buildup": 0.10,
+    "football.pressing": 0.20,
+}
 
 
 def load_effect_events(path: Path) -> list[dict]:
-    """Read Stage 2B events and normalize the effects fields once."""
+    """Read saved events and normalize the effects fields once."""
     with Path(path).open(encoding="utf-8") as handle:
         payload = json.load(handle)
     events = payload if isinstance(payload, list) else payload.get("events", [])
@@ -34,11 +41,13 @@ def load_effect_events(path: Path) -> list[dict]:
         if not isinstance(source, dict):
             continue
         event = dict(source)
-        definition = get_event(event.get("event_code"))
-        event["importance"] = definition.importance_base if definition else 0.0
-        event["timestamp_s"] = (
+        event["importance"] = max(
+            float(event.get("importance") or 0.0),
+            EVENT_IMPORTANCE.get(event.get("event_code"), 0.0),
+        )
+        event["timestamp_s"] = float(event.get("timestamp_s") or (
             float(event.get("start_s", 0.0)) + float(event.get("end_s", 0.0))
-        ) / 2.0
+        ) / 2.0)
         normalized.append(event)
     return normalized
 
@@ -50,6 +59,7 @@ def render_annotated_video(
     output_path: Path,
     config: PipelineConfig,
     homography_json_path: Optional[Path] = None,
+    topology_json_path: Optional[Path] = None,
     reencode_h264: bool = True,
 ) -> Path:
     """Render full annotated video from raw img1/ frames.
@@ -63,12 +73,20 @@ def render_annotated_video(
 
     events = load_effect_events(events_json_path)
 
-    frame_to_image_id, anns_by_image = load_predictions_index(predictions_json_path)
+    topology = None
+    annotations_path = Path(predictions_json_path)
+    if topology_json_path is not None:
+        topology = json.loads(Path(topology_json_path).read_text(encoding="utf-8"))
+        labels_path = Path(topology["labels_path"])
+        if not labels_path.is_absolute():
+            labels_path = Path(__file__).resolve().parents[2] / labels_path
+        annotations_path = labels_path
+    frame_to_image_id, anns_by_image = load_predictions_index(annotations_path)
     homo_frames = None
     if homography_json_path and Path(homography_json_path).exists():
         homo_frames = load_homography(homography_json_path)
 
-    frame_paths = _sorted_frame_paths(frames_dir)
+    frame_paths = sorted(frames_dir.glob("*.jpg"))
     if not frame_paths:
         raise FileNotFoundError(f"No frames found in {frames_dir}")
 
@@ -86,7 +104,7 @@ def render_annotated_video(
     )
 
     for frame_path in frame_paths:
-        frame_num = _frame_number_from_path(frame_path)
+        frame_num = int(frame_path.stem)
         frame = cv2.imread(str(frame_path))
         if frame is None:
             continue
@@ -98,6 +116,7 @@ def render_annotated_video(
             anns_by_image,
             homo_frames,
             config,
+            topology,
         )
         writer.write(frame)
 

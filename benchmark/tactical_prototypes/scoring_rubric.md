@@ -42,3 +42,10 @@ R8 概念混淆按错误计，且必须在更正列写明真实概念，供困�
 P0：fast_break_pattern、run_in_behind、corner-near-far-post、cutback。
 P1（仅评估）：line_break。
 其余概念本轮不评分、不晋升（mentor 决定，2026-07-17）。
+
+## System-arm 对外口径与 Sol 处置
+
+- 对外战术断言只允许 `confirmed`；`possible` 只进入专家评审队列，解说只能用观察式措辞。
+- `asserted precision` 只统计 `confirmed`；`queue precision` 统计 `confirmed + possible`。
+- Dev 阶段因轨迹缺失产生的 56 条 Sol pending 全部标记为 `superseded`，不再人工处理。
+- 冻结测试按 clip 统计 Sol 触发率；若超过 20%，后续批次的争议项自动降为 `insufficient`，不再进入 Sol 队列。

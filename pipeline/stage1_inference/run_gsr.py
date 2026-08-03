@@ -65,6 +65,10 @@ def _artifact_ready(path: Path, min_bytes: int = 1) -> bool:
     return path.is_file() and path.stat().st_size >= min_bytes
 
 
+def _is_hf_model_id(value: str) -> bool:
+    return value.startswith("facebook/") or value.startswith("hf://facebook/")
+
+
 def _pklz_has_video(pklz: Path, video_id: str) -> bool:
     """True if pklz is a readable archive containing {video_id}.pkl."""
     if not _artifact_ready(pklz, min_bytes=100):
@@ -80,8 +84,12 @@ def _subprocess_env() -> dict[str, str]:
     """Repo PYTHONPATH + conservative CPU/thread limits for child processes."""
     env = apply_cpu_limits(os.environ.copy())
     repo = str(REPO_ROOT)
+    repo_codes = str(REPO_ROOT / "codes")
     prev = env.get("PYTHONPATH", "")
-    env["PYTHONPATH"] = repo + (os.pathsep + prev if prev else "")
+    pythonpath_parts = [repo, repo_codes]
+    if prev:
+        pythonpath_parts.append(prev)
+    env["PYTHONPATH"] = os.pathsep.join(part for part in pythonpath_parts if part)
     return env
 
 
@@ -101,6 +109,16 @@ def _run(cmd: list[str], cwd: Path, dry_run: bool = False) -> None:
         return
 
     env = _subprocess_env()
+    # SAM2 launcher runs from within the repo root and can misresolve "sam2"
+    # if repo-level "codes" is on PYTHONPATH, so keep only the minimum path.
+    sam2_step2 = (REPO_ROOT / "codes" / "sam2" / "step_2").resolve()
+    if Path(cwd).resolve() == sam2_step2:
+        current_paths = [
+            p
+            for p in env.get("PYTHONPATH", "").split(os.pathsep)
+            if p and Path(p).resolve() != (REPO_ROOT / "codes").resolve()
+        ]
+        env["PYTHONPATH"] = os.pathsep.join(current_paths)
 
     # PyTorch >= 2.6 defaults torch.load(weights_only=True), which breaks YOLO
     # and other full-pickle GSR checkpoints. Patch before launching tracklab.
@@ -160,6 +178,44 @@ def run_step2(config: PipelineConfig, dry_run: bool = False) -> Path:
     seq_id = _sequence_id(config)
 
     sam2_dir = GSR_ROOT.parent / "sam2" / "step_2"
+    raw_checkpoint = os.environ.get(
+        "SAM2_CHECKPOINT", "../checkpoints/sam2.1_hiera_large.pt"
+    )
+    if _is_hf_model_id(raw_checkpoint):
+        sam_checkpoint = raw_checkpoint
+    else:
+        checkpoint = Path(raw_checkpoint)
+        if checkpoint.is_absolute():
+            candidate_checkpoint = checkpoint
+        else:
+            candidate_checkpoint = (sam2_dir / checkpoint).resolve()
+
+        if candidate_checkpoint.exists():
+            sam_checkpoint = str(candidate_checkpoint)
+        else:
+            # Keep compatibility with existing environment variable usage.
+            # If no local file exists, fallback to the canonical HF checkpoint id.
+            sam_checkpoint = "facebook/sam2.1-hiera-large"
+            if raw_checkpoint not in {"", "../checkpoints/sam2.1_hiera_large.pt"}:
+                log.warning(
+                    "SAM2 checkpoint not found locally: %s. Falling back to %s",
+                    raw_checkpoint,
+                    sam_checkpoint,
+                )
+            else:
+                log.info("Using default SAM2 checkpoint from Hugging Face id: %s", sam_checkpoint)
+
+    if not _is_hf_model_id(sam_checkpoint):
+        resolved = Path(sam_checkpoint)
+        if not resolved.is_absolute():
+            resolved = (sam2_dir / resolved).resolve()
+        sam_checkpoint = str(resolved)
+
+    if not _is_hf_model_id(sam_checkpoint) and not Path(sam_checkpoint).exists():
+        raise FileNotFoundError(
+            f"Invalid SAM2 checkpoint path: {sam_checkpoint} (set SAM2_CHECKPOINT to an existing checkpoint file or a Hugging Face model id)."
+        )
+
     input_pklz = _step1_dir(config) / "states" / "sn-gamestate.pklz"
     output_dir = _step2_dir(config)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -168,11 +224,24 @@ def run_step2(config: PipelineConfig, dry_run: bool = False) -> Path:
         log.info("Step 2 already done, skipping: %s", save_pklz)
         return output_dir
 
-    log.info("Running GSR Step 2 (SAM2) on %s/%s → %s", split, seq_name, output_dir)
+    if _is_hf_model_id(sam_checkpoint):
+        log.info(
+            "Running GSR Step 2 (SAM2) on %s/%s with checkpoint model: %s",
+            split,
+            seq_name,
+            sam_checkpoint,
+        )
+    else:
+        log.info(
+            "Running GSR Step 2 (SAM2) on %s/%s with checkpoint: %s",
+            split,
+            seq_name,
+            sam_checkpoint,
+        )
 
     infer_cmd = [
         "python", "inference.py",
-        "--sam_checkpoint", "../checkpoints/sam2.1_hiera_large.pt",
+        "--sam_checkpoint", sam_checkpoint,
         "--sam_config", "configs/sam2.1/sam2.1_hiera_l.yaml",
         "--input_pklz", str(input_pklz),
         "--dataset_root", str(GSR_ROOT / "datasets" / "SoccerNetGS"),
@@ -194,6 +263,12 @@ def run_step2(config: PipelineConfig, dry_run: bool = False) -> Path:
     ]
     _run(infer_cmd, sam2_dir, dry_run=dry_run)
 
+    expected_result = output_dir / "video_results" / f"{seq_id}_result.pkl"
+    if not _artifact_ready(expected_result, min_bytes=1):
+        raise RuntimeError(
+            "SAM2 Step 2 did not produce expected result file: " + str(expected_result)
+        )
+
     merge_cmd = [
         "python", "merge_pkl.py",
         "--input_pklz", str(input_pklz),
@@ -209,7 +284,6 @@ def run_step2(config: PipelineConfig, dry_run: bool = False) -> Path:
     ]
     _run(merge_cmd, sam2_dir, dry_run=dry_run)
     return output_dir
-
 
 def run_step3(config: PipelineConfig, dry_run: bool = False) -> Path:
     """Run calibration + jersey + team for one sequence. Returns final pklz path."""

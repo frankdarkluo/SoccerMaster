@@ -1,60 +1,58 @@
-"""Perspective-correct cone light beam + foot marker rendering."""
+"""FIFA-style vertical spotlight rendering."""
 from __future__ import annotations
-
-from typing import Tuple
 
 import cv2
 import numpy as np
 
+SPOTLIGHT_COLOR_BGR = (90, 230, 215)
 
-def draw_foot_marker(
+
+def draw_vertical_beam(
     frame: np.ndarray,
-    center: Tuple[int, int],
-    color: Tuple[int, int, int],
-    radius: int = 20,
-    alpha: float = 0.4,
-) -> None:
-    overlay = frame.copy()
-    cv2.circle(overlay, center, radius, color, 2, cv2.LINE_AA)
-    cv2.circle(overlay, center, int(radius * 1.5), color, 1, cv2.LINE_AA)
-    blurred = cv2.GaussianBlur(overlay, (0, 0), sigmaX=5)
-    cv2.addWeighted(blurred, alpha, frame, 1 - alpha, 0, dst=frame)
-
-
-def draw_cone_beam(
-    frame: np.ndarray,
-    origin: Tuple[int, int],
-    target: Tuple[int, int],
-    color: Tuple[int, int, int],
+    foot: tuple[int, int],
+    color: tuple[int, int, int] = SPOTLIGHT_COLOR_BGR,
     alpha: float = 0.3,
-    width_base: int = 40,
-    spread: float = 0.3,
 ) -> None:
-    """Draw perspective cone beam from origin toward target."""
-    ox, oy = origin
-    tx, ty = target
+    """Draw a soft yellow-green shaft ending in an elliptical ground glow."""
+    height, width = frame.shape[:2]
+    x = max(0, min(width - 1, int(foot[0])))
+    y = max(0, min(height - 1, int(foot[1])))
+    shaft_half = max(10, min(width // 28, 70))
+    ground_half = max(32, min(width // 16, 120))
 
-    dx, dy = tx - ox, ty - oy
-    length = max(1, int(np.hypot(dx, dy)))
-    nx, ny = -dy / length, dx / length
+    shaft = np.zeros((height, width), dtype=np.uint8)
+    cv2.fillConvexPoly(
+        shaft,
+        np.array([
+            (x - shaft_half, 0), (x + shaft_half, 0),
+            (x + ground_half, y), (x - ground_half, y),
+        ], dtype=np.int32),
+        210,
+        cv2.LINE_AA,
+    )
+    shaft = cv2.GaussianBlur(shaft, (0, 0), sigmaX=max(8, width // 100))
+    shaft = shaft.astype(float) * np.linspace(0.55, 0.9, height)[:, None]
 
-    w0 = width_base / 2
-    w1 = w0 + length * spread
+    ground = np.zeros((height, width), dtype=np.uint8)
+    cv2.ellipse(
+        ground,
+        (x, y),
+        (ground_half, max(8, ground_half // 4)),
+        0,
+        0,
+        360,
+        255,
+        -1,
+    )
+    ground = cv2.GaussianBlur(
+        ground, (0, 0), sigmaX=max(6, ground_half // 5),
+    )
 
-    pts = np.array([
-        [ox + nx * w0, oy + ny * w0],
-        [ox - nx * w0, oy - ny * w0],
-        [tx - nx * w1, ty - ny * w1],
-        [tx + nx * w1, ty + ny * w1],
-    ], dtype=np.int32)
-
-    overlay = np.zeros_like(frame)
-    cv2.fillPoly(overlay, [pts], color)
-    overlay = cv2.GaussianBlur(overlay, (0, 0), sigmaX=max(15, length // 10))
-
-    mask = overlay.astype(float) / 255.0
+    # ponytail: two masks match the broadcast effect; use particles only for animated dust.
+    mask = np.maximum(shaft, ground).clip(0, 255)[:, :, None] / 255.0 * float(alpha)
+    tint = np.asarray(color, dtype=float).reshape(1, 1, 3)
     frame[:] = (
-        frame.astype(float) * (1 - mask * alpha) + overlay.astype(float) * alpha
+        frame.astype(float) * (1 - mask) + tint * mask
     ).clip(0, 255).astype(np.uint8)
 
 

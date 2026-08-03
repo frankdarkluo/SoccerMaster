@@ -58,7 +58,7 @@ First, download the SigLIP2 backbone model to the pretrained models directory:
 
 ```bash
 pip install huggingface_hub
-hf download google/siglip2-large-patch16-512 --local-dir ./codes/sn-gamestate/pretrained_models/google/siglip2-large-patch16-512
+hf download google/siglip2-large-patch16-512 --local-dir /data/zhangzheng/pretrained_models/google/siglip2-large-patch16-512
 ```
 
 ### 3. Download SoccerMaster Checkpoints
@@ -66,15 +66,15 @@ hf download google/siglip2-large-patch16-512 --local-dir ./codes/sn-gamestate/pr
 Clone the SoccerMaster model checkpoints from Hugging Face:
 
 ```bash
-cd codes/sn-gamestate/pretrained_models
+cd /data/zhangzheng/pretrained_models
 mkdir SoccerMaster
 hf download xleprime/SoccerMaster --local-dir SoccerMaster
 ```
 
-After completing these steps, the SigLIP2 and SoccerMaster checkpoints live under `codes/sn-gamestate/pretrained_models/`:
+After completing these steps, the SigLIP2 and SoccerMaster checkpoints live under `/data/zhangzheng/pretrained_models/`:
 
 ```
-codes/sn-gamestate/pretrained_models/
+/data/zhangzheng/pretrained_models/
 ├── google/
 │   └── siglip2-large-patch16-512/
 └── SoccerMaster/
@@ -82,10 +82,10 @@ codes/sn-gamestate/pretrained_models/
 
 ### 4. Prepare Pretrained Models
 
-Please organize `codes/sn-gamestate/pretrained_models/` as follows:
+Please organize `/data/zhangzheng/pretrained_models/` as follows:
 
 ```
-codes/sn-gamestate/pretrained_models/
+/data/zhangzheng/pretrained_models/
 ├── calibration
 │   ├── mean.npy
 │   ├── pnl_SV_kp
@@ -116,7 +116,7 @@ codes/sn-gamestate/pretrained_models/
 - **google**: Download `siglip2-large-patch16-512` from [Hugging Face](https://huggingface.co/google/siglip2-large-patch16-512).
 - **legibility**: Download `legibility_resnet34_soccer_20240215.pth` from [Google Drive](https://drive.google.com/file/d/18HAuZbge3z8TSfRiX_FzsnKgiBs-RRNw/view?usp=sharing), following the [jersey-number-pipeline](https://github.com/mkoshkina/jersey-number-pipeline) project.
 - **jn**: Download Qwen2.5-VL models from the [Qwen2.5-VL Collection](https://huggingface.co/collections/Qwen/qwen25-vl) on Hugging Face.
-- **yolo**: Move `yolo_v8x6_finetuned.pt` to `codes/sn-gamestate/pretrained_models/yolo/`. This file can be obtained from [https://huggingface.co/xleprime/SoccerMaster](https://huggingface.co/xleprime/SoccerMaster).
+- **yolo**: Move `yolo_v8x6_finetuned.pt` to `/data/zhangzheng/pretrained_models/yolo/`. This file can be obtained from [https://huggingface.co/xleprime/SoccerMaster](https://huggingface.co/xleprime/SoccerMaster).
 
 All datasets for the data pipeline live under `codes/sn-gamestate/datasets/SoccerNetGS/` (see [Input Data Format](#input-data-format) below). The pretraining code in `codes/SoccerMaster/` reads models and data from `../sn-gamestate/` via config paths.
 
@@ -207,6 +207,48 @@ CUDA_VISIBLE_DEVICES=0 python -m tracklab.main -cn gsr_step_3_example_accelerate
 > **Model selection for Step 3:**
 >
 > For best results, use `Qwen2.5-VL-72B-Instruct` for jersey number (jn) recognition and `Qwen2.5-VL-7B-Instruct` for role classification (config: `gsr_step_3_example`). However, for faster inference speed and lower GPU memory consumption, you can use the accelerated config (`gsr_step_3_example_accelerate`) which merges both tasks into a single module and uses `Qwen2.5-VL-7B-Instruct` for both, with a minor trade-off in accuracy (Recommended).
+
+## Tactical Analysis and Effects
+
+### GT-first Visible Topology
+
+The topology analyzer uses SoccerNet GameState labels when available and falls back to `outputs/preprocessing/<clip>/predictions.json`. It only describes stable lines formed by visible players; uncertain candidates remain in the JSON and are not rendered.
+
+```bash
+python scripts/run_tactical_topology.py analyze --clip-uid SNGS-148
+```
+
+The default output is `outputs/tactical_topology/SNGS-148.json`. Each one-second window records the position source, visible-player evidence, accepted lines, and rejected candidates.
+
+### Stage 4 Preview
+
+Stage 4 can render a silent preview from existing frames, positions, homography, the reviewed FIFA style profile, and the topology result. This example applies effects only from 21 to 25 seconds and pins the vertical beam to track 1.
+
+```bash
+python -m pipeline.stage4_effects.run preview \
+  --frames-dir codes/sn-gamestate/datasets/SoccerNetGS/test/SNGS-148/img1 \
+  --predictions outputs/preprocessing/SNGS-148/predictions.json \
+  --homography outputs/preprocessing/SNGS-148/homography_per_frame.json \
+  --topology outputs/tactical_topology/SNGS-148.json \
+  --style-profile outputs/fifa_game_library/visual_patterns/style_profile.json \
+  --focus-track-id 1 \
+  --window 21:25 \
+  --output outputs/fifa_game_library/stage4/SNGS-148/preview.mp4 \
+  --fps 25
+```
+
+### Two-stage Tactical Commentary
+
+The maintained commentary path first analyzes video evidence with reviewed tactical facts and visible topology, then asks the same provider to write the final commentary. External upload must be explicitly enabled.
+
+```bash
+python scripts/run_tactical_commentary.py run \
+  --provider doubao \
+  --clip-uid soccernetgs:SNGS-148 \
+  --allow-external-upload
+```
+
+Results are written to `outputs/tactical_commentary/<provider>/<clip>.json`. Topology generation does not add another model call.
 
 ## TODO
 - [x] Add pretraining code.

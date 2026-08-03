@@ -1,20 +1,13 @@
 """Global pipeline configuration with unified input model."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GSR_ROOT = REPO_ROOT / "codes" / "sn-gamestate"
 DATASET_ROOT = GSR_ROOT / "datasets" / "SoccerNetGS"
-PRETRAINED_MODELS = GSR_ROOT / "pretrained_models"
-
-PITCH_LENGTH = 105.0
-PITCH_WIDTH = 68.0
-GOAL_WIDTH = 7.32
-GOAL_Y_HALF = GOAL_WIDTH / 2
-
 
 @dataclass
 class PipelineConfig:
@@ -29,13 +22,12 @@ class PipelineConfig:
 
     # --- General ---
     fps: int = 25
-    languages: List[str] = field(default_factory=lambda: ["en", "zh"])
     force: bool = False
 
     # --- Stage 1 ---
     sequence_prefix: str = "SNGS-10001"
     gsr_split: str = "sn500"
-    step3_config: str = "gsr_step_3_example_accelerate_vllm"
+    step3_config: str = "gsr_step_3_example_accelerate"
     input_video: Optional[Path] = None
     pklz_video_id: Optional[str] = None
     skip_sam2: bool = False
@@ -44,19 +36,9 @@ class PipelineConfig:
 
     # --- Effects ---
     event_importance_threshold: float = 0.5
-    beam_duration_s: float = 0.5
+    beam_duration_s: float = 1.5
     beam_alpha_max: float = 0.3
     topology_lines_enabled: bool = True
-
-    # --- Stage 2B ---
-    commentary_mode: str = "hybrid"
-    snapshot_hz: float = 2.0
-    radar_hz: float = 1.0
-    llm_max_images: int = 32
-
-    @property
-    def frames_dir(self) -> Path:
-        return self.clip_dir / "img1"
 
     @property
     def predictions_json(self) -> Path:
@@ -65,10 +47,6 @@ class PipelineConfig:
     @property
     def homography_json(self) -> Path:
         return self.existing_homography_json or self.output_dir / "homography_per_frame.json"
-
-    @property
-    def comments_dir(self) -> Path:
-        return self.output_dir / "comments"
 
     @property
     def voice_dir(self) -> Path:
@@ -89,42 +67,6 @@ class PipelineConfig:
     def final_video(self, language: str) -> Path:
         suffix = "_en" if language == "en" else ""
         return self.voice_dir / f"final_video{suffix}.mp4"
-
-    @property
-    def events_json(self) -> Path:
-        return self.comments_dir / "events.json"
-
-    @property
-    def event_spine_json(self) -> Path:
-        return self.comments_dir / "event_spine.json"
-
-    @property
-    def commentary_direct_json(self) -> Path:
-        return self.comments_dir / "commentary_direct.json"
-
-    @property
-    def tactical_state_json(self) -> Path:
-        return self.comments_dir / "tactical_state.json"
-
-    @property
-    def tactical_proposals_json(self) -> Path:
-        return self.comments_dir / "tactical_proposals.json"
-
-    @property
-    def verified_tactical_facts_json(self) -> Path:
-        return self.comments_dir / "verified_tactical_facts.json"
-
-    @property
-    def commentary_json(self) -> Path:
-        return self.comments_dir / "commentary.json"
-
-    @property
-    def relations_json(self) -> Path:
-        return self.comments_dir / "relations.json"
-
-    @property
-    def radar_dir(self) -> Path:
-        return self.comments_dir / "radar"
 
     def should_run_stage1(self) -> bool:
         if self.existing_predictions_json and Path(self.existing_predictions_json).exists():
