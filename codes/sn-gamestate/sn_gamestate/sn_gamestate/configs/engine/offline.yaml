@@ -1,0 +1,9 @@
+_target_: tracklab.engine.OfflineTrackingEngine
+num_workers: ${num_cores}
+callbacks:
+  progress:
+    _target_: tracklab.callbacks.Progressbar
+    use_rich: ${use_rich}
+  visualization:
+    _target_: sn_gamestate.visualization.PitchVisualizationEngine
+    cfg: ${visualization.cfg}

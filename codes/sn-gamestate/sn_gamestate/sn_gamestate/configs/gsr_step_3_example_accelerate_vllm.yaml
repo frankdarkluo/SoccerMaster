@@ -5,7 +5,7 @@ defaults:
 
 experiment_subname: "step_3_vllm"
 
-qwen_7b_vllm_model_path: "${model_dir}/jn/Qwen2.5-VL-7B-Instruct-AWQ"
+qwen_7b_vllm_model_path: "${model_dir}/jn/Qwen2.5-VL-32B-Instruct-AWQ"
 
 # step2 pklz already has reid embeddings — skip reid to save GPU time and VRAM
 pipeline:

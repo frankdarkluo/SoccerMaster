@@ -43,7 +43,7 @@ experiment_subname: "step_1_sn500_10001_10002"
 # Path definitions
 home_dir: "${oc.env:HOME}"
 data_dir: "${project_dir}/datasets"
-model_dir: "${project_dir}/pretrained_models"
+model_dir: "/data/zhangzheng/pretrained_models"
 
 # Machine configuration
 num_cores: 64
@@ -99,7 +99,7 @@ state:
 # Visualization
 visualization:
   cfg:
-    save_videos: False  # Save a .mp4 video on disk with the game state reconstruction output (see 'tracklab/tracklab/configs/visualization' for more options)
+    save_videos: True  # Save a .mp4 video on disk with the game state reconstruction output (see 'tracklab/tracklab/configs/visualization' for more options)
 
 # configure Hydra to use the current working directory
 # and set up the output directory according to experiment_name

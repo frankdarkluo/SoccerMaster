@@ -84,6 +84,7 @@ class TrackingEngine(ABC):
         # super().__init__()
         self.module_names = [module.name for module in modules]
         self.callbacks = callbacks or {}
+        callbacks = callbacks or {}
         callbacks_before = [c for c in callbacks.values() if not c.after_saved_state]
         callbacks_after = [c for c in callbacks.values() if c.after_saved_state]
         callbacks = callbacks_before + [tracker_state] + callbacks_after

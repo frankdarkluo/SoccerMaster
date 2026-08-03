@@ -154,7 +154,13 @@ class PitchVisualizationEngine(Callback):
             nframes,
         ) for image_id in islice(image_metadatas.index, vis_frames)]
         if self.cfg.save_videos:
-            image = cv2_load_image(image_metadatas.iloc[0].file_path)
+            image_path = image_metadatas.iloc[0].file_path
+            try:
+                image = cv2_load_image(image_path)
+            except BaseException as exc:
+                raise RuntimeError(f"Failed to load first frame for video {video_name} from {image_path}") from exc
+            if image is None:
+                raise RuntimeError(f"Failed to load first frame for video {video_name} from {image_path}")
             filepath = self.save_dir / "videos" / f"{video_name}.mp4"
             filepath.parent.mkdir(parents=True, exist_ok=True)
             video_writer = cv2.VideoWriter(
@@ -163,6 +169,18 @@ class PitchVisualizationEngine(Callback):
                 float(self.cfg.video_fps),
                 (image.shape[1], image.shape[0]),
             )
+            if not video_writer.isOpened():
+                log.warning("Failed to open VideoWriter with codec avc1, falling back to mp4v.")
+                video_writer = cv2.VideoWriter(
+                    str(filepath),
+                    cv2.VideoWriter_fourcc(*"mp4v"),
+                    float(self.cfg.video_fps),
+                    (image.shape[1], image.shape[0]),
+                )
+            if not video_writer.isOpened():
+                raise RuntimeError(f"Failed to initialize VideoWriter for {filepath} (avc1 and mp4v unavailable)")
+            frame_size = (image.shape[1], image.shape[0])
+            frame_count_written = 0
         with Pool(self.cfg.num_workers) as p:
             for patch, file_name in p.imap(process_frame, args):
                 if self.cfg.save_images:
@@ -175,12 +193,22 @@ class PitchVisualizationEngine(Callback):
                     filepath.parent.mkdir(parents=True, exist_ok=True)
                     assert cv2.imwrite(str(filepath), patch)
                 if self.cfg.save_videos:
+                    if patch is None or patch.size == 0:
+                        raise RuntimeError(f"Empty frame generated for video {video_name}")
+                    if (patch.shape[1], patch.shape[0]) != frame_size:
+                        raise RuntimeError(
+                            f"Frame size mismatch for video {video_name}: "
+                            f"got {patch.shape[1]}x{patch.shape[0]}, expected {frame_size[0]}x{frame_size[1]}"
+                        )
                     video_writer.write(patch)
+                    frame_count_written += 1
                 if progress:
                     progress.on_module_step_end(None, "vis", None, None)
 
         # save the final video
         if self.cfg.save_videos:
+            if frame_count_written == 0:
+                raise RuntimeError(f"No frames written for {video_name}, skipped video writing to {filepath}")
             video_writer.release()
             del video_writer
         self.processed_video_counter += 1

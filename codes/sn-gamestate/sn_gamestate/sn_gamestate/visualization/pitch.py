@@ -57,10 +57,12 @@ def draw_radar_view(patch, detections, scale, delta=32, group="ground truth", vi
     pitch_width = 105 + 2 * 10  # pitch size + 2 * margin
     pitch_height = 68 + 2 * 5  # pitch size + 2 * margin
     sign = -1 if group == "ground truth" else +1
-    radar_center_x = int(1920/2 - pitch_width * scale / 2 * sign - delta * sign)
-    radar_center_y = int(1080 - pitch_height * scale / 2)
+    # Use actual frame size; hardcoding 1920x1080 crashes on 720p event clips.
+    frame_h, frame_w = patch.shape[:2]
+    radar_center_x = int(frame_w / 2 - pitch_width * scale / 2 * sign - delta * sign)
+    radar_center_y = int(frame_h - pitch_height * scale / 2)
     radar_top_x = int(radar_center_x - pitch_width * scale / 2)
-    radar_top_y = int(1080 - pitch_height * scale)
+    radar_top_y = int(frame_h - pitch_height * scale)
     radar_width = int(pitch_width * scale)
     radar_height = int(pitch_height * scale)
     if pitch_file is not None:
@@ -73,9 +75,12 @@ def draw_radar_view(patch, detections, scale, delta=32, group="ground truth", vi
         radar_img = np.ones((pitch_height * scale, pitch_width * scale, 3)) * 255
 
     alpha = 0.3
+    roi = patch[radar_top_y:radar_top_y + radar_height, radar_top_x:radar_top_x + radar_width]
+    if roi.size == 0 or radar_img is None or getattr(radar_img, "size", 0) == 0:
+        log.warning("Skipping radar overlay: empty ROI (frame=%sx%s, radar_xy=%s,%s)", frame_w, frame_h, radar_top_x, radar_top_y)
+        return
     patch[radar_top_y:radar_top_y + radar_height, radar_top_x:radar_top_x + radar_width,
-    :] = cv2.addWeighted(patch[radar_top_y:radar_top_y + radar_height, radar_top_x:radar_top_x + radar_width,
-    :], 1-alpha, radar_img, alpha, 0.0)
+    :] = cv2.addWeighted(roi, 1 - alpha, radar_img, alpha, 0.0)
     draw_text(
         patch,
         group,

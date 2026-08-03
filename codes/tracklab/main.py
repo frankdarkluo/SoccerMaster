@@ -1,4 +1,5 @@
-from tracklab.main import main
+from tracklab.tracklab.main import main
+
 
 
 if __name__ == "__main__":

@@ -1,1 +1,2 @@
 from .bpbreid_strong_sort_api import BPBReIDStrongSORT
+from .bpbreid_pitch_deep_sort_api import BPBReIDPitchDeepSORT

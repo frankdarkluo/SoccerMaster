@@ -304,8 +304,8 @@ def load_tracklets_for_video(pklz_path, video_id, min_length=3, num_frames=None,
         raw_tracklets[track_id] = group
     print(f"Found {len(raw_tracklets)} tracklets")
 
-    # Determine prefix based on split: train=1, valid=2, test=3, challenge=4, franz=5, sn500=6
-    split_prefix = {'train': '1', 'valid': '2', 'test': '3', 'challenge': '4', 'franz': '5', 'sn500': '6'}[split]
+    # Match Tracklab's custom-split fallback so generated image ids stay aligned.
+    split_prefix = {'train': '1', 'valid': '2', 'test': '3', 'challenge': '4', 'franz': '5', 'sn500': '6'}.get(split, '9')
     frame_idx_2_image_id = {i: f'{split_prefix}{video_id}{(i+1):06d}' for i in range(num_frames)}
     img_id_to_frame_idx = {img_id: i for i, img_id in frame_idx_2_image_id.items()}
     
