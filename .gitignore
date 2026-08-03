@@ -1,4 +1,18 @@
+# Local datasets and generated artifacts
 datasets/
+outputs/
+data/FIFA Game Library/
+data/SoccerNetGS_videos/
+data/event-clips*_all/
+data/fifa_training_centre/
+
+# Local tools, worktrees, and bundled environments
+.claude/worktrees/
+.omc/
+.venv/
+knq-vision-service/
+codes/CosyVoice/
+docs/**/*.pdf
 
 __pycache__/
 *.py[cod]
@@ -10,8 +24,10 @@ pretrained_models
 *.txt
 *.pth
 *.csv
-datasets
-outputs
+
+.env
+.env.*
+!.env.example
 
 # Deformable attention compiled files
 *.so
