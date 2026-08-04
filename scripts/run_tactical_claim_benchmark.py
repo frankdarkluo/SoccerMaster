@@ -12,17 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from pipeline.tactics_qa.opentac import (
-    ONE_SHOT_TACTICS,
-    ONE_SHOT_V2_TACTICS,
-    PHASES,
-    report,
-    report_shot_comparison,
-    report_shot_comparison_v2,
-    run,
-    run_one_shot,
-    run_one_shot_v2,
-)
+from pipeline.tactics_qa.opentac import PHASES, report, run
 
 OUTPUT = ROOT / "outputs/tactical_claim_benchmark/opentac"
 GROUND_TRUTH = OUTPUT / "evaluation/ground_truth.jsonl"
@@ -40,23 +30,10 @@ def parser() -> argparse.ArgumentParser:
     generate.add_argument("--allow-external-upload", action="store_true")
     generate.add_argument("--force", action="store_true")
     generate.add_argument("--retry-failed", action="store_true")
-    one_shot = commands.add_parser("run-one-shot")
-    one_shot.add_argument("--provider", choices=("doubao", "gemini"), required=True)
-    one_shot.add_argument("--tactic-id", choices=ONE_SHOT_TACTICS, action="append", dest="tactic_ids")
-    one_shot.add_argument("--clip-uid", action="append", dest="clip_uids")
-    one_shot.add_argument("--allow-external-upload", action="store_true")
-    one_shot.add_argument("--force", action="store_true")
-    one_shot.add_argument("--retry-failed", action="store_true")
-    one_shot_v2 = commands.add_parser("run-one-shot-v2")
-    one_shot_v2.add_argument("--provider", choices=("doubao", "gemini"), required=True)
-    one_shot_v2.add_argument("--tactic-id", choices=ONE_SHOT_V2_TACTICS, action="append", dest="tactic_ids")
-    one_shot_v2.add_argument("--clip-uid", action="append", dest="clip_uids")
-    one_shot_v2.add_argument("--allow-external-upload", action="store_true")
-    one_shot_v2.add_argument("--force", action="store_true")
-    one_shot_v2.add_argument("--retry-failed", action="store_true")
+    generate.add_argument("--samples", type=int, dest="score_samples", help="odd score-pass sample count (default: Gemini 3, Doubao 1)")
+    generate.add_argument("--temperature", type=float, help="score-pass temperature for providers that support it; Gemini 3.6 rejects this flag")
+    generate.add_argument("--no-topology", action="store_true", help="write a geometry-free ablation under ablation_no_topology/")
     commands.add_parser("report")
-    commands.add_parser("report-shot-comparison")
-    commands.add_parser("report-shot-comparison-v2")
     return result
 
 
@@ -64,45 +41,11 @@ def main() -> None:
     args = parser().parse_args()
     if args.command == "report":
         value = report(OUTPUT, GLOSSARY, GROUND_TRUTH)
-    elif args.command == "report-shot-comparison":
-        value = report_shot_comparison(OUTPUT, GLOSSARY, GROUND_TRUTH)
-    elif args.command == "report-shot-comparison-v2":
-        value = report_shot_comparison_v2(OUTPUT, GLOSSARY, GROUND_TRUTH)
-    elif args.command == "run-one-shot":
-        if not args.allow_external_upload:
-            raise SystemExit("Refusing external video upload without --allow-external-upload")
-        value = run_one_shot(
-            OUTPUT,
-            GLOSSARY,
-            SOURCE_ROWS,
-            GROUND_TRUTH,
-            ROOT,
-            provider=args.provider,
-            tactic_ids=args.tactic_ids,
-            clip_uids=args.clip_uids,
-            force=args.force,
-            retry_failed=args.retry_failed,
-        )
-    elif args.command == "run-one-shot-v2":
-        if not args.allow_external_upload:
-            raise SystemExit("Refusing external video upload without --allow-external-upload")
-        value = run_one_shot_v2(
-            OUTPUT,
-            GLOSSARY,
-            SOURCE_ROWS,
-            GROUND_TRUTH,
-            ROOT,
-            provider=args.provider,
-            tactic_ids=args.tactic_ids,
-            clip_uids=args.clip_uids,
-            force=args.force,
-            retry_failed=args.retry_failed,
-        )
     else:
         if not args.allow_external_upload:
             raise SystemExit("Refusing external video upload without --allow-external-upload")
         value = run(
-            OUTPUT,
+            OUTPUT / "ablation_no_topology" if args.no_topology else OUTPUT,
             GLOSSARY,
             SOURCE_ROWS,
             GROUND_TRUTH,
@@ -112,6 +55,9 @@ def main() -> None:
             clip_uids=args.clip_uids,
             force=args.force,
             retry_failed=args.retry_failed,
+            score_samples=args.score_samples,
+            temperature=args.temperature,
+            use_topology=not args.no_topology,
         )
     print(json.dumps(value, ensure_ascii=False, indent=2))
 

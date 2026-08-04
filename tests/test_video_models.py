@@ -163,7 +163,7 @@ def test_gemini_transport_errors_are_retried(monkeypatch, error_name):
     calls = []
     error_type = type(error_name, (RuntimeError,), {})
 
-    def flaky(*_):
+    def flaky(*_args, **_kwargs):
         calls.append(None)
         if len(calls) == 1:
             raise error_type("transient")
@@ -186,7 +186,7 @@ def test_doubao_sdk_rate_limit_is_retried(monkeypatch):
     class RateLimitError(RuntimeError):
         pass
 
-    def flaky(*_):
+    def flaky(*_args, **_kwargs):
         calls.append(None)
         if len(calls) == 1:
             raise RateLimitError("retry")
@@ -204,7 +204,7 @@ def test_retry_exhaustion_records_attempt_count(monkeypatch):
     class ReadTimeout(RuntimeError):
         pass
 
-    def timeout(*_):
+    def timeout(*_args, **_kwargs):
         raise ReadTimeout("timeout")
 
     monkeypatch.setattr(video_models, "_doubao", timeout)
@@ -254,6 +254,99 @@ def test_doubao_video_uses_direct_base64_response_input(tmp_path, monkeypatch):
     assert content[0]["fps"] == 2
     assert content[0]["video_url"] == "data:video/mp4;base64,dmlkZW8tYnl0ZXM="
     assert content[1] == {"type": "input_text", "text": "prompt"}
+    assert sent["temperature"] == 0.0
+
+
+def test_doubao_honors_explicit_fps_and_temperature(tmp_path, monkeypatch):
+    sent = {}
+    response = SimpleNamespace(usage=None, output_text='{"ok": true}')
+    client = SimpleNamespace(responses=SimpleNamespace(
+        create=lambda **kwargs: sent.update(kwargs) or response,
+    ))
+    monkeypatch.delenv("ARK_RESPONSES_MODEL", raising=False)
+    monkeypatch.setattr(video_models, "_doubao_client", lambda: client)
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"video-bytes")
+
+    video_models.generate_json("doubao", "prompt", {}, video_path=video, fps=8.0, temperature=0.5)
+
+    assert sent["input"][0]["content"][0]["fps"] == 8.0
+    assert sent["temperature"] == 0.5
+
+
+def test_gemini_rejects_interactions_api_fps_field(tmp_path, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    monkeypatch.setattr(video_models, "_GEMINI_INDEX", 0)
+    monkeypatch.setattr(video_models, "_GEMINI_SUSPENDED", set())
+    sent = {}
+
+    def post(*_, **kwargs):
+        sent.update(kwargs["json"])
+        return SimpleNamespace(
+            status_code=200, headers={}, text="",
+            json=lambda: {"steps": [{"type": "model_output", "content": [{"type": "text", "text": '{"ok": true}'}]}]},
+        )
+
+    monkeypatch.setitem(sys.modules, "httpx", SimpleNamespace(post=post, Timeout=lambda *_a, **_k: None))
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"video-bytes")
+
+    with pytest.raises(ValueError, match="has no fps field"):
+        video_models.generate_json("gemini", "prompt", {}, video_path=video, fps=6.0, temperature=0.7)
+
+    assert sent == {}
+
+
+def test_gemini_omits_video_metadata_when_fps_not_given(tmp_path, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    monkeypatch.setattr(video_models, "_GEMINI_INDEX", 0)
+    monkeypatch.setattr(video_models, "_GEMINI_SUSPENDED", set())
+    sent = {}
+
+    def post(*_, **kwargs):
+        sent.update(kwargs["json"])
+        return SimpleNamespace(
+            status_code=200, headers={}, text="",
+            json=lambda: {"steps": [{"type": "model_output", "content": [{"type": "text", "text": '{"ok": true}'}]}]},
+        )
+
+    monkeypatch.setitem(sys.modules, "httpx", SimpleNamespace(post=post, Timeout=lambda *_a, **_k: None))
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"video-bytes")
+
+    video_models.generate_json("gemini", "prompt", {}, video_path=video)
+
+    assert "video_metadata" not in sent["input"][0]
+    assert "generation_config" not in sent
+
+
+def test_temporary_window_clip_trims_with_ffmpeg(tmp_path, monkeypatch):
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"source")
+    commands = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        Path(command[-1]).write_bytes(b"window")
+
+    monkeypatch.setattr(video_models.subprocess, "run", fake_run)
+    with video_models.temporary_window_clip(source, 4.0, 9.0, playback_slowdown=6) as window:
+        assert window.read_bytes() == b"window"
+
+    assert not window.exists()
+    command = commands[0]
+    assert command[command.index("-ss") + 1] == "4.000"
+    assert command[command.index("-to") + 1] == "9.000"
+    assert command[command.index("-vf") + 1] == "setpts=6*PTS"
+
+
+def test_temporary_window_clip_rejects_empty_or_inverted_range(tmp_path):
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"source")
+
+    with pytest.raises(ValueError, match="start_s < end_s"):
+        with video_models.temporary_window_clip(source, 5.0, 5.0):
+            pass
 
 
 def test_doubao_preserves_two_video_order(tmp_path, monkeypatch):
@@ -386,7 +479,7 @@ def test_generate_json_keeps_single_video_api(tmp_path, monkeypatch):
     monkeypatch.setattr(
         video_models,
         "_doubao",
-        lambda _prompt, _schema, paths: seen.append(paths) or ({"ok": True}, []),
+        lambda _prompt, _schema, paths, _video_instructions=None, **_kwargs: seen.append(paths) or ({"ok": True}, []),
     )
 
     video_models.generate_json("doubao", "prompt", {}, video_path=video)

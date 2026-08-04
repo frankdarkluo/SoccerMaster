@@ -78,7 +78,7 @@ def analyze(
 
     return records
 
-VISIBLE_TOPOLOGY_VERSION = "visible-topology-v1"
+VISIBLE_TOPOLOGY_VERSION = "visible-topology-v2"
 VISIBLE_TOPOLOGY_PARAMS = {
     "window_s": 1.0,
     "stride_s": 0.5,
@@ -389,6 +389,19 @@ def analyze_visible_topology(
             inter_line = _inter_line_space(lines)
             if inter_line:
                 zones.append(inter_line)
+            ball_samples = sorted(
+                (det for frame in frames for det in by_frame[frame] if det.role == "ball"),
+                key=lambda det: det.frame,
+            )
+            ball = None
+            if ball_samples:
+                first, last = ball_samples[0], ball_samples[-1]
+                ball = {
+                    "x_m": round(float(np.median([det.x for det in ball_samples])), 2),
+                    "y_m": round(float(np.median([det.y for det in ball_samples])), 2),
+                    "displacement_m": round(float(np.hypot(last.x - first.x, last.y - first.y)), 2),
+                    "sample_count": len(ball_samples),
+                }
             windows.append({
                 "window_id": window_id,
                 "start_s": round(start, 3),
@@ -397,6 +410,7 @@ def analyze_visible_topology(
                 "valid_frame_count": len(valid_frames),
                 "lines": lines,
                 "zones": zones,
+                "ball": ball,
             })
         start += stride_s
 

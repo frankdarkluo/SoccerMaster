@@ -62,6 +62,7 @@ def test_visible_topology_returns_only_three_stable_target_lines():
     ]
     assert {member["track_id"] for member in first["lines"][0]["members"]} == {3, 4}
     assert {zone["type"] for zone in first["zones"]} == {"unit_band", "inter_line_space"}
+    assert first["ball"] == {"x_m": -5.0, "y_m": -10.0, "displacement_m": 0.0, "sample_count": 25}
 
 
 def test_member_below_sixty_percent_keeps_line_candidate_only():
