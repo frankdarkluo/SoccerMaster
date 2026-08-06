@@ -43,11 +43,16 @@ Because every rubric item maps to an auditable KB field, judge scores are tracea
 - **Where accessible**: tracking-aligned video (SkillCorner-class) for a high-precision machine-verified slice.
 - FIFA Game Library clips remain the KB/exemplar layer only and never enter test data (licensing).
 
-### 3.4 Ground-truth construction: propose → rule-verify → adjudicate
+### 3.4 Ground-truth construction: dual blind annotation, pooled candidates, criterion-cited arbitration
 
-1. **Propose**: frontier VLMs nominate candidate (tactic, window, actors) triples via the two-phase open-nomination protocol (observation-first, then card-matched nomination).
-2. **Rule-verify (tiered)**: where GSR confidence is high, deterministic recipes check the KB's geometric/temporal criteria on pitch coordinates (tier A: machine-verified); otherwise trained adjudicators check the KB observable-feature checklist visually (tier B: human-verified); unverifiable claims are excluded. Tier metadata ships with every claim, and the tier distribution is itself a reported finding.
-3. **Adjudicate**: humans resolve disagreements against KB concept cards. A **human-only sampled slice** (annotated without model proposals) measures the recall bias of the propose stage — tactics VLMs cannot see must not silently vanish from the label distribution.
+A pilot annotation pass motivates this design and illustrates the core difficulty. Over 67 clips it produced 84 claims, but 55 of those clips carry exactly one claim, only 14 of the 19 P0 tactics appear at all, and four tactics account for 77% of the claims. A 10 to 30 second soccer clip almost always contains several concurrent tactical patterns, so this distribution describes the annotation process rather than the game: free-recall annotation is dominated by visually salient tactics such as counter-attacks, while quieter patterns like half-space penetration go unrecorded. Labels of this shape can measure precision but not recall, and cannot support multi-label recognition at all. Humans and models fail in opposite directions here. Human annotators rarely assert a tactic that is not there, but they omit; VLMs rarely omit, but they confuse similar tactics. The protocol is built around that asymmetry.
+
+1. **Human pass (checklist format, blind to model output).** Annotators judge every clip against all 19 P0 concept cards as an explicit checklist, marking each present, absent, or not observable. This converts free recall into recognition, which attacks the omission problem without any model involvement. Annotators mark an anchor timestamp where the tactic is clearest rather than precise boundaries, since human boundary agreement is poor and demanding it early manufactures spurious disagreement.
+2. **Model pass (pooled, blind to human labels).** Two or more VLMs nominate candidates under the open-nomination protocol, tuned toward recall. Pooling two models beats one on coverage, and their agreement structure is a free difficulty signal: candidates both models propose are easy items, single-model candidates are hard ones.
+3. **Merge.** The union is partitioned into agreement, human-only, model-only, and same-tactic-different-window.
+4. **Arbitration with cited criteria.** Adjudicators resolve disagreements and set boundaries. Every accepted claim must cite which KB observable-feature it satisfies; a bare accept/reject verdict is not sufficient, because it cannot distinguish an annotator being reminded of a real tactic from being talked into a spurious one. The cited criteria also seed T3 justification data.
+
+**Bias controls.** Ground truth pooled from human and model candidates advantages models that contributed to the pool, the pooling bias familiar from information retrieval evaluation. One model is therefore held out of the pool entirely, and its performance gap against a pooled model bounds the effect. Separately, 10 to 20% of clips are annotated independently by two humans to estimate inter-annotator agreement and the human omission rate.
 
 **Scale**: ~1–2k verified claims (~50–100 per tactic, positives + hard negatives), match-disjoint splits. **Annotation resources**: author + recruited football-literate students with measured inter-annotator agreement; MSRA annotation budget if available; crowdworkers gated by a KB-confusable-pair qualification quiz for scale-out.
 
@@ -55,7 +60,7 @@ Because every rubric item maps to an auditable KB field, judge scores are tracea
 
 - **Frontier VLM sweep** (Gemini, GPT-class, Claude, Qwen-VL, Doubao) on T1–T3: Top-1 claim accuracy, evidence-window overlap, rubric-scored justification.
 - **Anti-shortcut diagnostics**: confusable-pair confusion matrix, hard-negative false-positive rate, and "right label, wrong evidence" rate (T1 correct ∧ T2 wrong).
-- **Human expert ceiling**, doubling as the **judge-reliability audit**: on the same audited slice, report human accuracy on T1/T3, judge–human agreement, and inter-judge agreement — pre-empting the standard LLM-judge-bias objection and producing the calibration data the RL phase needs.
+- **Human expert ceiling**, which falls out of the §3.4 human pass rather than requiring separate annotation: it directly yields human accuracy on T1 and per-tactic human-versus-model recall, a finding in its own right. The same audited slice supplies the **judge-reliability check** (judge-human agreement and inter-judge agreement), pre-empting the standard LLM-judge-bias objection and producing the calibration data the RL phase needs.
 
 ## 4. Companion method (staged)
 
@@ -66,14 +71,15 @@ Because every rubric item maps to an auditable KB field, judge scores are tracea
 
 | Phase | Deliverable |
 |---|---|
-| M1 | Finish 67-clip pilot; use its confusion/failure data to freeze task formats and per-tactic rubrics |
+| M1 | Finish 67-clip pilot; validate checklist-format annotation against the current free-recall labels; freeze task formats and per-tactic rubrics |
 | M2–M3 | Scale propose–verify–adjudicate annotation to ~1–2k claims on SoccerNet/SoccerReplay; freeze benchmark; run VLM sweep + human study |
 | M4 | Benchmark paper draft |
 | M5–M6 | Rubric-anchored RL against the frozen benchmark |
 
 ## 6. Risks and mitigations
 
-- **Proposal recall bias** (model-nominated candidates skew the label pool) → human-only slice quantifies it; reported, not hidden.
+- **Pooling bias** (models contributing to the candidate pool are advantaged, and tactics neither humans nor models spot stay invisible) → held-out model bounds the effect; reported, not hidden.
+- **Checklist assumption**: the recall argument rests on checklist annotation actually outperforming free recall. This is measurable before scaling, by re-annotating a sample of the 67 pilot clips in checklist format and comparing claim density against the current 84.
 - **GSR noise on broadcast** → tiered verification keeps the benchmark honest; pilot measures tier-A share early, before the design commits to it.
 - **Judge bias / reward hacking** → auditable KB-derived rubrics, judge-reliability reporting, held-out rubric split, human audits.
 - **Annotation throughput** (~70–170h of football-literate work) → three-source staffing plan; scale target adjustable to ~1k without changing the design.

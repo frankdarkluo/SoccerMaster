@@ -17,7 +17,7 @@ from pipeline.tactics_qa.opentac import PHASES, report, run
 OUTPUT = ROOT / "outputs/tactical_claim_benchmark/opentac"
 GROUND_TRUTH = OUTPUT / "evaluation/ground_truth.jsonl"
 GLOSSARY = ROOT / "data/足球战术数据库_词条表_Grid.csv"
-SOURCE_ROWS = ROOT / "benchmark/tactical_prototypes/source_rows.jsonl"
+CLIP_MANIFEST = ROOT / "benchmark/tactical_prototypes/clip_manifest.jsonl"
 
 
 def parser() -> argparse.ArgumentParser:
@@ -47,7 +47,7 @@ def main() -> None:
         value = run(
             OUTPUT / "ablation_no_topology" if args.no_topology else OUTPUT,
             GLOSSARY,
-            SOURCE_ROWS,
+            CLIP_MANIFEST,
             GROUND_TRUTH,
             ROOT,
             phase=args.phase,

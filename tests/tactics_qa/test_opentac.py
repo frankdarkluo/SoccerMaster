@@ -21,7 +21,7 @@ from pipeline.tactics_qa.opentac import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GLOSSARY = REPO_ROOT / "data/足球战术数据库_词条表_Grid.csv"
 GROUND_TRUTH = REPO_ROOT / "outputs/tactical_claim_benchmark/opentac/evaluation/ground_truth.jsonl"
-SOURCE_ROWS = REPO_ROOT / "benchmark/tactical_prototypes/source_rows.jsonl"
+CLIP_MANIFEST = REPO_ROOT / "benchmark/tactical_prototypes/clip_manifest.jsonl"
 
 
 def card(tactic_id="counter-attack", name="快速反击"):
@@ -70,6 +70,30 @@ def test_score_prompt_and_schema_are_phase_independent():
     assert "first causal gate" in prompt
     assert "supporting_sequence_ids" not in response_schema(tactic_ids)["properties"]["assessments"]["items"]["properties"]
     assert "observations" not in response_schema(tactic_ids)["properties"]
+
+
+def test_score_prompt_keeps_an_absent_default_against_over_firing():
+    """Guards the regression where the score pass lost its absent prior and over-fired.
+
+    The screen is deliberately over-inclusive, so the score pass must be told that
+    forwarding is not evidence, that absent is the default, and that a card's
+    `confusing` entries have to be ruled out before marking it present.
+    """
+    prompt = build_prompt("clip-neutral.mp4", 6.0, [card()])
+
+    assert "NOT evidence of presence" in prompt
+    assert "most forwarded cards are still absent" in prompt
+    assert "absent is the default verdict" in prompt
+    assert "may contain no tactic at all" in prompt
+    # The screen must never be described in a way that reads as an endorsement.
+    assert "pre-screened" not in prompt
+    assert "narrowed list" not in prompt
+    # B7 populated `confusing`; the prompt has to actually direct the model to use it.
+    assert "`confusing` entries" in prompt
+    assert "mark the card absent" in prompt
+    # Observed v2 over-fire cluster: run-in-behind / line-breaking-pass / long-ball from one forward pass.
+    assert "ordinary progression" in prompt
+    assert "narrative plausibility" in prompt
 
 
 def test_score_screen_facts_rebases_transition_and_keeps_questionnaire():
@@ -288,7 +312,7 @@ def test_run_screens_then_scores_only_the_narrowed_window(tmp_path, monkeypatch)
 
     output_root = tmp_path / "opentac"
     counts = opentac.run(
-        output_root, GLOSSARY, SOURCE_ROWS, GROUND_TRUTH, REPO_ROOT,
+        output_root, GLOSSARY, CLIP_MANIFEST, GROUND_TRUTH, REPO_ROOT,
         phase="phase1_direct", provider="gemini", clip_uids=["event_clips:0006"],
     )
 
@@ -308,6 +332,45 @@ def test_run_screens_then_scores_only_the_narrowed_window(tmp_path, monkeypatch)
     assert slowdowns == [6.0]
 
 
+def test_run_doubao_score_fps_stays_inside_ark_range(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_generate_json(_provider, _prompt, _schema, *, video_path, fps, **_kwargs):
+        calls.append(fps)
+        if len(calls) == 1:
+            payload = {
+                "restart_type": "open_play", "possession_transition_s": None,
+                "decisive_window": {"start_s": 1.0, "end_s": 5.0},
+                "candidate_tactic_ids": ["counter-attack"],
+            }
+        else:
+            payload = {"assessments": [{
+                "tactic_id": "counter-attack", "verdict": "absent", "confidence": 80,
+                "reason_zh": "r", "matched_cues": [], "evidence_spans": [],
+            }]}
+        return payload, [{"tokens": 1}], 1
+
+    @contextmanager
+    def fake_window_clip(video_path, _start_s, _end_s, *, playback_slowdown):
+        yield video_path
+
+    monkeypatch.setattr(opentac, "generate_json", fake_generate_json)
+    monkeypatch.setattr(opentac, "duration", lambda _path: 12.0)
+    monkeypatch.setattr(opentac, "temporary_window_clip", fake_window_clip)
+
+    output_root = tmp_path / "opentac"
+    opentac.run(
+        output_root, GLOSSARY, CLIP_MANIFEST, GROUND_TRUTH, REPO_ROOT,
+        phase="phase1_direct", provider="doubao", clip_uids=["event_clips:0006"], use_topology=False,
+    )
+
+    assert calls == [opentac.SCREEN_FPS, opentac.DOUBAO_SCORE_FPS]
+    assert 0.2 <= opentac.DOUBAO_SCORE_FPS <= 5.0
+    result = json.loads((output_root / "phase1_direct/doubao/0006.json").read_text(encoding="utf-8"))
+    assert result["score_fps"] == opentac.DOUBAO_SCORE_FPS
+    assert result["score_playback_slowdown"] == 1.0
+
+
 def test_run_skips_score_pass_when_screen_finds_nothing_plausible(tmp_path, monkeypatch):
     def fake_generate_json(_provider, _prompt, _schema, **_kwargs):
         payload = {
@@ -322,7 +385,7 @@ def test_run_skips_score_pass_when_screen_finds_nothing_plausible(tmp_path, monk
 
     output_root = tmp_path / "opentac"
     opentac.run(
-        output_root, GLOSSARY, SOURCE_ROWS, GROUND_TRUTH, REPO_ROOT,
+        output_root, GLOSSARY, CLIP_MANIFEST, GROUND_TRUTH, REPO_ROOT,
         phase="phase1_direct", provider="gemini", clip_uids=["event_clips:0006"], use_topology=False,
     )
 
@@ -351,7 +414,7 @@ def test_run_skips_already_written_clips_unless_forced(tmp_path, monkeypatch):
 
     output_root = tmp_path / "opentac"
     run_kwargs = dict(
-        output_root=output_root, glossary_path=GLOSSARY, source_rows=SOURCE_ROWS, ground_truth=GROUND_TRUTH,
+        output_root=output_root, glossary_path=GLOSSARY, clip_manifest=CLIP_MANIFEST, ground_truth=GROUND_TRUTH,
         repo_root=REPO_ROOT, phase="phase1_direct", provider="gemini", clip_uids=["event_clips:0006"],
     )
 

@@ -6,14 +6,14 @@ import math
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from pipeline.utils.labels import frame_index_from_labels
-
-
 def load_predictions_index(predictions_json: Path) -> Tuple[Dict[int, str], Dict[str, List[dict]]]:
     with open(predictions_json, encoding="utf-8") as f:
         data = json.load(f)
 
-    image_id_to_frame, frame_to_image_id = frame_index_from_labels(data)
+    frame_to_image_id = {
+        int(Path(image["file_name"]).stem): str(image["image_id"])
+        for image in data.get("images", [])
+    }
     anns_by_image: Dict[str, List[dict]] = {}
     for ann in data.get("annotations", []):
         image_id = str(ann.get("image_id", ""))

@@ -27,9 +27,21 @@ def _video_duration_s(path: Path) -> float:
     return duration
 
 
-def _load_segments(path: Path) -> list[dict]:
-    with path.open(encoding="utf-8") as handle:
-        data = json.load(handle)
+def _load_segments(path: Path, duration_s: float) -> list[dict]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(data, dict) and data.get("commentary_zh"):
+        fact = data.get("locked_fact") or {}
+        window = fact.get("window") or {}
+        tactic = fact.get("tactic_zh")
+        if not tactic:
+            raise ValueError(f"Missing locked tactic in {path}")
+        return [{
+            "timestamp_s": float(window.get("start_s", 0.0)),
+            "end_s": duration_s,
+            "text_zh": data["commentary_zh"],
+            "fallback_text_zh": f"{tactic}形成威胁。",
+            "human_review_reference": fact,
+        }]
     segments = data.get("segments", data.get("commentary", [])) if isinstance(data, dict) else data
     if not segments:
         raise RuntimeError(f"No commentary segments in {path}")
@@ -97,6 +109,7 @@ def run_stage3_tts(
     voice: str = "both",
     prompt_wav: Optional[Path] = None,
     prompt_text: Optional[str] = None,
+    commentary_record: Optional[Path] = None,
     force: bool = False,
     prefer_fallback: bool = False,
     borrow_silence: bool = False,
@@ -108,15 +121,15 @@ def run_stage3_tts(
     output_dir = Path(output_dir)
     config = PipelineConfig(output_dir=output_dir)
     config.voice_dir.mkdir(parents=True, exist_ok=True)
-    commentary = output_dir / "comments" / "commentary.json"
+    commentary = Path(commentary_record) if commentary_record else output_dir / "comments" / "commentary.json"
     clip = output_dir / "clip.mp4"
     if not commentary.is_file():
-        raise FileNotFoundError(f"commentary.json not found: {commentary}")
+        raise FileNotFoundError(f"commentary not found: {commentary}")
     if not clip.is_file():
         raise FileNotFoundError(f"clip.mp4 not found: {clip}")
 
-    segments = _load_segments(commentary)
     duration_s = _video_duration_s(clip)
+    segments = _load_segments(commentary, duration_s)
     synthesizer = CosyVoiceSynthesizer(MODEL_DIR)
 
     default_audio = config.commentary_audio(language, default=True)
@@ -151,6 +164,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--prompt-wav", type=Path)
     parser.add_argument("--prompt-text")
+    parser.add_argument("--commentary-record", type=Path)
     parser.add_argument(
         "--prefer-fallback", action="store_true",
         help="use fallback text for locked tactical segments",
@@ -171,6 +185,7 @@ def main() -> None:
         voice=args.voice,
         prompt_wav=args.prompt_wav,
         prompt_text=args.prompt_text,
+        commentary_record=args.commentary_record,
         prefer_fallback=args.prefer_fallback,
         borrow_silence=args.borrow_silence,
         force=args.force,

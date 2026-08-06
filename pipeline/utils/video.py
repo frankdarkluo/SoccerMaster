@@ -70,12 +70,13 @@ def reencode_to_h264(src: Path, dst: Path) -> None:
 
 
 def encode_video(frame_dir: Path, output_path: Path, fps: float = 25.0) -> None:
-    """Encode directory of numbered JPEGs to MP4."""
+    """Encode directory of numbered JPEGs to MP4 (native res, low compression)."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         "ffmpeg", "-y", "-framerate", str(fps),
         "-i", str(frame_dir / "%06d.jpg"),
         "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-crf", "23", "-preset", "medium",
         "-movflags", "+faststart",
         str(output_path),
     ]

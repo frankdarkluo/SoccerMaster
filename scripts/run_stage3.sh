@@ -10,6 +10,7 @@ STAGE3_VOICE="${STAGE3_VOICE:-both}"
 STAGE3_FORCE="${STAGE3_FORCE:-1}"
 STAGE3_PROMPT_WAV="${STAGE3_PROMPT_WAV:-}"
 STAGE3_PROMPT_TEXT="${STAGE3_PROMPT_TEXT:-}"
+STAGE3_COMMENTARY_RECORD="${STAGE3_COMMENTARY_RECORD:-}"
 
 cmd=(
   python -m pipeline.stage3_tts.run "$OUTPUT_DIR"
@@ -27,6 +28,10 @@ fi
 
 if [[ -n "$STAGE3_PROMPT_TEXT" ]]; then
   cmd+=(--prompt-text "$STAGE3_PROMPT_TEXT")
+fi
+
+if [[ -n "$STAGE3_COMMENTARY_RECORD" ]]; then
+  cmd+=(--commentary-record "$STAGE3_COMMENTARY_RECORD")
 fi
 
 exec "${cmd[@]}"

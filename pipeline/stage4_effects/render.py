@@ -31,8 +31,10 @@ EVENT_IMPORTANCE = {
 }
 
 
-def load_effect_events(path: Path) -> list[dict]:
+def load_effect_events(path: Path | None) -> list[dict]:
     """Read saved events and normalize the effects fields once."""
+    if path is None:
+        return []
     with Path(path).open(encoding="utf-8") as handle:
         payload = json.load(handle)
     events = payload if isinstance(payload, list) else payload.get("events", [])
@@ -54,7 +56,7 @@ def load_effect_events(path: Path) -> list[dict]:
 
 def render_annotated_video(
     frames_dir: Path,
-    events_json_path: Path,
+    events_json_path: Optional[Path],
     predictions_json_path: Path,
     output_path: Path,
     config: PipelineConfig,

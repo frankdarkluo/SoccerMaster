@@ -166,6 +166,10 @@ def test_event_beam_only_highlights_decisive_passer():
     assert np.any(frame != 10)
 
 
+def test_effect_events_are_optional():
+    assert load_effect_events(None) == []
+
+
 def test_effect_events_keep_key_pass_importance_and_timestamp(tmp_path: Path):
     path = tmp_path / "events.json"
     path.write_text(json.dumps({"events": [{

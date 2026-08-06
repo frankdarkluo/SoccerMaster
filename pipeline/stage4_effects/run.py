@@ -70,7 +70,7 @@ def run_stage4(
         clip_dir = Path(config.clip_dir)
         force = config.force if force is None else force
     predictions = _require_file(output_dir / "predictions.json")
-    events = _require_file(output_dir / "comments" / "events.json")
+    events = output_dir / "comments" / "events.json"
     frames = clip_dir / "img1"
     if not frames.is_dir() or not next(frames.glob("*.jpg"), None):
         raise FileNotFoundError(f"Clip frames not found: {frames}")
@@ -92,7 +92,7 @@ def run_stage4(
         )
     if force or not annotated.is_file():
         render_annotated_video(
-            frames, events, predictions, annotated, config,
+            frames, events if events.is_file() else None, predictions, annotated, config,
             homography_json_path=homography if homography.is_file() else None,
             topology_json_path=topology if topology.is_file() else None,
         )

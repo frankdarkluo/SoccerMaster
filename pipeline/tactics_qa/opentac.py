@@ -15,14 +15,16 @@ from pipeline.video_models import generate_json, model_name, temporary_window_cl
 
 PHASES = ("phase1_direct", "phase2_observation_first")
 PROMPT_VERSIONS = {
-    "phase1_direct": "p0-two-pass-screen-then-score-v2",
-    "phase2_observation_first": "p0-two-pass-questionnaire-screen-then-score-v2",
+    "phase1_direct": "p0-two-pass-screen-then-score-v3",
+    "phase2_observation_first": "p0-two-pass-questionnaire-screen-then-score-v3",
 }
-SCHEMA_VERSION = "p0-two-pass-screen-then-score-v2"
-EXPERIMENT_ID = "p0-two-pass-screening-and-scoring-v2"
+SCHEMA_VERSION = "p0-two-pass-screen-then-score-v3"
+EXPERIMENT_ID = "p0-two-pass-screening-and-scoring-v3"
 CONFIDENCE_THRESHOLDS = (0, 50, 60, 70, 80, 90)
 SCREEN_FPS = 1.0
 SCORE_FPS = 6.0
+# Ark rejects fps outside [0.2, 5.0]; Gemini uses SCORE_FPS as playback slowdown, not API fps.
+DOUBAO_SCORE_FPS = 5.0
 SCORE_WINDOW_MAX_S = 5.0
 RESTART_TYPES = ("corner", "free_kick", "throw_in", "goal_kick", "kickoff", "open_play")
 
@@ -36,11 +38,6 @@ def write_json(path: Path, value: Any) -> None:
     temporary = path.with_name(f".{path.name}.tmp")
     temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     temporary.replace(path)
-
-
-def write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows), encoding="utf-8")
 
 
 def sha256(path: Path) -> str:
@@ -111,9 +108,9 @@ def response_schema(tactic_ids: list[str]) -> dict[str, Any]:
 
 def build_prompt(clip_alias: str, duration_s: float, cards: list[dict[str, Any]], topology: str | None = None, screen_facts: dict[str, Any] | None = None) -> str:
     count = len(cards)
-    return f"""You are scoring a short, pre-screened football clip against a narrowed list of concept cards.
+    return f"""You are judging a short, automatically trimmed football clip against a list of concept cards.
 
-Watch the complete clip and read ALL {count} concept cards. A supplied card does not imply that its tactic is present. Tactics are NOT mutually exclusive: multiple cards may independently be present, and some may be absent.
+Watch the complete clip and read ALL {count} concept cards. These cards were forwarded by a deliberately over-inclusive low-frame-rate filter that was told to include anything plausible rather than exclude it. Being forwarded is NOT evidence of presence: most forwarded cards are still absent, and the trimmed excerpt may contain no tactic at all. Tactics are NOT mutually exclusive, so several may hold at once, but absent is the default verdict unless this clip visibly demonstrates the card's defining mechanism.
 
 LOW-FPS SCREEN FACTS:
 {json.dumps(screen_facts or {}, ensure_ascii=False)}
@@ -121,7 +118,9 @@ Treat these as fallible observations to verify against the high-frame-rate clip,
 
 Apply restart type as the first causal gate. If this is a corner, free kick, throw-in, goal kick, or kickoff, only mark a card present when its definition explicitly covers that restart. Never relabel a set-piece delivery as cutback, long-ball, line-breaking-pass, run-in-behind, or counter-attack merely because the ball travels forward or enters the box. For open play, distinguish normal progression from a genuine possession transition; counter-attack requires a visible regain followed immediately by a short, direct threat sequence.
 
-For every card, decide present or absent independently based on whether its defining mechanism is visibly supported. Rank confidence by the strength of that card's own evidence, not by how prominent the sequence is relative to other tactics. When present, copy at least one matched cue exactly from its card and cite 1 to 3 decisive time spans within this clip's bounds. When absent, a brief reason is enough and evidence_spans/matched_cues may be empty. Write reasons and evidence in Chinese. Do not infer from filenames, prior labels, commentary, shirt identity, coach intent, another model, or unstated facts. Return exactly one assessment per card, covering every tactic_id exactly once. Return JSON only.
+Hard negatives against prior over-firing: a forward pass plus a runner moving toward goal is ordinary progression, not automatic present for run-in-behind, line-breaking-pass, or long-ball. Mark those present only when that card's own last-line / distance / aerial-span cues are visibly satisfied in this clip. If the same single pass would make you mark two or more of those three present, prefer absent on the ones whose cues you cannot show. Prefer absent whenever confidence would rest on narrative plausibility rather than a visible cue match.
+
+For every card, decide present or absent independently based on whether its defining mechanism is visibly supported. Rank confidence by the strength of that card's own evidence, not by how prominent the sequence is relative to other tactics. Before marking a card present, read its `confusing` entries: name the nearest confusable pattern and state the visible evidence that rules it out. If you cannot rule it out from this clip, mark the card absent. When present, copy at least one matched cue exactly from its card and cite 1 to 3 decisive time spans within this clip's bounds. When absent, a brief reason is enough and evidence_spans/matched_cues may be empty. Write reasons and evidence in Chinese. Do not infer from filenames, prior labels, commentary, shirt identity, coach intent, another model, or unstated facts. Return exactly one assessment per card, covering every tactic_id exactly once. Return JSON only.
 
 Clip: {clip_alias}
 Clip bounds: 0.000 to {duration_s:.3f} seconds.
@@ -313,13 +312,13 @@ def duration(path: Path) -> float:
     return float(result.stdout.strip())
 
 
-def frozen_sources(repo_root: Path, source_rows: Path, ground_truth: Path) -> dict[str, dict[str, Any]]:
-    index = {row["clip_uid"]: {**row, "absolute_video_path": (repo_root / row["video_path"]).resolve()} for row in load_jsonl(source_rows) if row.get("video_path")}
+def frozen_sources(repo_root: Path, clip_manifest: Path, ground_truth: Path) -> dict[str, dict[str, Any]]:
+    index = {row["clip_uid"]: {**row, "absolute_video_path": (repo_root / row["video_path"]).resolve()} for row in load_jsonl(clip_manifest) if row.get("video_path")}
     clip_uids = sorted({claim["clip_uid"] for claim in load_jsonl(ground_truth) if claim.get("score_set") == "primary"})
     if len(clip_uids) != 67:
         raise ValueError(f"expected 67 frozen clips, got {len(clip_uids)}")
     if missing := set(clip_uids) - set(index):
-        raise ValueError(f"clips missing from source_rows: {sorted(missing)}")
+        raise ValueError(f"clips missing from clip manifest: {sorted(missing)}")
     return {clip_uid: index[clip_uid] for clip_uid in clip_uids}
 
 
@@ -341,7 +340,7 @@ def _load_topology(repo_root: Path, clip_uid: str) -> dict[str, Any] | None:
     return json.loads(topology_path.read_text(encoding="utf-8")) if topology_path.is_file() else None
 
 
-def run(output_root: Path, glossary_path: Path, source_rows: Path, ground_truth: Path, repo_root: Path, *, phase: str, provider: str, clip_uids: Iterable[str] | None = None, force: bool = False, retry_failed: bool = False, score_samples: int | None = None, temperature: float | None = None, use_topology: bool = True) -> dict[str, int | float | str | None]:
+def run(output_root: Path, glossary_path: Path, clip_manifest: Path, ground_truth: Path, repo_root: Path, *, phase: str, provider: str, clip_uids: Iterable[str] | None = None, force: bool = False, retry_failed: bool = False, score_samples: int | None = None, temperature: float | None = None, use_topology: bool = True) -> dict[str, int | float | str | None]:
     """Two-pass per clip: a low-fps screen over the full video narrows to <=8 cards and a
     decisive window, then a high-fps score pass judges only that window against that subset."""
     score_samples = (3 if provider == "gemini" else 1) if score_samples is None else score_samples
@@ -357,7 +356,7 @@ def run(output_root: Path, glossary_path: Path, source_rows: Path, ground_truth:
     cards_by_id = scored_cards(glossary_path, ground_truth)
     cards = sorted(cards_by_id.values(), key=lambda card: card["tactic_id"])
     tactic_ids = list(cards_by_id)
-    sources = frozen_sources(repo_root, source_rows, ground_truth)
+    sources = frozen_sources(repo_root, clip_manifest, ground_truth)
     selected = set(clip_uids or sources)
     if unknown := selected - set(sources):
         raise ValueError(f"unknown clips: {sorted(unknown)}")
@@ -401,7 +400,7 @@ def run(output_root: Path, glossary_path: Path, source_rows: Path, ground_truth:
                         provider_calls += 1
                         sample, sample_usage, sample_attempts = generate_json(
                             provider, score_prompt, response_schema(narrowed_ids), video_path=clip_window,
-                            fps=SCORE_FPS if provider == "doubao" else None, temperature=temperature,
+                            fps=DOUBAO_SCORE_FPS if provider == "doubao" else None, temperature=temperature,
                         )
                         validate_response(sample, narrowed_ids)
                         validate_evidence_bounds(sample, score_duration)
@@ -425,7 +424,7 @@ def run(output_root: Path, glossary_path: Path, source_rows: Path, ground_truth:
             "screen_prompt_sha256": hashlib.sha256(screen_prompt.encode()).hexdigest() if result["status"] == "success" else None,
             "screen_fps": SCREEN_FPS,
             "score_prompt_sha256": hashlib.sha256(score_prompt.encode()).hexdigest() if score_prompt else None,
-            "score_fps": SCORE_FPS if score_prompt else None,
+            "score_fps": (DOUBAO_SCORE_FPS if provider == "doubao" else SCORE_FPS) if score_prompt else None,
             "score_playback_slowdown": score_playback_slowdown,
             "temperature": temperature, "score_samples": score_samples, "attempts": attempts, "clip_duration_s": clip_duration,
             "topology_enabled": use_topology, "topology_position_source": topology["position_source"] if topology else None,

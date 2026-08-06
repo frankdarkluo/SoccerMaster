@@ -1,4 +1,9 @@
 # Local datasets and generated artifacts
+!/data/
+/data/*
+!/data/annotations/
+/data/annotations/*
+!/data/annotations/tactical_source_rows_full.jsonl
 datasets/
 outputs/
 data/FIFA Game Library/
@@ -24,6 +29,7 @@ pretrained_models
 *.txt
 *.pth
 *.csv
+!benchmark/annotation_pilot/*.csv
 
 .env
 .env.*

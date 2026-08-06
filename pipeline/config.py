@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GSR_ROOT = REPO_ROOT / "codes" / "sn-gamestate"
@@ -15,11 +14,6 @@ class PipelineConfig:
     clip_dir: Path = Path(".")
     output_dir: Path = Path("outputs/pipeline_run")
 
-    # --- Optional Stage 1 inputs ---
-    existing_predictions_json: Optional[Path] = None
-    existing_homography_json: Optional[Path] = None
-    existing_pklz_path: Optional[Path] = None
-
     # --- General ---
     fps: int = 25
     force: bool = False
@@ -28,11 +22,7 @@ class PipelineConfig:
     sequence_prefix: str = "SNGS-10001"
     gsr_split: str = "sn500"
     step3_config: str = "gsr_step_3_example_accelerate"
-    input_video: Optional[Path] = None
-    pklz_video_id: Optional[str] = None
     skip_sam2: bool = False
-    sam2_propagation_margin: int = 50
-    sam2_max_retries_per_segment: int = 2
 
     # --- Effects ---
     event_importance_threshold: float = 0.5
@@ -42,11 +32,11 @@ class PipelineConfig:
 
     @property
     def predictions_json(self) -> Path:
-        return self.existing_predictions_json or self.output_dir / "predictions.json"
+        return self.output_dir / "predictions.json"
 
     @property
     def homography_json(self) -> Path:
-        return self.existing_homography_json or self.output_dir / "homography_per_frame.json"
+        return self.output_dir / "homography_per_frame.json"
 
     @property
     def voice_dir(self) -> Path:
@@ -67,10 +57,3 @@ class PipelineConfig:
     def final_video(self, language: str) -> Path:
         suffix = "_en" if language == "en" else ""
         return self.voice_dir / f"final_video{suffix}.mp4"
-
-    def should_run_stage1(self) -> bool:
-        if self.existing_predictions_json and Path(self.existing_predictions_json).exists():
-            return False
-        if self.existing_pklz_path and Path(self.existing_pklz_path).exists():
-            return True
-        return self.force or not (self.output_dir / "predictions.json").exists()

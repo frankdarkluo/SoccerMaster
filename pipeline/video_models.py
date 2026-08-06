@@ -19,7 +19,6 @@ GEMINI_MODEL = "gemini-3.6-flash"
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 TIMEOUT_S = 300.0
 TRANSPORT_RETRIES = 2
-DOUBAO_COMPACT_UPLOAD_PROFILE = "480p12-crf28-v1"
 _GEMINI_KEYS = ("GEMINI_API_KEY", "GEMINI_API_KEY1", "GEMINI_API_KEY2")
 _GEMINI_LOCK = threading.Lock()
 _GEMINI_INDEX = 0
@@ -36,29 +35,6 @@ class RetryableProviderError(RuntimeError):
         super().__init__(message)
         self.status_code = status_code
         self.retry_after_s = retry_after_s
-
-
-@contextmanager
-def temporary_doubao_proxies(video_paths: tuple[Path, ...]) -> Iterator[tuple[Path, ...]]:
-    """Yield small temporary copies for Doubao's inline base64 video upload."""
-    with tempfile.TemporaryDirectory(prefix="doubao-upload-") as directory:
-        proxies = []
-        for index, source in enumerate(video_paths):
-            target = Path(directory) / f"video-{index}.mp4"
-            subprocess.run(
-                [
-                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                    "-i", str(source), "-vf", "scale=-2:480,fps=12", "-an",
-                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
-                    "-maxrate", "800k", "-bufsize", "1600k",
-                    "-movflags", "+faststart", str(target),
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            proxies.append(target)
-        yield tuple(proxies)
 
 
 @contextmanager
@@ -126,8 +102,7 @@ def _doubao_client():
 def _doubao(
     prompt: str,
     schema: dict[str, Any],
-    video_paths: tuple[Path, ...],
-    video_instructions: tuple[str, ...] | None = None,
+    video_path: Path | None,
     *,
     fps: float = 2.0,
     temperature: float = 0.0,
@@ -136,7 +111,7 @@ def _doubao(
     if configured != DOUBAO_MODEL:
         raise ValueError(f"ARK_RESPONSES_MODEL must be {DOUBAO_MODEL}, got {configured}")
     client = _doubao_client()
-    if not video_paths:
+    if video_path is None:
         response = client.chat.completions.create(
             model=configured,
             messages=[{"role": "user", "content": prompt}],
@@ -154,12 +129,11 @@ def _doubao(
         usage = [response.usage.model_dump(exclude_none=True)] if response.usage else []
         return _json_object(response.choices[0].message.content or ""), usage
 
-    videos = [{"type": "input_video", "video_url": "data:video/mp4;base64," + base64.b64encode(path.read_bytes()).decode("ascii"), "fps": fps} for path in video_paths]
-    content = videos if video_instructions is None else [
-        item
-        for instruction, video in zip(video_instructions, videos)
-        for item in ({"type": "input_text", "text": instruction}, video)
-    ]
+    content = [{
+        "type": "input_video",
+        "video_url": "data:video/mp4;base64," + base64.b64encode(video_path.read_bytes()).decode("ascii"),
+        "fps": fps,
+    }]
     response = client.responses.create(
         model=configured,
         input=[{
@@ -232,8 +206,7 @@ def _gemini_schema(value: Any) -> Any:
 def _gemini(
     prompt: str,
     schema: dict[str, Any],
-    video_paths: tuple[Path, ...],
-    video_instructions: tuple[str, ...] | None = None,
+    video_path: Path | None,
     *,
     fps: float | None = None,
     temperature: float | None = None,
@@ -245,16 +218,13 @@ def _gemini(
     if temperature is not None:
         raise ValueError("Gemini 3.6 Flash does not support temperature")
     inputs: list[dict[str, Any]] = []
-    for index, video_path in enumerate(video_paths):
-        if video_instructions is not None:
-            inputs.append({"type": "text", "text": video_instructions[index]})
-        video: dict[str, Any] = {
+    if video_path is not None:
+        inputs.append({
             "type": "video",
             "data": base64.b64encode(video_path.read_bytes()).decode("ascii"),
             "mime_type": "video/mp4",
             "resolution": "high",
-        }
-        inputs.append(video)
+        })
     inputs.append({"type": "text", "text": prompt})
     key_name, api_key = _gemini_key()
     response = httpx.post(
@@ -308,20 +278,11 @@ def generate_json(
     schema: dict[str, Any],
     *,
     video_path: Path | None = None,
-    video_paths: tuple[Path, ...] | None = None,
-    video_instructions: tuple[str, ...] | None = None,
     fps: float | None = None,
     temperature: float | None = None,
     retries: int = TRANSPORT_RETRIES,
     sleep: Callable[[float], None] = time.sleep,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], int]:
-    if video_path is not None and video_paths is not None:
-        raise ValueError("pass video_path or video_paths, not both")
-    paths = video_paths if video_paths is not None else ((video_path,) if video_path else ())
-    if video_instructions is not None and not paths:
-        raise ValueError("video_instructions require video paths")
-    if video_instructions is not None and len(video_instructions) != len(paths):
-        raise ValueError("video_instructions must match video paths")
     call = _doubao if provider == "doubao" else _gemini if provider == "gemini" else None
     if call is None:
         raise ValueError(f"unknown provider: {provider}")
@@ -332,7 +293,7 @@ def generate_json(
         kwargs["fps"] = fps
     for attempt in range(retries + 1):
         try:
-            payload, usage = call(prompt, schema, paths, video_instructions, **kwargs)
+            payload, usage = call(prompt, schema, video_path, **kwargs)
             return payload, usage, attempt + 1
         except Exception as exc:
             if not isinstance(exc, RetryableProviderError) and not _retryable(exc):

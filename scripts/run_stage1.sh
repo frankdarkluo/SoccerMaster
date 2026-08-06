@@ -140,7 +140,6 @@ import logging
 import os
 
 from pipeline.config import PipelineConfig
-from pipeline.run import infer_video_id, resolve_input_video
 from pipeline.stage1_inference.pklz_to_json import convert_pklz_to_json
 from pipeline.stage1_inference.run_gsr import run_step1, run_step2, run_step3
 
@@ -160,7 +159,6 @@ phase = "${STAGE1_PHASE}"
 config = PipelineConfig(
     clip_dir=clip_dir,
     output_dir=output_dir,
-    input_video=input_video,
     sequence_prefix=clip_dir.name,
     gsr_split=clip_dir.parent.name,
     force=False,
@@ -170,8 +168,7 @@ if phase in {"all", "step1"}:
     if not (clip_dir / "img1").is_dir() or not any((clip_dir / "img1").glob("*.jpg")):
         # Keep video preprocessing with Step 1 so later batch phases are fully resumable.
         from pipeline.stage1_inference.preprocess import preprocess_video
-        video_path = resolve_input_video(config)
-        preprocess_video(video_path, sequence_name=config.sequence_prefix, split=config.gsr_split)
+        preprocess_video(input_video, sequence_name=config.sequence_prefix, split=config.gsr_split)
     run_step1(config)
 
 if phase in {"all", "step2"}:
@@ -181,7 +178,7 @@ if phase in {"all", "step3"}:
     pklz_path = run_step3(config)
     convert_pklz_to_json(
         pklz_path,
-        infer_video_id(config.clip_dir, config.pklz_video_id),
+        clip_dir.name.removeprefix("SNGS-") if clip_dir.name.startswith("SNGS-") else "001",
         output_dir,
         fps=config.fps,
         sequence_name=config.sequence_prefix,

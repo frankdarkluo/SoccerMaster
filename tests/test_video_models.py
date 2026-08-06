@@ -7,26 +7,6 @@ import pytest
 from pipeline import video_models
 
 
-def test_temporary_doubao_proxies_downscale_without_retaining_files(tmp_path, monkeypatch):
-    source = tmp_path / "source.mp4"
-    source.write_bytes(b"source")
-    commands = []
-
-    def fake_run(command, **_kwargs):
-        commands.append(command)
-        Path(command[-1]).write_bytes(b"proxy")
-
-    monkeypatch.setattr(video_models.subprocess, "run", fake_run)
-    with video_models.temporary_doubao_proxies((source,)) as proxies:
-        assert len(proxies) == 1
-        assert proxies[0].read_bytes() == b"proxy"
-        assert proxies[0].name == "video-0.mp4"
-
-    assert not proxies[0].exists()
-    assert commands[0][commands[0].index("-vf") + 1] == "scale=-2:480,fps=12"
-    assert "-an" in commands[0]
-
-
 def test_gemini_rotates_three_keys_and_suspends_rate_limited_key(monkeypatch):
     fake_keys = ("fake-a", "fake-b", "fake-c")
     for name, value in zip(video_models._GEMINI_KEYS, fake_keys):
@@ -151,7 +131,7 @@ def test_gemini_omits_array_bounds_without_mutating_schema(monkeypatch):
         "required": ["items"],
     }
 
-    assert video_models._gemini("prompt", schema, ())[0] == {"items": []}
+    assert video_models._gemini("prompt", schema, None)[0] == {"items": []}
     sent_items = sent["response_format"]["schema"]["properties"]["items"]
     assert "minItems" not in sent_items
     assert "maxItems" not in sent_items
@@ -226,7 +206,7 @@ def test_doubao_text_json_uses_shared_transport(monkeypatch):
     ))
     monkeypatch.delenv("ARK_RESPONSES_MODEL", raising=False)
     monkeypatch.setattr(video_models, "_doubao_client", lambda: client)
-    payload, usage = video_models._doubao("prompt", {}, ())
+    payload, usage = video_models._doubao("prompt", {}, None)
     assert payload == {"ok": True}
     assert usage == []
 
@@ -245,7 +225,7 @@ def test_doubao_video_uses_direct_base64_response_input(tmp_path, monkeypatch):
     video = tmp_path / "neutral.mp4"
     video.write_bytes(b"video-bytes")
 
-    payload, usage = video_models._doubao("prompt", {}, (video,))
+    payload, usage = video_models._doubao("prompt", {}, video)
 
     assert payload == {"ok": True}
     assert usage == []
@@ -349,155 +329,19 @@ def test_temporary_window_clip_rejects_empty_or_inverted_range(tmp_path):
             pass
 
 
-def test_doubao_preserves_two_video_order(tmp_path, monkeypatch):
-    sent = {}
-    response = SimpleNamespace(usage=None, output_text='{"ok": true}')
-    client = SimpleNamespace(responses=SimpleNamespace(
-        create=lambda **kwargs: sent.update(kwargs) or response,
-    ))
-    monkeypatch.delenv("ARK_RESPONSES_MODEL", raising=False)
-    monkeypatch.setattr(video_models, "_doubao_client", lambda: client)
-    first, second = tmp_path / "first.mp4", tmp_path / "second.mp4"
-    first.write_bytes(b"first")
-    second.write_bytes(b"second")
-
-    video_models._doubao("prompt", {}, (first, second))
-
-    content = sent["input"][0]["content"]
-    assert [item["video_url"] for item in content[:2]] == [
-        "data:video/mp4;base64,Zmlyc3Q=",
-        "data:video/mp4;base64,c2Vjb25k",
-    ]
-    assert content[2] == {"type": "input_text", "text": "prompt"}
-
-
-def test_doubao_interleaves_video_instructions(tmp_path, monkeypatch):
-    sent = {}
-    response = SimpleNamespace(usage=None, output_text='{"ok": true}')
-    client = SimpleNamespace(responses=SimpleNamespace(
-        create=lambda **kwargs: sent.update(kwargs) or response,
-    ))
-    monkeypatch.delenv("ARK_RESPONSES_MODEL", raising=False)
-    monkeypatch.setattr(video_models, "_doubao_client", lambda: client)
-    first, second = tmp_path / "first.mp4", tmp_path / "second.mp4"
-    first.write_bytes(b"first")
-    second.write_bytes(b"second")
-
-    video_models.generate_json(
-        "doubao",
-        "main prompt",
-        {},
-        video_paths=(first, second),
-        video_instructions=("reference instruction", "query instruction"),
-    )
-
-    content = sent["input"][0]["content"]
-    assert content[0] == {"type": "input_text", "text": "reference instruction"}
-    assert content[1]["video_url"] == "data:video/mp4;base64,Zmlyc3Q="
-    assert content[2] == {"type": "input_text", "text": "query instruction"}
-    assert content[3]["video_url"] == "data:video/mp4;base64,c2Vjb25k"
-    assert content[4] == {"type": "input_text", "text": "main prompt"}
-
-
-def test_gemini_preserves_two_video_order(tmp_path, monkeypatch):
-    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
-    monkeypatch.setattr(video_models, "_GEMINI_INDEX", 0)
-    monkeypatch.setattr(video_models, "_GEMINI_SUSPENDED", set())
-    sent = {}
-
-    def post(*_, **kwargs):
-        sent.update(kwargs["json"])
-        return SimpleNamespace(
-            status_code=200,
-            headers={},
-            text="",
-            json=lambda: {"steps": [{
-                "type": "model_output",
-                "content": [{"type": "text", "text": '{"ok": true}'}],
-            }]},
-        )
-
-    monkeypatch.setitem(sys.modules, "httpx", SimpleNamespace(
-        post=post, Timeout=lambda *_args, **_kwargs: None,
-    ))
-    first, second = tmp_path / "first.mp4", tmp_path / "second.mp4"
-    first.write_bytes(b"first")
-    second.write_bytes(b"second")
-
-    video_models._gemini("prompt", {}, (first, second))
-
-    assert [item["data"] for item in sent["input"][:2]] == [
-        "Zmlyc3Q=",
-        "c2Vjb25k",
-    ]
-    assert sent["input"][2] == {"type": "text", "text": "prompt"}
-
-
-def test_gemini_interleaves_video_instructions(tmp_path, monkeypatch):
-    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
-    monkeypatch.setattr(video_models, "_GEMINI_INDEX", 0)
-    monkeypatch.setattr(video_models, "_GEMINI_SUSPENDED", set())
-    sent = {}
-
-    def post(*_, **kwargs):
-        sent.update(kwargs["json"])
-        return SimpleNamespace(
-            status_code=200,
-            headers={},
-            text="",
-            json=lambda: {"steps": [{
-                "type": "model_output",
-                "content": [{"type": "text", "text": '{"ok": true}'}],
-            }]},
-        )
-
-    monkeypatch.setitem(sys.modules, "httpx", SimpleNamespace(
-        post=post, Timeout=lambda *_args, **_kwargs: None,
-    ))
-    first, second = tmp_path / "first.mp4", tmp_path / "second.mp4"
-    first.write_bytes(b"first")
-    second.write_bytes(b"second")
-
-    video_models.generate_json(
-        "gemini",
-        "main prompt",
-        {},
-        video_paths=(first, second),
-        video_instructions=("reference instruction", "query instruction"),
-    )
-
-    assert sent["input"][0] == {"type": "text", "text": "reference instruction"}
-    assert sent["input"][1]["data"] == "Zmlyc3Q="
-    assert sent["input"][2] == {"type": "text", "text": "query instruction"}
-    assert sent["input"][3]["data"] == "c2Vjb25k"
-    assert sent["input"][4] == {"type": "text", "text": "main prompt"}
-
-
 def test_generate_json_keeps_single_video_api(tmp_path, monkeypatch):
     video = tmp_path / "clip.mp4"
     seen = []
     monkeypatch.setattr(
         video_models,
         "_doubao",
-        lambda _prompt, _schema, paths, _video_instructions=None, **_kwargs: seen.append(paths) or ({"ok": True}, []),
+        lambda _prompt, _schema, path, **_kwargs: seen.append(path) or ({"ok": True}, []),
     )
 
     video_models.generate_json("doubao", "prompt", {}, video_path=video)
 
-    assert seen == [(video,)]
+    assert seen == [video]
 
-
-
-@pytest.mark.parametrize(("kwargs", "message"), [
-    ({"video_instructions": ("orphan",)}, "require video paths"),
-    ({
-        "video_paths": (Path("first.mp4"), Path("second.mp4")),
-        "video_instructions": ("only one",),
-    }, "match video paths"),
-])
-def test_generate_json_rejects_invalid_video_instructions(kwargs, message):
-    with pytest.raises(ValueError, match=message):
-        video_models.generate_json("doubao", "prompt", {}, **kwargs)
 
 
 def test_doubao_client_honors_base_and_timeout_env(monkeypatch):
@@ -525,7 +369,7 @@ def test_doubao_client_honors_base_and_timeout_env(monkeypatch):
     monkeypatch.setitem(sys.modules, "openai", SimpleNamespace(OpenAI=openai))
     monkeypatch.setenv("ARK_TIMEOUT_S", "90")
 
-    payload, _ = video_models._doubao("prompt", {}, ())
+    payload, _ = video_models._doubao("prompt", {}, None)
 
     assert payload == {"ok": True}
     assert calls["base_url"] == "https://ark.cn-beijing.volces.com/api/v3"
