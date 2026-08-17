@@ -22,7 +22,7 @@
 
 import argparse
 import csv
-import re
+import sys
 from collections import OrderedDict
 from pathlib import Path
 
@@ -31,7 +31,20 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
-DEFAULT_DATA = Path(__file__).resolve().parents[1] / "data"
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from pipeline.fifa_grounding import (  # noqa: E402
+    COLLECTIVE_SHAPE_TACTICS,
+    DROPPED_GROUPS,
+    EXTRA_EVENTS,
+    load_reference,
+    load_tactics,
+    needs_group,
+)
+
+DEFAULT_DATA = ROOT / "data"
 
 EXAMPLES_REL = Path("FIFA Game Library") / "FIFA_Game_Library_examples.csv"
 GRID_REL = Path("足球战术数据库_词条表_Grid.csv")
@@ -40,17 +53,6 @@ REFERENCE_REL = Path("reference_football.csv")
 
 # 绝不能出现在发给标注者的文件里：模型产物会锚定标注结果。
 FORBIDDEN_COLUMNS = ("description_zh", "evidence_source", "evidence_spans_json")
-
-# 被砍掉的两组限定词，理由见规范文档。
-DROPPED_GROUPS = ("pattern_of_play", "context_tag")
-
-# reference_football.csv 里没有无球跑动类事件，但 run-in-behind / third-man-run /
-# overlap-underlap 的核心就是跑动。本项目先行扩展，待这批标注跑完再决定是否并入。
-EXTRA_EVENTS = [
-    ("run_in_behind", "跑向身后（本项目扩展）"),
-    ("off_ball_run", "无球跑动（本项目扩展）"),
-    ("receive", "接球（本项目扩展）"),
-]
 
 RESULT_OPTIONS = ["进球", "射正", "射偏", "传中", "获得定位球", "丢失球权", "被解围", "无明确结果"]
 VISIBILITY_OPTIONS = ["清晰", "部分遮挡", "无法判断"]
@@ -75,38 +77,6 @@ def read_csv(path: Path) -> list:
         return list(csv.DictReader(f))
 
 
-def load_tactics(grid: Path) -> dict:
-    """词条 id -> 提示文本与分类信息。"""
-    out = {}
-    for r in read_csv(grid):
-        tid = (r.get("id（英文标识）") or "").strip()
-        if not tid or (r.get("优先级") or "").strip() not in ("P0", "P1", "P2"):
-            continue
-        features = [ln.strip() for ln in (r.get("可观察特征") or "").splitlines() if ln.strip()]
-        out[tid] = {
-            "priority": r["优先级"].strip(),
-            "name_cn": (r.get("中文名") or "").strip(),
-            "layer": (r.get("层级 layer") or "").strip(),
-            "phase": (r.get("阶段 phase") or "").strip(),
-            "hint": "；".join([(r.get("一句话定义") or "").strip()] + features[:3]).strip("；"),
-            "actors": (r.get("视频侧-参与者") or "").strip(),
-            "sequence": (r.get("视频侧-事件序列") or "").strip(),
-        }
-    return out
-
-
-# 阶段/层级推导不出、但本质是集体形态的战术。buildup-structure（出球结构 3+2 / 2+3）
-# 描述的是后场整体站位而不是某几个人的角色链，所以同样走 who_group。
-COLLECTIVE_SHAPE_TACTICS = {"buildup-structure"}
-
-
-def needs_group(t: dict, tactic_id: str) -> bool:
-    """防守组织 / 集体形态类战术，who_group 必填，四槽多为 null。"""
-    return (t["phase"] in ("defensive_org", "defensive_transition")
-            or t["layer"] == "structure"
-            or tactic_id in COLLECTIVE_SHAPE_TACTICS)
-
-
 def load_zones(db_xlsx: Path) -> list:
     ws = openpyxl.load_workbook(db_xlsx, read_only=True)["受控词表"]
     text = "\n".join(str(c) for row in ws.iter_rows(values_only=True) for c in row if c)
@@ -117,36 +87,6 @@ def load_zones(db_xlsx: Path) -> list:
     if missing:
         raise SystemExit(f"受控词表 sheet 里找不到这些 zone 取值，请核对：{missing}")
     return [f"{t}, {c}" for t in thirds for c in channels] + specials
-
-
-def load_reference(reference: Path) -> tuple:
-    """返回 (事件列表, 限定词组有序字典)。"""
-    rows = [r for r in read_csv(reference) if (r.get("event_id") or "").strip()]
-
-    events = OrderedDict()
-    for r in rows:
-        if r["event_id"].startswith("_TAG"):
-            continue
-        if r["level_hint"] == "core" or r["family"] == "possession":
-            events[r["code"]] = r["display_name_cn"]
-    for code, label in EXTRA_EVENTS:
-        events[code] = label
-
-    groups = OrderedDict()
-    for g in rows:
-        if g["event_id"] != "_TAG_GROUP" or g["code"] in DROPPED_GROUPS:
-            continue
-        applies = [a.strip() for a in
-                   re.sub(r"^applies_to:", "", g["description"]).split(",") if a.strip()]
-        values = [f'{v["display_name_cn"]}({v["code"]})'
-                  for v in rows if v["event_id"] == "_TAG_VALUE" and v["family"] == g["code"]]
-        groups[g["code"]] = {
-            "label": g["display_name_cn"],
-            "exclusive": g["level_hint"] == "exclusive",
-            "applies_to": applies,
-            "values": values,
-        }
-    return list(events.items()), groups
 
 
 def load_cards(examples: Path, tactics: dict) -> list:
