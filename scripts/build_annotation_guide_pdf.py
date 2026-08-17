@@ -126,11 +126,11 @@ def styles() -> dict:
                              textColor=ACCENT, **base),
         "h2": ParagraphStyle("h2", fontSize=9.2, leading=12.5, spaceBefore=6, spaceAfter=2.5,
                              textColor=ACCENT, **base),
-        "body": ParagraphStyle("body", fontSize=8.2, leading=11.6, spaceAfter=2.6, **base),
-        "bullet": ParagraphStyle("bullet", fontSize=8.2, leading=11.6, spaceAfter=1.8,
+        "body": ParagraphStyle("body", fontSize=8.4, leading=12.0, spaceAfter=2.8, **base),
+        "bullet": ParagraphStyle("bullet", fontSize=8.4, leading=12.0, spaceAfter=2.0,
                                  leftIndent=10, bulletIndent=2, **base),
-        "cell": ParagraphStyle("cell", fontSize=7.4, leading=10.0, **base),
-        "cellhead": ParagraphStyle("cellhead", fontSize=7.4, leading=10.0,
+        "cell": ParagraphStyle("cell", fontSize=7.5, leading=10.2, **base),
+        "cellhead": ParagraphStyle("cellhead", fontSize=7.5, leading=10.2,
                                    textColor=ACCENT, **base),
     }
 

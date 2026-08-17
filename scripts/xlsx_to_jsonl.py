@@ -28,11 +28,11 @@ from pipeline.fifa_grounding import (  # noqa: E402
     card_key,
     clean,
     derive_pattern_of_play,
-    extract_code,
+    event_zh_to_code,
     is_null,
+    join_zone,
     load_reference,
     load_tactics,
-    qualifier_columns,
     read_workbook,
     split_steps,
     step_actor,
@@ -57,19 +57,26 @@ def number_or_none(value) -> float | None:
         return None
 
 
-def build_steps(rows: list[dict], sequence_steps: list[str], qual_cols: dict) -> list[dict]:
-    """明细表有行就用明细表，没有就退回主表 ev_sequence 解析出的步。"""
+def build_steps(rows: list[dict], sequence_steps: list[str],
+                groups: dict, zh_to_code: dict) -> list[dict]:
+    """明细表有行就用明细表，没有就退回主表事件序列解析出的步。
+
+    表里填的全是中文，这里统一映射回 reference_football.csv 的英文 code。
+    """
     if rows:
         out = []
         for r in rows:
-            qualifiers = {group_code: extract_code(r.get(column))
-                          for column, group_code in qual_cols.items()
-                          if not is_null(r.get(column))}
+            qualifiers = {}
+            for group_code, group in groups.items():
+                value = r.get(group["label"])
+                if is_null(value):
+                    continue
+                qualifiers[group_code] = group["zh_to_code"].get(clean(value), clean(value))
             out.append({
                 "step_no": r.get("step_no"),
                 "is_key_step": clean(r.get("is_key_step")) == "是",
                 "actor": text_or_none(r.get("actor")),
-                "event_code": extract_code(r.get("event_code")) or None,
+                "event_code": zh_to_code.get(clean(r.get("event_code"))) or None,
                 "qualifiers": qualifiers,
             })
         return out
@@ -77,12 +84,13 @@ def build_steps(rows: list[dict], sequence_steps: list[str], qual_cols: dict) ->
         "step_no": i,
         "is_key_step": False,
         "actor": step_actor(s) or None,
-        "event_code": step_event_code(s) or None,
+        "event_code": zh_to_code.get(step_event_code(s)) or None,
         "qualifiers": {},
     } for i, s in enumerate(sequence_steps, start=1)]
 
 
-def to_record(card: dict, rows: list[dict], tactics: dict, qual_cols: dict) -> dict:
+def to_record(card: dict, rows: list[dict], tactics: dict,
+              groups: dict, zh_to_code: dict) -> dict:
     tid = clean(card.get("tactic_id"))
     tactic = tactics.get(tid)
     steps = split_steps(card.get("ev_sequence"))
@@ -97,9 +105,10 @@ def to_record(card: dict, rows: list[dict], tactics: dict, qual_cols: dict) -> d
             "start_sec": number_or_none(card.get("start_sec")),
             "end_sec": number_or_none(card.get("end_sec")),
         },
+        # 表里是「横区 / 纵道」两列中文，这里拼回受控词表原样的 `final_third, left_halfspace`
         "spatial_grounding": {
-            "origin_zone": text_or_none(card.get("origin_zone")),
-            "target_zone": text_or_none(card.get("target_zone")),
+            "origin_zone": join_zone(card.get("origin_third"), card.get("origin_channel")),
+            "target_zone": join_zone(card.get("target_third"), card.get("target_channel")),
         },
         "evidence": evidence,
         "tactical_report": text_or_none(card.get("ev_sequence")),
@@ -130,7 +139,7 @@ def to_record(card: dict, rows: list[dict], tactics: dict, qual_cols: dict) -> d
         },
         "event_sequence": {
             "non_scored": True,
-            "steps": build_steps(rows, steps, qual_cols),
+            "steps": build_steps(rows, steps, groups, zh_to_code),
         },
         "commentary_zh": {
             "non_scored": True,
@@ -152,8 +161,8 @@ def main() -> None:
 
     data = Path(args.data_dir)
     tactics = load_tactics(data / GRID_REL)
-    _, groups = load_reference(data / REFERENCE_REL)
-    qual_cols = qualifier_columns(groups)
+    event_list, groups = load_reference(data / REFERENCE_REL)
+    zh_to_code = event_zh_to_code(event_list)
 
     cards, steps_by_key = read_workbook(Path(args.workbook))
     out = Path(args.out)
@@ -161,7 +170,8 @@ def main() -> None:
 
     with out.open("w", encoding="utf-8") as f:
         for card in cards:
-            record = to_record(card, steps_by_key.get(card_key(card), []), tactics, qual_cols)
+            record = to_record(card, steps_by_key.get(card_key(card), []),
+                               tactics, groups, zh_to_code)
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     print(f"已写入 {out}（{len(cards)} 条）")

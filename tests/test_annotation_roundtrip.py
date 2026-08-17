@@ -30,13 +30,13 @@ def _fill(ws, row: int, values: dict) -> None:
 
 def _row_of(ws, tactic_id: str) -> int:
     for r in range(2, ws.max_row + 1):
-        if ws.cell(r, _col(ws, "tactic_id")).value == tactic_id:
+        if ws.cell(r, _col(ws, "词条id")).value == tactic_id:
             return r
     raise AssertionError(f"主表里没有 {tactic_id}")
 
 
 def _detail_rows(ws, video_path: str) -> list[int]:
-    col = _col(ws, "video_path")
+    col = _col(ws, "视频路径")
     return [r for r in range(2, ws.max_row + 1) if ws.cell(r, col).value == video_path]
 
 
@@ -50,41 +50,42 @@ def filled(data_dir: Path, tmp_path: Path) -> Path:
 
     # --- 合规的一张：line-breaking-pass（进攻链，不要求 who_group）---
     good = _row_of(main, "line-breaking-pass")
-    good_path = main.cell(good, _col(main, "video_path")).value
+    good_path = main.cell(good, _col(main, "视频路径")).value
     _fill(main, good, {
-        "annotator": "小王", "date": "2026-08-18",
-        "start_sec": 8.0, "end_sec": 14.0,
-        "origin_zone": "middle_third, center", "target_zone": "final_third, left_halfspace",
-        "who_team": "进攻方", "who_initiator": "后腰@蓝队", "who_finisher": "前腰@蓝队",
-        "who_defenders": "两名中场@白队",
-        "ev_participants": "传球者 1 人、被穿越的防守者 2 人、接球者 1 人",
-        "ev_space": "穿越白队两条线之间约 12 米的空当",
-        "ev_time": "从出脚到接球约 1.5 秒",
-        "ev_sequence": "后腰@蓝队 pass -> 前腰@蓝队 receive -> 前腰@蓝队 dribble",
-        "result": "无明确结果", "visibility": "清晰",
+        "标注人": "小王", "标注日期": "2026-08-18",
+        "开始秒": 8.0, "结束秒": 14.0,
+        "起始区_横区": "中场", "起始区_纵道": "中路",
+        "结束区_横区": "前场", "结束区_纵道": "左肋",
+        "队伍": "进攻方", "发起者": "后腰@蓝队", "终结者": "前腰@蓝队",
+        "关键防守者": "两名中场@白队",
+        "证据_参与者": "传球者 1 人、被穿越的防守者 2 人、接球者 1 人",
+        "证据_空间": "穿越白队两条线之间约 12 米的空当",
+        "证据_时间": "从出脚到接球约 1.5 秒",
+        "事件序列": "后腰@蓝队 传球 -> 前腰@蓝队 接球* -> 前腰@蓝队 过人",
+        "结果": "无明确结果", "画面清晰度": "清晰",
     })
     rows = _detail_rows(detail, good_path)
     for i, r in enumerate(rows[:3]):
         _fill(detail, r, {
-            "actor": ["后腰@蓝队", "前腰@蓝队", "前腰@蓝队"][i],
-            "event_code": ["传球(pass)", "接球（本项目扩展）(receive)", "过人(dribble)"][i],
-            "is_key_step": "是" if i == 0 else "否",
+            "角色": ["后腰@蓝队", "前腰@蓝队", "前腰@蓝队"][i],
+            "事件": ["传球", "接球*", "过人"][i],
+            "是否关键步": "是" if i == 0 else "否",
         })
-    _fill(detail, rows[0], {"传球方向/意图": "直塞(through_ball)", "触球技术": "脚弓/脚内侧(inside_foot)"})
+    _fill(detail, rows[0], {"传球方向/意图": "直塞", "触球技术": "脚弓/脚内侧"})
 
     # --- 有问题的一张：low-block（防守类，要求 who_group）---
     bad = _row_of(main, "low-block")
     _fill(main, bad, {
-        "annotator": "小王", "date": "2026-08-18",
-        "start_sec": 5.0, "end_sec": 99.0,          # 越界：片段只有 24.5 秒
-        "who_team": "防守方",
-        "who_initiator": "中卫@红队",                # 与事件序列第一步对不上
-        "ev_participants": "全队回撤",
-        "ev_space": "站得很紧凑",                    # 纯形容词，没有数字
-        "ev_time": "持续一段时间",
-        "ev_sequence": "边锋@白队 cross -> 后腰@红队 interception",   # 只有 2 步 + cross 不是事件
-        # who_group 故意留空
-        "visibility": "清晰",
+        "标注人": "小王", "标注日期": "2026-08-18",
+        "开始秒": 5.0, "结束秒": 99.0,               # 越界：片段只有 24.5 秒
+        "队伍": "防守方",
+        "发起者": "中卫@红队",                       # 与事件序列第一步对不上
+        "证据_参与者": "全队回撤",
+        "证据_空间": "站得很紧凑",                    # 纯形容词，没有数字
+        "证据_时间": "持续一段时间",
+        "事件序列": "边锋@白队 传中 -> 后腰@红队 拦截",   # 只有 2 步 + 传中不是事件
+        # 群体描述 故意留空
+        "画面清晰度": "清晰",
     })
     wb.save(path)
     return path
@@ -110,7 +111,7 @@ def test_checker_flags_every_planted_error(filled: Path, data_dir: Path, tmp_pat
     assert "who_group 缺失" in rules
     assert "步数越界" in rules
     assert "传中不是事件" in rules
-    assert "who_initiator 与事件序列对不上" in rules
+    assert "发起者 与事件序列对不上" in rules
 
     # 合规的那张卡一条都不该被打回
     assert not [i for i in items if "Breaking lines" in i["tactic_label_given"]]
@@ -137,6 +138,8 @@ def test_jsonl_is_isomorphic_to_the_model_prompt(filled: Path, data_dir: Path, t
     # 与模型 prompt 同构的五个字段
     assert good["tactic"] == "Breaking lines"
     assert good["temporal_grounding"] == {"start_sec": 8.0, "end_sec": 14.0}
+    # 中文两列必须拼回受控词表的英文原值
+    assert good["spatial_grounding"]["origin_zone"] == "middle_third, center"
     assert good["spatial_grounding"]["target_zone"] == "final_third, left_halfspace"
     assert {e["evidence_id"] for e in good["evidence"]} == {
         "video_participants", "video_space", "video_time", "video_sequence"}
@@ -149,8 +152,9 @@ def test_jsonl_is_isomorphic_to_the_model_prompt(filled: Path, data_dir: Path, t
     steps = good["event_sequence"]["steps"]
     assert [s["event_code"] for s in steps] == ["pass", "receive", "dribble"]
     assert sum(s["is_key_step"] for s in steps) == 1
+    # 表里填中文，导出必须是英文 code
     assert steps[0]["qualifiers"] == {
-        "pass_direction": "through_ball", "foot_technique": "inside_foot"}
+        "foot_technique": "inside_foot", "pass_direction": "through_ball"}
 
 
 def test_pattern_of_play_is_derived_not_asked(filled: Path, data_dir: Path, tmp_path: Path):

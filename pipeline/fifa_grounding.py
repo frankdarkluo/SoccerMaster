@@ -22,11 +22,47 @@ DETAIL_SHEET = "事件明细"
 DROPPED_GROUPS = ("pattern_of_play", "context_tag")
 
 # reference_football.csv 没有无球跑动类事件，本项目先行扩展。
+# 结尾的 * 就是「本项目新增」的标记，规范里有说明；写全称会撑爆内联下拉的 255 字符上限。
+EXTENSION_MARK = "*"
 EXTRA_EVENTS = (
-    ("run_in_behind", "跑向身后（本项目扩展）"),
-    ("off_ball_run", "无球跑动（本项目扩展）"),
-    ("receive", "接球（本项目扩展）"),
+    ("run_in_behind", "跑向身后" + EXTENSION_MARK),
+    ("off_ball_run", "无球跑动" + EXTENSION_MARK),
+    ("receive", "接球" + EXTENSION_MARK),
 )
+
+# 表头一律中文（实习生好认），代码里仍用英文内部键，读写都过这两张表。
+MAIN_COLUMNS = OrderedDict([
+    ("video_path", "视频路径"), ("duration_s", "时长秒"),
+    ("tactic_label_given", "战术标签"), ("tactic_id", "词条id"),
+    ("tactic_hint", "战术说明"), ("actors_hint", "参与者提示"),
+    ("sequence_hint", "事件序列示例"), ("group_required", "需填群体"),
+    ("annotator", "标注人"), ("date", "标注日期"),
+    ("start_sec", "开始秒"), ("end_sec", "结束秒"),
+    ("origin_third", "起始区_横区"), ("origin_channel", "起始区_纵道"),
+    ("target_third", "结束区_横区"), ("target_channel", "结束区_纵道"),
+    ("who_team", "队伍"), ("who_initiator", "发起者"), ("who_carriers", "传导者"),
+    ("who_finisher", "终结者"), ("who_defenders", "关键防守者"), ("who_group", "群体描述"),
+    ("ev_participants", "证据_参与者"), ("ev_space", "证据_空间"),
+    ("ev_time", "证据_时间"), ("ev_sequence", "事件序列"),
+    ("result", "结果"), ("result_note", "结果备注"), ("commentary_zh", "解说词"),
+    ("visibility", "画面清晰度"), ("dispute", "异议"),
+])
+
+DETAIL_COLUMNS = OrderedDict([
+    ("video_path", "视频路径"), ("tactic_label_given", "战术标签"),
+    ("step_no", "步号"), ("is_key_step", "是否关键步"),
+    ("actor", "角色"), ("event_code", "事件"),
+])
+
+# 下拉取值也用中文，导出 JSONL 时映射回受控词表的英文原值。
+THIRD_ZH_TO_CODE = OrderedDict([
+    ("后场", "defensive_third"), ("中场", "middle_third"), ("前场", "final_third"),
+])
+CHANNEL_ZH_TO_CODE = OrderedDict([
+    ("左边路", "left_wing"), ("左肋", "left_halfspace"), ("中路", "center"),
+    ("右肋", "right_halfspace"), ("右边路", "right_wing"),
+    ("弧顶", "zone_14"), ("禁区", "penalty_area"), ("小禁区", "six_yard_box"), ("全场", "all"),
+])
 
 # 阶段/层级推导不出、但本质是集体形态的战术，同样走 who_group。
 COLLECTIVE_SHAPE_TACTICS = frozenset({"buildup-structure"})
@@ -108,15 +144,38 @@ def load_reference(reference_csv: Path) -> tuple[list[tuple[str, str]], "Ordered
             continue
         applies = [a.strip() for a in
                    re.sub(r"^applies_to:", "", g["description"]).split(",") if a.strip()]
-        values = [f'{v["display_name_cn"]}({v["code"]})'
-                  for v in rows if v["event_id"] == "_TAG_VALUE" and v["family"] == g["code"]]
+        # 取值只留中文（内联下拉要省字符），另建 中文 -> code 映射供导出用。
+        pairs = [(v["display_name_cn"], v["code"])
+                 for v in rows if v["event_id"] == "_TAG_VALUE" and v["family"] == g["code"]]
+        labels = [label for label, _ in pairs]
+        if len(set(labels)) != len(labels):
+            raise ValueError(f"限定词组「{g['code']}」里有重名的中文取值，映射会二义：{labels}")
         groups[g["code"]] = {
             "label": g["display_name_cn"],
             "exclusive": g["level_hint"] == "exclusive",
             "applies_to": applies,
-            "values": values,
+            "values": labels,
+            "zh_to_code": dict(pairs),
         }
     return list(events.items()), groups
+
+
+def event_zh_to_code(events: list[tuple[str, str]]) -> dict[str, str]:
+    """事件下拉显示中文，导出时要映射回 code。"""
+    mapping: dict[str, str] = {}
+    for code, label in events:
+        if label in mapping:
+            raise ValueError(f"事件中文名「{label}」重复，映射会二义")
+        mapping[label] = code
+    return mapping
+
+
+def join_zone(third: Any, channel: Any) -> str | None:
+    """把「横区 / 纵道」两列拼回受控词表原样的 `final_third, left_halfspace`。"""
+    t = THIRD_ZH_TO_CODE.get(clean(third))
+    c = CHANNEL_ZH_TO_CODE.get(clean(channel))
+    parts = [p for p in (t, c) if p]
+    return ", ".join(parts) if parts else None
 
 
 def load_tactics(grid_csv: Path) -> dict[str, dict]:
@@ -161,8 +220,20 @@ def derive_pattern_of_play(tactic_id: str, tactic: dict | None) -> str:
 
 # --------------------------------------------------------------------- 读回收的表
 
-def _header_index(ws) -> dict[str, int]:
-    return {clean(c.value): c.column for c in ws[1] if clean(c.value)}
+def _header_index(ws, columns: "OrderedDict[str, str]") -> dict[str, int]:
+    """中文表头 -> 内部键。表里多出来的列（限定词组）保持中文原名。"""
+    zh_to_key = {zh: key for key, zh in columns.items()}
+    out = {}
+    for cell in ws[1]:
+        zh = clean(cell.value)
+        if zh:
+            out[zh_to_key.get(zh, zh)] = cell.column
+    return out
+
+
+def column_label(key: str) -> str:
+    """报错信息里用中文列名，别让标注者去猜英文键。"""
+    return MAIN_COLUMNS.get(key) or DETAIL_COLUMNS.get(key) or key
 
 
 def read_workbook(path: Path) -> tuple[list[dict], dict[tuple[str, str], list[dict]]]:
@@ -173,7 +244,7 @@ def read_workbook(path: Path) -> tuple[list[dict], dict[tuple[str, str], list[di
     wb = openpyxl.load_workbook(path, data_only=True)
 
     ws = wb[MAIN_SHEET]
-    h = _header_index(ws)
+    h = _header_index(ws, MAIN_COLUMNS)
     cards = []
     for row in range(2, ws.max_row + 1):
         rec = {name: ws.cell(row, col).value for name, col in h.items()}
@@ -187,7 +258,7 @@ def read_workbook(path: Path) -> tuple[list[dict], dict[tuple[str, str], list[di
     steps: dict[tuple[str, str], list[dict]] = {}
     if DETAIL_SHEET in wb.sheetnames:
         wd = wb[DETAIL_SHEET]
-        hd = _header_index(wd)
+        hd = _header_index(wd, DETAIL_COLUMNS)
         for row in range(2, wd.max_row + 1):
             rec = {name: wd.cell(row, col).value for name, col in hd.items()}
             rec["_row"] = row

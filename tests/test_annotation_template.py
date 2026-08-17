@@ -6,6 +6,8 @@ from pathlib import Path
 import openpyxl
 import pytest
 
+from openpyxl.utils import get_column_letter
+
 from scripts import build_fifa_annotation_tasks as build
 
 @pytest.fixture()
@@ -68,12 +70,36 @@ def _validated_columns(ws) -> set[str]:
 
 def test_dropdowns_present(workbook):
     wb, _ = workbook
-    # origin_zone(M) / target_zone(N) / who_team(O) / result(Y) / visibility(AB)
-    assert {"M", "N", "O", "Y", "AB"} <= _validated_columns(wb["主表"])
+    main_cols = _validated_columns(wb["主表"])
+    keys = list(build.MAIN_COLUMNS)
+    for key in ("origin_third", "origin_channel", "target_third", "target_channel",
+                "who_team", "result", "visibility"):
+        assert get_column_letter(keys.index(key) + 1) in main_cols, key
 
     detail = wb["事件明细"]
-    assert len(detail.data_validations.dataValidation) == 2 + 15   # is_key_step + event_code + 15 组
-    assert all(str(dv.formula1).startswith("='选项'!") for dv in detail.data_validations.dataValidation)
+    assert len(detail.data_validations.dataValidation) == 2 + 15   # 是否关键步 + 事件 + 15 组
+
+
+def test_dropdown_formulas_are_valid_inline_lists(workbook):
+    """v1 的下拉全废了，就是因为 formula1 带了前导 =，Excel 静默丢弃整条验证。"""
+    wb, _ = workbook
+    assert "选项" not in wb.sheetnames          # 不再跨表引用
+    seen = 0
+    for ws in wb.worksheets:
+        for dv in ws.data_validations.dataValidation:
+            formula = str(dv.formula1)
+            assert not formula.startswith("="), f"{ws.title}: formula1 不能带前导 = → {formula[:40]}"
+            assert formula.startswith('"') and formula.endswith('"'), formula[:40]
+            assert len(formula) <= 255, f"{ws.title}: 内联下拉超 255 字符（{len(formula)}）"
+            seen += 1
+    assert seen >= 20
+
+
+def test_all_headers_are_chinese(workbook):
+    wb, _ = workbook
+    for name in ("主表", "事件明细", "反馈表"):
+        for header in _headers(wb[name]):
+            assert re.search(r"[\u4e00-\u9fff]", header), f"{name} 的表头「{header}」不是中文"
 
 
 def test_detail_rows_match_cards(workbook):
@@ -96,12 +122,14 @@ def test_group_required_flag_follows_phase(workbook):
     assert by_tactic["buildup-structure"] == "是"
 
 
-def test_extension_events_are_marked(workbook):
+def test_event_dropdown_is_chinese_with_extension_mark(workbook):
     wb, _ = workbook
-    ws = wb["选项"]
-    header = [c.value for c in ws[1]]
-    col = header.index("event_code") + 1
-    codes = [ws.cell(r, col).value for r in range(2, ws.max_row + 1) if ws.cell(r, col).value]
-    assert any("run_in_behind" in c and "本项目扩展" in c for c in codes)
-    assert any("pass" in c for c in codes)
-    assert not any(c.endswith("(cross)") for c in codes)   # 传中是限定词，不是事件
+    detail = wb["事件明细"]
+    col = list(build.DETAIL_COLUMNS).index("event_code") + 1
+    dv = next(d for d in detail.data_validations.dataValidation
+              if get_column_letter(col) in str(d.sqref))
+    labels = str(dv.formula1).strip('"').split(",")
+    assert "传球" in labels
+    assert "跑向身后*" in labels          # * = 本项目扩展
+    assert "传中" not in labels           # 传中是限定词取值，不是事件
+    assert not any("(" in x for x in labels)

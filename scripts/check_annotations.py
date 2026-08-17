@@ -26,7 +26,8 @@ from pipeline.fifa_grounding import (  # noqa: E402
     MIN_STEPS,
     card_key,
     clean,
-    extract_code,
+    column_label,
+    event_zh_to_code,
     is_null,
     load_reference,
     load_tactics,
@@ -37,6 +38,9 @@ from pipeline.fifa_grounding import (  # noqa: E402
     split_steps,
     step_event_code,
 )
+
+# 「传中」是传球方向的取值，不是事件——最容易踩的一条，单独拦。
+CROSS_LABEL = "传中"
 
 DEFAULT_DATA = ROOT / "data"
 GRID_REL = Path("足球战术数据库_词条表_Grid.csv")
@@ -67,34 +71,34 @@ def check_card(card: dict, tactics: dict, report: Report) -> None:
     start, end = card.get("start_sec"), card.get("end_sec")
     duration = card.get("duration_s")
     if is_null(start) or is_null(end):
-        report.add("主表", row, "时间区间缺失", "start_sec / end_sec 必填", key)
+        report.add("主表", row, "时间区间缺失", "「开始秒」「结束秒」必填", key)
     else:
         try:
             s, e = float(start), float(end)
             if s >= e:
-                report.add("主表", row, "时间区间非法", f"start_sec({s}) 必须小于 end_sec({e})", key)
+                report.add("主表", row, "时间区间非法", f"「开始秒」({s}) 必须小于「结束秒」({e})", key)
             elif duration and e > float(duration) + 0.01:
                 report.add("主表", row, "时间区间越界",
-                           f"end_sec({e}) 超过片段时长({duration})", key)
+                           f"「结束秒」({e}) 超过片段时长({duration})", key)
         except (TypeError, ValueError):
             report.add("主表", row, "时间区间非数字", f"start={start!r} end={end!r}", key)
 
     # 规则 1：证据必须含几何/时序/人数，最容易违反的是空间栏写成纯形容词
     if is_null(card.get("ev_space")):
-        report.add("主表", row, "证据缺失", "ev_space 必填（规则 1）", key)
+        report.add("主表", row, "证据缺失", "「证据_空间」必填（规则 1）", key)
     elif not HAS_DIGIT.search(clean(card.get("ev_space"))):
         report.add("主表", row, "纯形容词",
-                   f"ev_space 里没有任何数字，疑似纯形容词：{clean(card.get('ev_space'))[:40]}", key)
+                   f"「证据_空间」里没有任何数字，疑似纯形容词：{clean(card.get('ev_space'))[:40]}", key)
 
     # 规则 8：防守 / 集体形态类战术必须写群体栏
     if tactic and needs_group(tactic, tid) and is_null(card.get("who_group")):
         report.add("主表", row, "who_group 缺失",
-                   f"{tid} 是防守/集体形态类战术，who_group 必填（规则 8）", key)
+                   f"{tid} 是防守/集体形态类战术，「群体描述」必填（规则 8）", key)
 
     # 规则 9 / 10：事件序列的步数与事件 code
     steps = split_steps(card.get("ev_sequence"))
     if not steps:
-        report.add("主表", row, "事件序列缺失", "ev_sequence 必填（规则 9）", key)
+        report.add("主表", row, "事件序列缺失", "「事件序列」必填（规则 9）", key)
         return steps
     if not MIN_STEPS <= len(steps) <= MAX_STEPS:
         report.add("主表", row, "步数越界",
@@ -102,16 +106,18 @@ def check_card(card: dict, tactics: dict, report: Report) -> None:
     return steps
 
 
-def check_sequence_events(card, steps, events, report) -> None:
+def check_sequence_events(card, steps, event_labels, report) -> None:
+    """事件序列里每步的事件名，必须是「事件」下拉里的中文名。"""
     key, row = card_key(card), card["_row"]
     for i, step in enumerate(steps, start=1):
-        code = step_event_code(step)
-        if code == "cross":
+        name = step_event_code(step)
+        if name == CROSS_LABEL:
             report.add("主表", row, "传中不是事件",
-                       f"第 {i} 步写了 cross，应写 pass 并在明细表选「传中(cross)」（规则 10）", key)
-        elif code not in events:
-            report.add("主表", row, "事件 code 非法",
-                       f"第 {i} 步的「{code}」不在事件词表里（规则 10）", key)
+                       f"第 {i} 步写了「传中」，应写「传球」并在明细表的"
+                       f"「传球方向/意图」列选传中（规则 10）", key)
+        elif name not in event_labels:
+            report.add("主表", row, "事件名非法",
+                       f"第 {i} 步的「{name}」不在「事件」下拉里（规则 10）", key)
 
 
 def check_who_matches_sequence(card, steps, report) -> None:
@@ -126,11 +132,11 @@ def check_who_matches_sequence(card, steps, report) -> None:
             continue                      # 防守类战术四槽为 null 是正常的
         role = role_of(value)
         if role and role not in clean(step):
-            report.add("主表", row, f"{field} 与事件序列对不上",
-                       f"{field}=「{role}」没有出现在事件序列的{label}：{clean(step)[:40]}", key)
+            report.add("主表", row, f"{column_label(field)} 与事件序列对不上",
+                       f"{column_label(field)}=「{role}」没有出现在事件序列的{label}：{clean(step)[:40]}", key)
 
 
-def check_steps(card, steps, rows, events, groups, qual_cols, report) -> None:
+def check_steps(card, steps, rows, zh_to_code, groups, qual_cols, report) -> None:
     key, row = card_key(card), card["_row"]
     if not rows:
         report.add("事件明细", row, "明细表缺行", "主表填了事件序列，明细表却没有对应行", key)
@@ -143,15 +149,16 @@ def check_steps(card, steps, rows, events, groups, qual_cols, report) -> None:
     keys = [r for r in rows if clean(r.get("is_key_step")) == "是"]
     if len(keys) != 1:
         report.add("事件明细", rows[0]["_row"], "关键步数量不对",
-                   f"每张卡应恰好 1 步 is_key_step=是，实际 {len(keys)} 步", key)
+                   f"每张卡应恰好 1 步「是否关键步」=是，实际 {len(keys)} 步", key)
 
     for r in rows:
-        code = extract_code(r.get("event_code"))
-        if code == "cross":
+        name = clean(r.get("event_code"))
+        code = zh_to_code.get(name, "")
+        if name == CROSS_LABEL:
             report.add("事件明细", r["_row"], "传中不是事件",
-                       "event_code 写了 cross，应写 pass 并在「传球方向」选传中", key)
-        elif code and code not in events:
-            report.add("事件明细", r["_row"], "事件 code 非法", f"「{code}」不在事件词表里", key)
+                       "「事件」列写了传中，应写「传球」并在「传球方向/意图」列选传中", key)
+        elif name and not code:
+            report.add("事件明细", r["_row"], "事件名非法", f"「{name}」不在「事件」下拉里", key)
 
         for column, group_code in qual_cols.items():
             value = r.get(column)
@@ -161,13 +168,13 @@ def check_steps(card, steps, rows, events, groups, qual_cols, report) -> None:
             if code and code not in group["applies_to"]:
                 report.add("事件明细", r["_row"], "限定词越界",
                            f"「{column}」只适用于 {'/'.join(group['applies_to'])}，"
-                           f"但这一步是 {code}", key)
+                           f"但这一步是「{name}」({code})", key)
             if group["exclusive"] and MULTI_VALUE.search(clean(value)):
                 report.add("事件明细", r["_row"], "互斥组填了多个值",
                            f"「{column}」是互斥组，只能选一个：{clean(value)[:40]}", key)
             if clean(r.get("is_key_step")) != "是":
                 report.add("事件明细", r["_row"], "非关键步填了限定词",
-                           f"只有 is_key_step=是 的那一步需要填「{column}」", key)
+                           f"只有「是否关键步」=是 的那一步需要填「{column}」", key)
 
 
 def main() -> None:
@@ -180,7 +187,8 @@ def main() -> None:
     data = Path(args.data_dir)
     tactics = load_tactics(data / GRID_REL)
     event_list, groups = load_reference(data / REFERENCE_REL)
-    events = {code for code, _ in event_list}
+    zh_to_code = event_zh_to_code(event_list)          # 表里填的是中文名
+    event_labels = set(zh_to_code)
     qual_cols = qualifier_columns(groups)
 
     cards, steps_by_key = read_workbook(Path(args.workbook))
@@ -188,10 +196,10 @@ def main() -> None:
 
     for card in cards:
         steps = check_card(card, tactics, report) or []
-        check_sequence_events(card, steps, events, report)
+        check_sequence_events(card, steps, event_labels, report)
         check_who_matches_sequence(card, steps, report)
         check_steps(card, steps, steps_by_key.get(card_key(card), []),
-                    events, groups, qual_cols, report)
+                    zh_to_code, groups, qual_cols, report)
 
     if not cards:
         print("这份表里还没有任何已标注的行。")

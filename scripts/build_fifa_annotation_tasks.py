@@ -36,9 +36,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pipeline.fifa_grounding import (  # noqa: E402
-    COLLECTIVE_SHAPE_TACTICS,
+    CHANNEL_ZH_TO_CODE,
+    DETAIL_COLUMNS,
     DROPPED_GROUPS,
-    EXTRA_EVENTS,
+    MAIN_COLUMNS,
+    THIRD_ZH_TO_CODE,
     load_reference,
     load_tactics,
     needs_group,
@@ -77,16 +79,14 @@ def read_csv(path: Path) -> list:
         return list(csv.DictReader(f))
 
 
-def load_zones(db_xlsx: Path) -> list:
+def check_zone_vocabulary(db_xlsx: Path) -> None:
+    """中文下拉最终要映射回这些受控值，先确认词表里确实还有它们。"""
     ws = openpyxl.load_workbook(db_xlsx, read_only=True)["受控词表"]
     text = "\n".join(str(c) for row in ws.iter_rows(values_only=True) for c in row if c)
-    channels = ["left_wing", "left_halfspace", "center", "right_halfspace", "right_wing"]
-    thirds = ["defensive_third", "middle_third", "final_third"]
-    specials = ["zone_14", "penalty_area", "six_yard_box", "all"]
-    missing = [v for v in channels + thirds + specials if v not in text]
+    expected = list(THIRD_ZH_TO_CODE.values()) + list(CHANNEL_ZH_TO_CODE.values())
+    missing = [v for v in expected if v not in text]
     if missing:
         raise SystemExit(f"受控词表 sheet 里找不到这些 zone 取值，请核对：{missing}")
-    return [f"{t}, {c}" for t in thirds for c in channels] + specials
 
 
 def load_cards(examples: Path, tactics: dict) -> list:
@@ -126,44 +126,51 @@ def write_header(ws, columns: list, prefilled: int) -> None:
     ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}1"
 
 
-def add_options_sheet(wb, lists: "OrderedDict[str, list]"):
-    """把所有下拉取值写进「选项」sheet，返回 名称 -> 区域引用。
+def inline_list(values: list) -> str:
+    """内联下拉的公式。
 
-    必须走区域引用而不是内联列表：Excel 的内联列表上限 255 字符，zones 有 19 项放不下。
+    两个坑，踩过一次了：
+    1. formula1 的内容**本身就是公式**，不能带前导 `=`——带了会变成 `==...`，
+       Excel 判非法后静默丢弃整条验证，下拉就是空的（v1 模板就是这么坏的）。
+    2. Excel 的内联列表上限 255 字符，超了同样失效，所以这里硬断言。
     """
-    ws = wb.create_sheet("选项")
-    refs = {}
-    for col, (name, values) in enumerate(lists.items(), start=1):
-        letter = get_column_letter(col)
-        ws.cell(1, col, name).font = Font(bold=True)
-        for row, v in enumerate(values, start=2):
-            ws.cell(row, col, v)
-        ws.column_dimensions[letter].width = max(12, min(40, max(len(str(v)) for v in values) + 2))
-        refs[name] = f"='选项'!${letter}$2:${letter}${len(values) + 1}"
-    ws.sheet_state = "hidden"
-    return refs
+    if any("," in str(v) for v in values):
+        raise ValueError(f"下拉取值里不能含逗号（逗号是分隔符）：{values}")
+    formula = '"' + ",".join(str(v) for v in values) + '"'
+    if len(formula) > 255:
+        raise ValueError(f"内联下拉超过 255 字符（{len(formula)}），需要拆列或缩短取值：{values}")
+    return formula
 
 
-def attach_dropdown(ws, ref: str, col: int, last_row: int) -> None:
-    dv = DataValidation(type="list", formula1=ref, allow_blank=True, showDropDown=False)
+def attach_dropdown(ws, values: list, col: int, last_row: int) -> None:
+    dv = DataValidation(type="list", formula1=inline_list(values),
+                        allow_blank=True, showErrorMessage=True)
     ws.add_data_validation(dv)
     letter = get_column_letter(col)
     dv.add(f"{letter}2:{letter}{last_row}")
 
 
-def build_main(wb, cards, refs):
-    columns = [
-        ("video_path", 58), ("duration_s", 10), ("tactic_label_given", 24), ("tactic_id", 20),
-        ("tactic_hint", 52), ("参与者提示", 44), ("序列提示", 44), ("who_group_必填", 12),
-        ("annotator", 10), ("date", 11),
-        ("start_sec", 9), ("end_sec", 9), ("origin_zone", 24), ("target_zone", 24),
-        ("who_team", 16), ("who_initiator", 18), ("who_carriers", 18), ("who_finisher", 18),
-        ("who_defenders", 22), ("who_group", 30),
-        ("ev_participants", 30), ("ev_space", 30), ("ev_time", 26), ("ev_sequence", 44),
-        ("result", 14), ("result_note", 18), ("commentary_zh", 34), ("visibility", 12),
-        ("dispute", 26),
-    ]
-    prefilled = 8
+WIDTHS = {
+    "video_path": 58, "duration_s": 9, "tactic_label_given": 24, "tactic_id": 20,
+    "tactic_hint": 52, "actors_hint": 44, "sequence_hint": 44, "group_required": 10,
+    "annotator": 10, "date": 12, "start_sec": 9, "end_sec": 9,
+    "origin_third": 12, "origin_channel": 12, "target_third": 12, "target_channel": 12,
+    "who_team": 16, "who_initiator": 18, "who_carriers": 18, "who_finisher": 18,
+    "who_defenders": 22, "who_group": 30,
+    "ev_participants": 30, "ev_space": 30, "ev_time": 26, "ev_sequence": 44,
+    "result": 14, "result_note": 18, "commentary_zh": 34, "visibility": 12, "dispute": 26,
+    "step_no": 7, "is_key_step": 11, "actor": 22, "event_code": 14,
+}
+
+# 预填（灰底）的内部键，到 group_required 为止
+PREFILLED_KEYS = ("video_path", "duration_s", "tactic_label_given", "tactic_id",
+                  "tactic_hint", "actors_hint", "sequence_hint", "group_required")
+
+
+def build_main(wb, cards):
+    keys = list(MAIN_COLUMNS)
+    columns = [(MAIN_COLUMNS[k], WIDTHS[k]) for k in keys]
+    prefilled = len(PREFILLED_KEYS)
     ws = wb.create_sheet("主表", 0)
     write_header(ws, columns, prefilled)
 
@@ -178,16 +185,20 @@ def build_main(wb, cards, refs):
         for i in range(prefilled + 1, len(columns) + 1):
             ws.cell(row, i).alignment = TOP
 
-    last = len(cards) + 1
-    for name, col in [("zones", 13), ("zones", 14), ("who_team", 15),
-                      ("result", 25), ("visibility", 28)]:
-        attach_dropdown(ws, refs[name], col, max(last, DV_MAX_ROW))
+    last_row = max(len(cards) + 1, DV_MAX_ROW)
+    dropdowns = {
+        "origin_third": list(THIRD_ZH_TO_CODE), "origin_channel": list(CHANNEL_ZH_TO_CODE),
+        "target_third": list(THIRD_ZH_TO_CODE), "target_channel": list(CHANNEL_ZH_TO_CODE),
+        "who_team": TEAM_OPTIONS, "result": RESULT_OPTIONS, "visibility": VISIBILITY_OPTIONS,
+    }
+    for key, values in dropdowns.items():
+        attach_dropdown(ws, values, keys.index(key) + 1, last_row)
     return ws
 
 
-def build_detail(wb, cards, refs, groups):
-    columns = [("video_path", 58), ("tactic_label_given", 24), ("step_no", 8),
-               ("is_key_step", 12), ("actor", 22), ("event_code", 20)]
+def build_detail(wb, cards, events, groups):
+    keys = list(DETAIL_COLUMNS)
+    columns = [(DETAIL_COLUMNS[k], WIDTHS[k]) for k in keys]
     columns += [(g["label"], 18) for g in groups.values()]
 
     ws = wb.create_sheet("事件明细")
@@ -202,20 +213,20 @@ def build_detail(wb, cards, refs, groups):
                 cell.alignment = WRAP
             row += 1
 
-    attach_dropdown(ws, refs["is_key_step"], 4, DV_MAX_ROW)
-    attach_dropdown(ws, refs["event_code"], 6, DV_MAX_ROW)
-    for i, code in enumerate(groups, start=7):
-        attach_dropdown(ws, refs[f"tag_{code}"], i, DV_MAX_ROW)
+    attach_dropdown(ws, YESNO_OPTIONS, keys.index("is_key_step") + 1, DV_MAX_ROW)
+    attach_dropdown(ws, [label for _, label in events], keys.index("event_code") + 1, DV_MAX_ROW)
+    for i, group in enumerate(groups.values(), start=len(keys) + 1):
+        attach_dropdown(ws, group["values"], i, DV_MAX_ROW)
     return ws
 
 
-def build_feedback(wb, refs):
+def build_feedback(wb):
     columns = [("日期", 12), ("问题类型", 22), ("涉及片段（可留空）", 50),
                ("具体描述", 60), ("你的建议", 40)]
     ws = wb.create_sheet("反馈表")
     write_header(ws, columns, 0)
-    attach_dropdown(ws, refs["feedback_kind"], 2, 500)
-    ws.cell(2, 4, "例：who_carriers 说「超过 3 人写群体」，但没说群体要不要带队伍名").alignment = WRAP
+    attach_dropdown(ws, FEEDBACK_KINDS, 2, 500)
+    ws.cell(2, 4, "例：「传导者」说超过 3 人写群体，但没说群体要不要带队伍名").alignment = WRAP
     return ws
 
 
@@ -233,28 +244,14 @@ def assert_no_model_columns(wb) -> None:
 def build(data_dir: Path, out: Path) -> dict:
     tactics = load_tactics(data_dir / GRID_REL)
     cards = load_cards(data_dir / EXAMPLES_REL, tactics)
-    zones = load_zones(data_dir / DB_XLSX_REL)
+    check_zone_vocabulary(data_dir / DB_XLSX_REL)
     events, groups = load_reference(data_dir / REFERENCE_REL)
-
-    lists = OrderedDict([
-        ("zones", zones),
-        ("who_team", TEAM_OPTIONS),
-        ("result", RESULT_OPTIONS),
-        ("visibility", VISIBILITY_OPTIONS),
-        ("is_key_step", YESNO_OPTIONS),
-        ("feedback_kind", FEEDBACK_KINDS),
-        ("event_code", [f"{label}({code})" for code, label in events]),
-    ])
-    for code, g in groups.items():
-        lists[f"tag_{code}"] = g["values"]
 
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
-    refs = add_options_sheet(wb, lists)
-    build_main(wb, cards, refs)
-    build_detail(wb, cards, refs, groups)
-    build_feedback(wb, refs)
-    wb.move_sheet("主表", offset=-wb.sheetnames.index("主表"))
+    build_main(wb, cards)
+    build_detail(wb, cards, events, groups)
+    build_feedback(wb)
     assert_no_model_columns(wb)
 
     out.parent.mkdir(parents=True, exist_ok=True)
