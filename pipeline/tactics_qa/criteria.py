@@ -82,7 +82,9 @@ def response_schema(doc: dict[str, Any] | None = None) -> dict[str, Any]:
                 "window_end_s": {"type": "number"},
                 "note": {"type": "string"},
             },
-            "required": ["team", "evidence", "window_start_s", "window_end_s"],
+            # Ark 的 strict json_schema 要求每个属性都出现在 required 里，
+            # 所以 note 也是必填 —— 没什么可说时给空串。
+            "required": ["team", "evidence", "window_start_s", "window_end_s", "note"],
             "additionalProperties": False,
         }
     ids = list(per_tactic)

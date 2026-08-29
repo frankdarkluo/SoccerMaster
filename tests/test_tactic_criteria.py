@@ -146,3 +146,21 @@ def test_registry_cross_references_are_named():
             if "registry_criterion_id" in e]
     assert refs, "至少应保留几条与 registry 同名的判据"
     assert all(isinstance(r, str) and r for r in refs)
+
+
+def _objects(node, path="$"):
+    if isinstance(node, dict):
+        if node.get("type") == "object" and "properties" in node:
+            yield path, node
+        for key, value in node.items():
+            yield from _objects(value, f"{path}.{key}")
+
+
+def test_schema_is_strict_json_schema_compatible():
+    """Ark 的 responses API 用 strict: True 调用，要求每个属性都在 required 里。
+
+    少一个（例如把 note 当可选）会被服务端直接拒掉，整批跑不起来。
+    """
+    for path, node in _objects(criteria.response_schema()):
+        assert set(node["properties"]) == set(node["required"]), path
+        assert node["additionalProperties"] is False, path
