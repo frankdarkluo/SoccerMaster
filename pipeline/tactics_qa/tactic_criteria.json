@@ -1,6 +1,7 @@
 {
-  "version": "v3",
-  "note": "12 类战术的可观察证据条目。这是 prompt 文本、JSON schema 与下游校验的单一真源；改这里，不要改生成出来的 Markdown。条目来源：战术词条表_12个战术.csv 的「视频侧-事件序列」与人工核验指南 v3 的 11/12 节「最低核心证据」。",
+  "version": "v3.1",
+  "note": "12 类战术的可观察证据条目。这是 prompt 文本、JSON schema 与下游校验的单一真源；改这里，不要改生成出来的 Markdown。条目来源：战术词条表_12个战术.csv 的「视频侧-事件序列」与人工核验指南 v3 的 11/12 节「最低核心证据」。key 用稳定命名而非位置编号 E1..En：插入或删除条目时，已落盘数据的键含义不会静默改变。",
+  "registry_note": "registry_criterion_id 交叉引用 benchmark/grounded_tactics/criterion_registry.json。该 registry 目前 22 条全为 provisional_unreviewed、observable_evidence 全空，其中 5 条是挂在所有战术上的通用模板，因此只复用能一对一对上的名字，不整体采用。",
   "score_levels": {
     "1.0": "清楚出现",
     "0.75": "大概率出现",
@@ -14,23 +15,26 @@
       "name_cn": "快速反击",
       "evidence": [
         {
-          "key": "E1",
-          "text": "出现明确球权转换（断球 / 抢断 / 解围）"
+          "key": "possession_regain",
+          "text": "出现明确球权转换（断球 / 抢断 / 解围）",
+          "registry_criterion_id": "possession_regain"
         },
         {
-          "key": "E2",
-          "text": "得球后少触球直接向前，不是先横传回传重新组织"
+          "key": "immediate_progression",
+          "text": "得球后少触球直接向前，不是先横传回传重新组织",
+          "registry_criterion_id": "immediate_progression"
         },
         {
-          "key": "E3",
+          "key": "supporting_runs",
           "text": "有队友沿纵向路线同步前插"
         },
         {
-          "key": "E4",
-          "text": "对方防线尚未重新落位"
+          "key": "defence_unset",
+          "text": "对方防线尚未重新落位",
+          "registry_criterion_id": "defence_unset"
         },
         {
-          "key": "E5",
+          "key": "territory_gain",
           "text": "球从夺权点跨越至少一个三区边界进入前场"
         }
       ]
@@ -40,23 +44,23 @@
       "name_cn": "下底倒三角",
       "evidence": [
         {
-          "key": "E1",
+          "key": "carrier_reaches_byline",
           "text": "边路持球人推进到底线附近"
         },
         {
-          "key": "E2",
+          "key": "defence_collapses_near_post",
           "text": "防守者被吸引向球侧 / 近门柱收缩"
         },
         {
-          "key": "E3",
+          "key": "pass_played_backward",
           "text": "传球方向朝本方球门一侧回做，不是传向门前或后点"
         },
         {
-          "key": "E4",
+          "key": "target_zone_penalty_spot",
           "text": "落点在小禁区线与点球点之间的中路"
         },
         {
-          "key": "E5",
+          "key": "central_runner_receives",
           "text": "中路包抄队友在该区域接球并处理"
         }
       ]
@@ -66,19 +70,20 @@
       "name_cn": "长传冲吊",
       "evidence": [
         {
-          "key": "E1",
+          "key": "origin_own_third_or_middle",
           "text": "出球点在本方后场或中场"
         },
         {
-          "key": "E2",
-          "text": "直接起纵向长球，跳过中间组织区域"
+          "key": "aerial_forward_ball",
+          "text": "直接起纵向长球，跳过中间组织区域",
+          "registry_criterion_id": "aerial_forward_ball"
         },
         {
-          "key": "E3",
+          "key": "first_ball_contest",
           "text": "前场目标争第一点或跑向防线身后"
         },
         {
-          "key": "E4",
+          "key": "second_ball_support",
           "text": "队友整体前压准备争第二点"
         }
       ]
@@ -88,19 +93,19 @@
       "name_cn": "破线传球",
       "evidence": [
         {
-          "key": "E1",
+          "key": "defensive_line_visible",
           "text": "画面中可见一条由至少两名防守者构成的防守线"
         },
         {
-          "key": "E2",
+          "key": "pass_crosses_line",
           "text": "传球路线从两名防守者之间或其上方穿过该线"
         },
         {
-          "key": "E3",
+          "key": "reception_behind_line",
           "text": "接球点位于该线最深防守者身后或线间"
         },
         {
-          "key": "E4",
+          "key": "receiver_faces_forward",
           "text": "接球者面向对方球门方向处理球"
         }
       ]
@@ -110,23 +115,23 @@
       "name_cn": "大范围转移",
       "evidence": [
         {
-          "key": "E1",
+          "key": "strong_side_congested",
           "text": "强侧出现压迫聚集或继续向前受阻"
         },
         {
-          "key": "E2",
+          "key": "ball_crosses_to_weak_side",
           "text": "球横向或斜向跨越中路到达对侧"
         },
         {
-          "key": "E3",
+          "key": "weak_side_width_held",
           "text": "弱侧接球者靠近边线保持宽度"
         },
         {
-          "key": "E4",
+          "key": "weak_side_space_gained",
           "text": "弱侧接球者获得更大前向空间并向前处理"
         },
         {
-          "key": "E5",
+          "key": "lateral_intent_not_vertical",
           "text": "该球的主要作用是改变进攻侧，而不是纵向寻找防线身后"
         }
       ]
@@ -136,23 +141,23 @@
       "name_cn": "高位逼抢",
       "evidence": [
         {
-          "key": "E1",
+          "key": "opponent_builds_from_back",
           "text": "对手在其防守三区从门将或后卫脚下出球"
         },
         {
-          "key": "E2",
+          "key": "multi_player_pressure",
           "text": "至少三名本方球员参与第一线压迫"
         },
         {
-          "key": "E3",
+          "key": "passing_options_locked",
           "text": "邻近的短传接应点被锁住"
         },
         {
-          "key": "E4",
+          "key": "line_pushes_up",
           "text": "整体阵线同步前移，后卫线推进至中线附近"
         },
         {
-          "key": "E5",
+          "key": "press_forces_outcome",
           "text": "迫使对手回传 / 出界 / 仓促长传，或本方在对手防守三区夺回球权"
         }
       ]
@@ -162,19 +167,19 @@
       "name_cn": "打身后 / 反越位跑位",
       "evidence": [
         {
-          "key": "E1",
+          "key": "last_line_visible",
           "text": "画面中可见对方最后一线"
         },
         {
-          "key": "E2",
+          "key": "run_starts_onside",
           "text": "跑动者起点在最后一线身前或与之平齐"
         },
         {
-          "key": "E3",
+          "key": "ball_beyond_last_line",
           "text": "球越过最后一线"
         },
         {
-          "key": "E4",
+          "key": "runner_arrives_behind",
           "text": "跑动者终点在最后一线身后（接球或被判越位）"
         }
       ]
@@ -184,20 +189,21 @@
       "name_cn": "二过一 / 撞墙配合",
       "evidence": [
         {
-          "key": "E1",
+          "key": "first_pass_to_wall",
           "text": "A 传球给 B"
         },
         {
-          "key": "E2",
+          "key": "passer_runs_past_defender",
           "text": "A 传球后立即启动，绕向防守者身侧或身后"
         },
         {
-          "key": "E3",
+          "key": "return_pass_into_path",
           "text": "B 快速把球回传到 A 的跑动线路"
         },
         {
-          "key": "E4",
-          "text": "A 越过防守者后再次接到球"
+          "key": "receiver_identity",
+          "text": "A 越过防守者后再次接到球（回传的接球者就是最初的传球者）",
+          "registry_criterion_id": "receiver_identity"
         }
       ]
     },
@@ -206,19 +212,19 @@
       "name_cn": "后场倒脚控场",
       "evidence": [
         {
-          "key": "E1",
+          "key": "back_line_circulation",
           "text": "门将与后卫之间连续横传或回传"
         },
         {
-          "key": "E2",
+          "key": "ball_stays_in_own_half",
           "text": "球持续不越过中线"
         },
         {
-          "key": "E3",
+          "key": "full_cycle_observed",
           "text": "能观察到一次完整的后场循环（约 10 至 25 秒）"
         },
         {
-          "key": "E4",
+          "key": "tempo_lowered",
           "text": "对方不上抢或上抢被回避，比赛节奏明显放慢"
         }
       ]
@@ -228,23 +234,23 @@
       "name_cn": "战术犯规",
       "evidence": [
         {
-          "key": "E1",
+          "key": "turnover_just_occurred",
           "text": "刚刚发生球权转换"
         },
         {
-          "key": "E2",
+          "key": "opponent_accelerating",
           "text": "对方持球人正在向前起速"
         },
         {
-          "key": "E3",
+          "key": "defence_out_of_shape",
           "text": "本方多数球员位于球的后方，尚未回防落位"
         },
         {
-          "key": "E4",
+          "key": "contact_not_for_ball",
           "text": "犯规动作不指向球（伸脚、拉拽、身体阻挡）"
         },
         {
-          "key": "E5",
+          "key": "whistle_stops_attack",
           "text": "裁判鸣哨，对方进攻被中断"
         }
       ]
@@ -254,23 +260,24 @@
       "name_cn": "短角球",
       "evidence": [
         {
-          "key": "E1",
+          "key": "corner_awarded",
           "text": "该片段中出现角球"
         },
         {
-          "key": "E2",
-          "text": "第一脚短传给角球区附近 5 至 15 米的队友，未直接传入禁区"
+          "key": "first_pass_short",
+          "text": "第一脚短传给角球区附近 5 至 15 米的队友，未直接传入禁区",
+          "registry_criterion_id": "first_pass_short"
         },
         {
-          "key": "E3",
+          "key": "defenders_drawn_out",
           "text": "防守者被迫离开门前站位向边线外出"
         },
         {
-          "key": "E4",
+          "key": "second_phase_created",
           "text": "通过回传 / 二过一 / 套边 / 带球形成第二阶段，改变传中角度"
         },
         {
-          "key": "E5",
+          "key": "final_delivery_or_shot",
           "text": "出现二次传中、肋部突破或禁区弧射门"
         }
       ]
@@ -280,23 +287,23 @@
       "name_cn": "套边与内切套上",
       "evidence": [
         {
-          "key": "E1",
+          "key": "carrier_engages_fullback",
           "text": "持球人稳定控球并吸引对方边后卫贴身对位"
         },
         {
-          "key": "E2",
+          "key": "run_starts_behind_carrier",
           "text": "队友从持球人身后启动"
         },
         {
-          "key": "E3",
+          "key": "runner_passes_carrier",
           "text": "跑动者越过持球人，走外侧（套边）或走内侧肋部（内切套上）"
         },
         {
-          "key": "E4",
+          "key": "defender_forced_to_choose",
           "text": "对方边后卫被迫在持球人与跑动者之间二选一，形成 2v1"
         },
         {
-          "key": "E5",
+          "key": "ball_released_to_runner",
           "text": "持球人把球分给跑动者"
         }
       ]

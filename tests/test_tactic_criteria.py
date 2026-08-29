@@ -51,13 +51,22 @@ def test_validate_accepts_wellformed_payload():
     criteria.validate(_payload())
 
 
+def _drop_key(payload, tactic):
+    payload["scores"][tactic]["evidence"].pop(criteria.evidence_keys(tactic)[0])
+
+
+def _set_first(payload, tactic, value):
+    payload["scores"][tactic]["evidence"][criteria.evidence_keys(tactic)[0]] = value
+
+
+# 判据键名会随判据修订而变，测试按位置取键，不写死名字。
 @pytest.mark.parametrize("mutate, message", [
     (lambda p: p["scores"].pop("one-two"), "缺少"),
     (lambda p: p["scores"].update({"tiki-taka": p["scores"]["one-two"]}), "多出"),
-    (lambda p: p["scores"]["one-two"]["evidence"].pop("E3"), "键不匹配"),
-    (lambda p: p["scores"]["one-two"]["evidence"].update({"E9": 0.5}), "键不匹配"),
-    (lambda p: p["scores"]["cutback"]["evidence"].update({"E1": 1.5}), "越界"),
-    (lambda p: p["scores"]["cutback"]["evidence"].update({"E1": "high"}), "不是数值"),
+    (lambda p: _drop_key(p, "one-two"), "键不匹配"),
+    (lambda p: p["scores"]["one-two"]["evidence"].update({"made_up": 0.5}), "键不匹配"),
+    (lambda p: _set_first(p, "cutback", 1.5), "越界"),
+    (lambda p: _set_first(p, "cutback", "high"), "不是数值"),
     (lambda p: p["scores"]["high-press"].update({"window_start_s": 9.0,
                                                  "window_end_s": 1.0}), "窗口反向"),
     (lambda p: p["scores"].clear(), "不匹配"),
@@ -110,3 +119,30 @@ def test_script_quarantines_invalid_rows_instead_of_passing_them_through(tmp_pat
     assert "AA-bad" in rejects and "long-ball" in rejects
     assert "AA-bad" not in dst.read_text(encoding="utf-8-sig")
     assert "AA-good" in dst.read_text(encoding="utf-8-sig")
+
+
+def test_criterion_keys_are_stable_names_not_positional():
+    """E1..En 这种位置编号是脆的：插一条判据，已落盘数据里的键含义就悄悄变了。"""
+    keys = [k for tid in criteria.tactic_ids() for k in criteria.evidence_keys(tid)]
+    assert keys, "没有读到任何判据"
+    assert not any(k.startswith("E") and k[1:].isdigit() for k in keys)
+    assert all(criteria.KEY_PATTERN.fullmatch(k) for k in keys)
+
+
+def test_load_rejects_non_snake_case_keys(tmp_path: Path):
+    doc = json.loads(criteria.CRITERIA_PATH.read_text(encoding="utf-8"))
+    doc["tactics"][0]["evidence"][0]["key"] = "E1"
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    with pytest.raises(ValueError, match="snake_case"):
+        criteria.load(bad)
+
+
+def test_registry_cross_references_are_named():
+    """能与 criterion_registry.json 一对一对上的判据，保留原名以便日后对账。"""
+    doc = criteria.load()
+    refs = [e["registry_criterion_id"]
+            for t in doc["tactics"] for e in t["evidence"]
+            if "registry_criterion_id" in e]
+    assert refs, "至少应保留几条与 registry 同名的判据"
+    assert all(isinstance(r, str) and r for r in refs)

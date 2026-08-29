@@ -13,11 +13,15 @@
 from __future__ import annotations
 
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 CRITERIA_PATH = Path(__file__).with_name("tactic_criteria.json")
+
+# 稳定命名而非位置编号：插入 / 删除条目时，已落盘数据里的键含义不会静默改变。
+KEY_PATTERN = re.compile(r"[a-z][a-z0-9_]*$")
 
 SCORE_MIN, SCORE_MAX = 0.0, 1.0
 
@@ -34,6 +38,9 @@ def load(path: Path = CRITERIA_PATH) -> dict[str, Any]:
             raise ValueError(f"{path}: {tactic['id']} 的证据 key 重复")
         if not keys:
             raise ValueError(f"{path}: {tactic['id']} 没有证据条目")
+        bad = [k for k in keys if not KEY_PATTERN.fullmatch(k)]
+        if bad:
+            raise ValueError(f"{path}: {tactic['id']} 的证据 key 不是 snake_case：{bad}")
     return doc
 
 
