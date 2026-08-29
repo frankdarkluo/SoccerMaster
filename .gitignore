@@ -4,6 +4,7 @@
 !/data/annotations/
 /data/annotations/*
 !/data/annotations/tactical_source_rows_full.jsonl
+!/data/annotations/*.md
 datasets/
 outputs/
 data/FIFA Game Library/
