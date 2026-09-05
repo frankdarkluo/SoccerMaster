@@ -10,6 +10,8 @@ from typing import Dict, List
 
 import numpy as np
 
+from pipeline.config import GSR_DATASET_ROOT, REPO_ROOT
+
 from .io_gamestate import Detection, load_detections
 
 VISIBLE_TOPOLOGY_VERSION = "visible-topology-v2"
@@ -69,16 +71,9 @@ def resolve_position_source(
             "gt" if candidate.name == "Labels-GameState.json" else "soccer_master"
         )
 
-    flat_gt = repo_root / "data" / "GSR-2024" / "images" / clip / "Labels-GameState.json"
-    if flat_gt.is_file():
-        return flat_gt.resolve(), "gt"
-
-    gt_root = repo_root / "codes/sn-gamestate/datasets/SoccerNetGS"
-    matches = sorted(gt_root.glob(f"*/{clip}/Labels-GameState.json"))
-    if len(matches) > 1:
-        raise ValueError(f"Multiple GameState GT files found for {clip}: {matches}")
-    if matches:
-        return matches[0].resolve(), "gt"
+    gt = repo_root / GSR_DATASET_ROOT.relative_to(REPO_ROOT) / "images" / clip / "Labels-GameState.json"
+    if gt.is_file():
+        return gt.resolve(), "gt"
 
     prediction = (
         Path(preprocessing_root)

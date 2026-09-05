@@ -32,7 +32,7 @@ def _visible_shape(drop_forward_member_after=None):
 
 
 def test_position_source_prefers_gamestate_gt(tmp_path: Path):
-    gt = tmp_path / "codes/sn-gamestate/datasets/SoccerNetGS/test/SNGS-X/Labels-GameState.json"
+    gt = tmp_path / "data/GSR-2025/images/SNGS-X/Labels-GameState.json"
     prediction = tmp_path / "outputs/preprocessing/SNGS-X/predictions.json"
     gt.parent.mkdir(parents=True)
     prediction.parent.mkdir(parents=True)

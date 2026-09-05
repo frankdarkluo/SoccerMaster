@@ -254,7 +254,7 @@ def test_doubao_honors_explicit_fps_and_temperature(tmp_path, monkeypatch):
     assert sent["temperature"] == 0.5
 
 
-def test_gemini_rejects_interactions_api_fps_field(tmp_path, monkeypatch):
+def test_gemini_rejects_fps_and_temperature_and_sends_neither(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
     monkeypatch.setattr(video_models, "_GEMINI_INDEX", 0)
     monkeypatch.setattr(video_models, "_GEMINI_SUSPENDED", set())
@@ -271,31 +271,13 @@ def test_gemini_rejects_interactions_api_fps_field(tmp_path, monkeypatch):
     video = tmp_path / "clip.mp4"
     video.write_bytes(b"video-bytes")
 
-    with pytest.raises(ValueError, match="has no fps field"):
-        video_models.generate_json("gemini", "prompt", {}, video_path=video, fps=6.0, temperature=0.7)
-
+    # The Interactions API has no field for either; accepting them silently would drop them.
+    for tuning in ({"fps": 6.0}, {"temperature": 0.7}, {"fps": 6.0, "temperature": 0.7}):
+        with pytest.raises(ValueError, match="neither fps nor temperature"):
+            video_models.generate_json("gemini", "prompt", {}, video_path=video, **tuning)
     assert sent == {}
 
-
-def test_gemini_omits_video_metadata_when_fps_not_given(tmp_path, monkeypatch):
-    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
-    monkeypatch.setattr(video_models, "_GEMINI_INDEX", 0)
-    monkeypatch.setattr(video_models, "_GEMINI_SUSPENDED", set())
-    sent = {}
-
-    def post(*_, **kwargs):
-        sent.update(kwargs["json"])
-        return SimpleNamespace(
-            status_code=200, headers={}, text="",
-            json=lambda: {"steps": [{"type": "model_output", "content": [{"type": "text", "text": '{"ok": true}'}]}]},
-        )
-
-    monkeypatch.setitem(sys.modules, "httpx", SimpleNamespace(post=post, Timeout=lambda *_a, **_k: None))
-    video = tmp_path / "clip.mp4"
-    video.write_bytes(b"video-bytes")
-
     video_models.generate_json("gemini", "prompt", {}, video_path=video)
-
     assert "video_metadata" not in sent["input"][0]
     assert "generation_config" not in sent
 

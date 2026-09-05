@@ -12,8 +12,10 @@ from pathlib import Path
 from pipeline.config import (
     GSR_ROOT,
     REPO_ROOT,
+    SPLITS,
     PipelineConfig,
     source_split_for_clip,
+    tracklab_split,
 )
 from pipeline.stage1_inference.cpu_guard import (
     apply_cpu_limits,
@@ -37,19 +39,11 @@ def _sequence_id(config: PipelineConfig) -> str:
 
 
 def _split_name(config: PipelineConfig) -> str:
-    """Resolve TrackLab's logical split independently of the physical path."""
-    parent = Path(config.clip_dir).parent.name
-    if parent == "validation":
-        return "valid"
-    if parent in {"train", "valid", "test", "challenge", "sn500"}:
-        return parent
-    configured = config.gsr_split
-    if configured in {"train", "valid", "validation", "test", "challenge", "sn500"}:
-        return "valid" if configured == "validation" else configured
-    detected = source_split_for_clip(config.gsr_frames_root, _sequence_name(config))
-    if detected:
-        return "valid" if detected == "validation" else detected
-    raise ValueError(f"Cannot resolve source split for {_sequence_name(config)}")
+    """TrackLab's logical split: the configured one, else the clip's split in the dataset."""
+    split = config.gsr_split or source_split_for_clip(config.gsr_dataset_root, _sequence_name(config))
+    if split not in SPLITS:
+        raise ValueError(f"Unknown split {split!r}; expected one of {SPLITS}")
+    return tracklab_split(split)
 
 
 def _gsr_output_base(config: PipelineConfig) -> Path:

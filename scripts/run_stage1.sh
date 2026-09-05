@@ -7,24 +7,17 @@
 # Step 3 default uses HuggingFace (Qwen2.5-VL-7B-Instruct, gsr_step_3_example_accelerate).
 # Run two-stage commentary, Stage 3 TTS, and optional Stage 4 Effects separately.
 #
-# The clip_dir may use the flat GSR-2024 images root or the legacy split tree.
-# The source split comes from sequences_info.json (or GSR_SPLIT when provided).
+# clip_dir is <dataset-root>/images/<clip>. The split comes from the dataset's
+# sequences_info.json, or from GSR_SPLIT when set.
 #
 # Usage:
 #   bash scripts/run_stage1.sh
-#   bash scripts/run_stage1.sh \
-#     data/GSR-2024/images/SNGS-148 \
-#     outputs/SNGS-148
+#   bash scripts/run_stage1.sh data/GSR-2025/images/SNGS-148 outputs/SNGS-148
 #
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-DEFAULT_CLIP="data/GSR-2024/images/SNGS-148"
-if [[ ! -d "$DEFAULT_CLIP/img1" ]]; then
-  DEFAULT_CLIP="codes/sn-gamestate/datasets/SoccerNetGS/test/SNGS-148"
-fi
-
-CLIP_DIR="${1:-$DEFAULT_CLIP}"
+CLIP_DIR="${1:-data/GSR-2025/images/SNGS-148}"
 OUTPUT_DIR="${2:-outputs/SNGS-148}"
 INPUT_VIDEO="${INPUT_VIDEO:-}"
 STAGE1_PHASE="${STAGE1_PHASE:-all}"
@@ -68,32 +61,6 @@ fi
 
 export PYTHONPATH="${PWD}${PYTHONPATH:+:$PYTHONPATH}"
 
-# nohup/non-interactive shells often leave conda on base (no torch). Activate tracklab.
-if [[ -z "${GSR_PYTHON:-}" ]]; then
-  for _tracklab_python in \
-    "${HOME}/guoqing/miniconda3/envs/tracklab/bin/python" \
-    "${HOME}/miniconda3/envs/tracklab/bin/python" \
-    "${HOME}/anaconda3/envs/tracklab/bin/python"
-  do
-    if [[ -x "$_tracklab_python" ]]; then
-      export GSR_PYTHON="$_tracklab_python"
-      break
-    fi
-  done
-fi
-
-if [[ -z "${CONDA_DEFAULT_ENV:-}" || "${CONDA_DEFAULT_ENV}" == "base" ]]; then
-  for _conda_sh in \
-    "${HOME}/miniconda3/etc/profile.d/conda.sh" \
-    "${HOME}/anaconda3/etc/profile.d/conda.sh"
-  do
-    if [[ -f "$_conda_sh" ]]; then
-      # shellcheck source=/dev/null
-      source "$_conda_sh"
-      conda activate tracklab 2>/dev/null && break
-    fi
-  done
-fi
 PYTHON="${GSR_PYTHON:-python}"
 export GSR_PYTHON="$(command -v "$PYTHON")"
 if ! "$PYTHON" -c "import torch" 2>/dev/null; then
@@ -112,7 +79,7 @@ export GPU_LIST="${GPU_LIST:-0}"
 export MAX_PROCESSES_PER_GPU="${MAX_PROCESSES_PER_GPU:-1}"
 
 SEQ_NAME="$(basename "$CLIP_DIR")"
-SPLIT_NAME="${GSR_SPLIT:-metadata}"
+SPLIT_NAME="${GSR_SPLIT:-from sequences_info.json}"
 
 echo "=== Stage 1: SoccerMaster Inference (single clip) ==="
 echo "  clip_dir:    $CLIP_DIR"
@@ -138,7 +105,7 @@ from pathlib import Path
 import logging
 import os
 
-from pipeline.config import PipelineConfig, source_split_for_clip
+from pipeline.config import PipelineConfig
 from pipeline.stage1_inference.pklz_to_json import convert_pklz_to_json
 from pipeline.stage1_inference.run_gsr import run_step1, run_step2, run_step3
 
@@ -155,22 +122,12 @@ if input_video is not None and (not input_video.exists() or input_video.stat().s
     input_video = None
 
 phase = "${STAGE1_PHASE}"
-parent_name = clip_dir.parent.name
-legacy_splits = {"train", "valid", "validation", "test", "challenge", "sn500"}
-frames_root = clip_dir.parent.parent if parent_name in legacy_splits else clip_dir.parent
-source_split = (
-    os.environ.get("GSR_SPLIT")
-    or source_split_for_clip(frames_root, clip_dir.name)
-    or (parent_name if parent_name in legacy_splits else None)
-)
-if source_split is None:
-    raise ValueError("Source split is absent from sequences_info.json; set GSR_SPLIT")
 config = PipelineConfig(
     clip_dir=clip_dir,
     output_dir=output_dir,
     sequence_prefix=clip_dir.name,
-    gsr_split=source_split,
-    gsr_frames_root=frames_root,
+    gsr_dataset_root=clip_dir.parent.parent,
+    gsr_split=os.environ.get("GSR_SPLIT") or None,
     force=False,
 )
 
@@ -181,8 +138,8 @@ if phase in {"all", "step1"}:
         preprocess_video(
             input_video,
             sequence_name=config.sequence_prefix,
-            split=config.gsr_split,
-            dataset_root=config.gsr_frames_root,
+            split=config.gsr_split or "test",
+            dataset_root=config.gsr_dataset_root,
         )
     run_step1(config)
 

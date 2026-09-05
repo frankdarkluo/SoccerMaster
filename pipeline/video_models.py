@@ -233,9 +233,6 @@ def _gemini(
     prompt: str,
     schema: dict[str, Any],
     video_path: Path | None,
-    *,
-    fps: float | None = None,
-    temperature: float | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     import httpx
 
@@ -309,10 +306,13 @@ def generate_json(
     if call is None:
         raise ValueError(f"unknown provider: {provider}")
     kwargs: dict[str, Any] = {}
-    if temperature is not None or provider == "doubao":
-        kwargs["temperature"] = temperature if temperature is not None else 0.0
-    if fps is not None:
-        kwargs["fps"] = fps
+    if provider == "gemini":
+        if fps is not None or temperature is not None:
+            raise ValueError("Gemini's Interactions API accepts neither fps nor temperature")
+    else:
+        kwargs["temperature"] = 0.0 if temperature is None else temperature
+        if fps is not None:
+            kwargs["fps"] = fps
     for attempt in range(retries + 1):
         try:
             payload, usage = call(prompt, schema, video_path, **kwargs)
