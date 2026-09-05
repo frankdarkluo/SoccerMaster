@@ -1,4 +1,4 @@
-"""Read-only integrity checks for legacy or flat SoccerNetGS layouts."""
+"""Read-only integrity checks for a SoccerNetGS dataset root."""
 
 from __future__ import annotations
 
@@ -226,19 +226,9 @@ def validate_sequence(
 
 
 def _sequence_dirs(root: Path, split: str) -> list[Path]:
-    legacy_split = "valid" if split == "validation" else split
-    legacy_dir = root / legacy_split
-    if legacy_dir.is_dir():
-        return sorted(path for path in legacy_dir.iterdir() if path.is_dir())
-
-    metadata_path = root / "sequences_info.json"
-    if not metadata_path.is_file():
-        metadata_path = root.parent / "sequences_info.json"
-    if not metadata_path.is_file():
-        return []
-    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    key = "validation" if split == "valid" else split
-    return [root / entry["name"] for entry in metadata.get(key, [])]
+    """`root` is the images directory; sequences_info.json sits beside it."""
+    metadata = json.loads((root.parent / "sequences_info.json").read_text(encoding="utf-8"))
+    return [root / entry["name"] for entry in metadata.get(split, [])]
 
 
 def validate_dataset(
