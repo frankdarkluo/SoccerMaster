@@ -118,7 +118,7 @@ Please organize `/data/zhangzheng/pretrained_models/` as follows:
 - **jn**: Download Qwen2.5-VL models from the [Qwen2.5-VL Collection](https://huggingface.co/collections/Qwen/qwen25-vl) on Hugging Face.
 - **yolo**: Move `yolo_v8x6_finetuned.pt` to `/data/zhangzheng/pretrained_models/yolo/`. This file can be obtained from [https://huggingface.co/xleprime/SoccerMaster](https://huggingface.co/xleprime/SoccerMaster).
 
-The audited GSR-2024 source lives under `data/GSR-2024/`. Logical source splits remain in `sequences_info.json` and `clip_manifest.jsonl`; directory parents no longer encode the split. Runtime loaders retain one migration cycle of legacy split-tree fallback.
+The dataset lives under `data/GSR-2025/`. Splits come from `sequences_info.json`; directory parents do not encode the split. Point elsewhere with `PipelineConfig(gsr_dataset_root=...)`.
 
 ## Data Pipeline
 
@@ -127,9 +127,8 @@ The audited GSR-2024 source lives under `data/GSR-2024/`. Logical source splits 
 The data pipeline follows the [SoccerNet Game State Recognition (GSR)](https://github.com/soccernet/sn-gamestate) format. You need to organize your input video frames into the following directory structure. The audited layout uses `SNGS-001` through `SNGS-200`; one sequence is shown below:
 
 ```
-data/GSR-2024/
+data/GSR-2025/
 ├── sequences_info.json
-├── clip_manifest.jsonl
 ├── videos/
 │   ├── SNGS-001.mp4
 │   └── ...
@@ -218,21 +217,23 @@ python scripts/run_tactical_topology.py analyze --clip-uid SNGS-148
 
 The default output is `outputs/tactical_topology/SNGS-148.json`. Each one-second window records the position source, visible-player evidence, accepted lines, and rejected candidates.
 
-### Stage 4 Preview
+### Stage 3: Commentary Audio
 
-Stage 4 can render a silent preview from existing frames, positions, homography, the reviewed FIFA style profile, and the topology result. This example applies effects only from 21 to 25 seconds and pins the vertical beam to track 1.
+Synthesize the commentary with CosyVoice and mux it onto the clip. `--voice default` uses the
+built-in voice; `--voice clone` needs a `--prompt-wav` reference sample.
 
 ```bash
-python -m pipeline.stage4_effects.run preview \
-  --frames-dir data/GSR-2024/images/SNGS-148/img1 \
-  --predictions outputs/preprocessing/SNGS-148/predictions.json \
-  --homography outputs/preprocessing/SNGS-148/homography_per_frame.json \
-  --topology outputs/tactical_topology/SNGS-148.json \
-  --style-profile outputs/fifa_game_library/visual_patterns/style_profile.json \
-  --focus-track-id 1 \
-  --window 21:25 \
-  --output outputs/fifa_game_library/stage4/SNGS-148/preview.mp4 \
-  --fps 25
+bash scripts/run_stage3.sh outputs/SNGS-148
+```
+
+### Stage 4: Tactical Effects
+
+Stage 4 draws the topology graphics over the frames and muxes the Stage 3 audio into the final
+video. Graphics cover the whole clip unless `--window start:end` narrows them; `--focus-track-id`
+pins the vertical beam to one track.
+
+```bash
+bash scripts/run_stage4.sh outputs/SNGS-148 --clip-dir data/GSR-2025/images/SNGS-148
 ```
 
 ### Two-stage Tactical Commentary
@@ -247,6 +248,40 @@ python scripts/run_tactical_commentary.py run \
 ```
 
 Results are written to `outputs/tactical_commentary/<provider>/<clip>.json`. Topology generation does not add another model call.
+
+## Multi-Agent Tactic Recognition
+
+Two arms over the frozen 37-clip GSR-2025 set, both runnable on either provider
+(`--provider doubao` or `--provider gemini`). They share ground truth, metrics and
+reporting, so their numbers are directly comparable.
+
+**A + B + rule → C.** Agent A reports spatial evidence and agent B an event sequence, neither
+naming a tactic. Eight deterministic rules score the eight tactics from A and B. Agent C then
+arbitrates among the rules' top three candidates against the video. `final.source` records
+whether the answer came from the arbiter or the rule.
+
+```bash
+python multi-agent/pilot.py run --provider doubao --run-id r5 --allow-external-upload
+python multi-agent/pilot.py report --run-id r5
+```
+
+**C-only.** The control: a single call classifies the clip directly, with no A, B or rule.
+
+```bash
+python multi-agent/c_only.py run --provider gemini --run-id g1 --allow-external-upload
+python multi-agent/c_only.py report --run-id g1
+```
+
+Both write `multi-agent/outputs/multiagent_pilot/<arm>/<run-id>/` with `clips/`, `manifest.json`,
+`metrics.json` and `review.md`. Ground truth is `data/grounded_tactics/gsr2025_gt_37.csv` and the
+tactic definitions are `data/足球战术数据库_词条表_Grid.csv`. Uploading video to an external API
+requires `--allow-external-upload`.
+
+Offline tests, no network:
+
+```bash
+python multi-agent/test_pilot.py
+```
 
 ## TODO
 - [x] Add pretraining code.

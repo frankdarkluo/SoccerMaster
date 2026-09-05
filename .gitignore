@@ -72,3 +72,10 @@ docs/superpowers/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Inputs the delivered multi-agent pipeline cannot run without. These sit under
+# /data/* and match *.csv, so both blanket rules have to be reopened here.
+!/data/grounded_tactics/
+/data/grounded_tactics/*
+!/data/grounded_tactics/gsr2025_gt_37.csv
+!/data/足球战术数据库_词条表_Grid.csv
