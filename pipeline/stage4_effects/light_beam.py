@@ -56,8 +56,3 @@ def draw_vertical_beam(
     ).clip(0, 255).astype(np.uint8)
 
 
-def compute_beam_alpha(frame_offset: int, half_duration_frames: int, alpha_max: float) -> float:
-    """Fade in/out alpha based on frame distance from event center."""
-    if abs(frame_offset) >= half_duration_frames:
-        return 0.0
-    return alpha_max * (1 - abs(frame_offset) / half_duration_frames)

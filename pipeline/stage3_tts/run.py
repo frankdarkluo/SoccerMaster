@@ -32,14 +32,10 @@ def _load_segments(path: Path, duration_s: float) -> list[dict]:
     if isinstance(data, dict) and data.get("commentary_zh"):
         fact = data.get("locked_fact") or {}
         window = fact.get("window") or {}
-        tactic = fact.get("tactic_zh")
-        if not tactic:
-            raise ValueError(f"Missing locked tactic in {path}")
         return [{
             "timestamp_s": float(window.get("start_s", 0.0)),
             "end_s": duration_s,
             "text_zh": data["commentary_zh"],
-            "fallback_text_zh": f"{tactic}形成威胁。",
             "human_review_reference": fact,
         }]
     segments = data.get("segments", data.get("commentary", [])) if isinstance(data, dict) else data
@@ -59,8 +55,6 @@ def _synthesize_voice(
     prompt_wav: Optional[Path],
     prompt_text: Optional[str],
     force: bool,
-    prefer_fallback: bool = False,
-    borrow_silence: bool = False,
 ) -> Path:
     from pipeline.stage3_tts.synthesize import assemble_timeline, synthesize_fitting_segment
 
@@ -72,19 +66,8 @@ def _synthesize_voice(
         if force or not path.is_file():
             start = float(segment.get("timestamp_s", 0.0))
             end = float(segment.get("end_s", duration_s))
-            is_locked_tactical = isinstance(
-                segment.get("human_review_reference"), dict
-            )
-            if borrow_silence and is_locked_tactical:
-                later = [
-                    float(item.get("timestamp_s", duration_s))
-                    for item in segments[index + 1:]
-                    if float(item.get("timestamp_s", duration_s)) > start
-                ]
-                end = min(later) if later else duration_s
             synthesize_fitting_segment(
                 segment, language, path, max(end - start, 0.0), synthesizer,
-                prefer_fallback=prefer_fallback and is_locked_tactical,
                 voice=voice, prompt_wav=prompt_wav, prompt_text=prompt_text,
             )
         paths.append(path)
@@ -106,13 +89,11 @@ def _atomic_mux(clip: Path, audio: Path, target: Path) -> Path:
 def run_stage3_tts(
     output_dir: Path,
     language: str = "zh",
-    voice: str = "both",
+    voice: str = "default",
     prompt_wav: Optional[Path] = None,
     prompt_text: Optional[str] = None,
     commentary_record: Optional[Path] = None,
     force: bool = False,
-    prefer_fallback: bool = False,
-    borrow_silence: bool = False,
 ) -> Path:
     from pipeline.stage3_tts.cosyvoice import (
         DEFAULT_PROMPT_TEXT, MODEL_DIR, CosyVoiceSynthesizer,
@@ -132,47 +113,24 @@ def run_stage3_tts(
     segments = _load_segments(commentary, duration_s)
     synthesizer = CosyVoiceSynthesizer(MODEL_DIR)
 
-    default_audio = config.commentary_audio(language, default=True)
-    clone_audio = config.commentary_audio(language)
-    baseline = config.raw_final_video(language)
-    final = config.final_video(language)
-
-    selected_audio = None
-    if voice in {"default", "both"}:
-        selected_audio = _synthesize_voice(
-            output_dir, segments, language, "default", default_audio, duration_s,
-            synthesizer, prompt_wav, prompt_text or DEFAULT_PROMPT_TEXT, force,
-            prefer_fallback, borrow_silence,
-        )
-    if voice in {"clone", "both"}:
-        selected_audio = _synthesize_voice(
-            output_dir, segments, language, "clone", clone_audio, duration_s,
-            synthesizer, prompt_wav, prompt_text, force,
-            prefer_fallback, borrow_silence,
-        )
-    assert selected_audio is not None
-    _atomic_mux(clip, selected_audio, baseline)
-    return _atomic_mux(clip, selected_audio, final)
+    if voice == "clone" and prompt_wav is None:
+        raise ValueError("--voice clone requires --prompt-wav")
+    audio = _synthesize_voice(
+        output_dir, segments, language, voice, config.commentary_audio(language), duration_s,
+        synthesizer, prompt_wav,
+        prompt_text if voice == "clone" else (prompt_text or DEFAULT_PROMPT_TEXT), force,
+    )
+    return _atomic_mux(clip, audio, config.final_video(language))
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output_dir", type=Path)
     parser.add_argument("--language", choices=["zh", "en"], default="zh")
-    parser.add_argument(
-        "--voice", choices=["default", "clone", "both"], default="both"
-    )
+    parser.add_argument("--voice", choices=["default", "clone"], default="default")
     parser.add_argument("--prompt-wav", type=Path)
     parser.add_argument("--prompt-text")
     parser.add_argument("--commentary-record", type=Path)
-    parser.add_argument(
-        "--prefer-fallback", action="store_true",
-        help="use fallback text for locked tactical segments",
-    )
-    parser.add_argument(
-        "--borrow-silence", action="store_true",
-        help="extend locked tactical segments to the next commentary start",
-    )
     parser.add_argument("--force", action="store_true")
     return parser
 
@@ -186,8 +144,6 @@ def main() -> None:
         prompt_wav=args.prompt_wav,
         prompt_text=args.prompt_text,
         commentary_record=args.commentary_record,
-        prefer_fallback=args.prefer_fallback,
-        borrow_silence=args.borrow_silence,
         force=args.force,
     ))
 

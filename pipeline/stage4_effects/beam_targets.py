@@ -32,35 +32,6 @@ def foot_point_from_bbox(bbox_image: dict) -> Optional[Tuple[int, int]]:
     return int(round(float(x_center))), int(round(float(y) + float(h)))
 
 
-def _find_ball(annotations: List[dict]) -> Optional[dict]:
-    for ann in annotations:
-        role = (ann.get("attributes") or {}).get("role")
-        if role == "ball":
-            return ann
-    return None
-
-
-def _find_player(
-    annotations: List[dict],
-    jersey: Optional[str],
-    team: Optional[str],
-) -> Optional[dict]:
-    if jersey:
-        for ann in annotations:
-            attrs = ann.get("attributes") or {}
-            if str(attrs.get("jersey", "")) == str(jersey):
-                return ann
-    if team:
-        players = [
-            ann for ann in annotations
-            if (ann.get("attributes") or {}).get("team") == team
-            and (ann.get("attributes") or {}).get("role") in ("player", "goalkeeper")
-        ]
-        if players:
-            return players[0]
-    return None
-
-
 def _nearest_field_player_to_ball(
     annotations: List[dict],
     ball_ann: dict,
@@ -99,24 +70,3 @@ def _nearest_field_player_to_ball(
     return candidates[0][2] if candidates[0][0] <= max_dist_m else None
 
 
-def resolve_beam_origin(
-    event: dict,
-    annotations: List[dict],
-) -> Optional[Tuple[int, int]]:
-    """Resolve the highlighted creator's foot point."""
-    ball = _find_ball(annotations)
-    player = _find_player(
-        annotations,
-        event.get("player_jersey"),
-        event.get("player_team"),
-    )
-    if player is None and ball is not None:
-        player = _nearest_field_player_to_ball(
-            annotations,
-            ball,
-            max_dist_m=5.0,
-            prefer_outfield=True,
-        )
-    if player is None:
-        return None
-    return foot_point_from_bbox(player.get("bbox_image") or {})

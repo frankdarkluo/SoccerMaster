@@ -6,10 +6,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from pipeline.config import PipelineConfig
 from pipeline.stage4_effects.light_beam import draw_vertical_beam
-from pipeline.stage4_effects.overlay import apply_event_beams
-from pipeline.stage4_effects.render import load_effect_events
 from pipeline.stage4_effects.preview import (
     _infer_attacking_team,
     draw_preview_effects,
@@ -146,44 +143,6 @@ def test_preview_beam_can_lock_to_one_track():
     assert rendered[8, 70].mean() > rendered[8, 35].mean() + 2
 
 
-def test_event_beam_only_highlights_decisive_passer():
-    frame = np.full((100, 180, 3), 10, dtype=np.uint8)
-    annotations = _annotations("1")
-    config = PipelineConfig(fps=25, beam_duration_s=1.5)
-
-    goal = [{
-        "event_code": "football.goal", "importance": 1.0, "frame_id": 25,
-        "player_jersey": "1", "player_team": "left",
-    }]
-    apply_event_beams(frame, 25, goal, {25: "1"}, {"1": annotations}, config)
-    assert np.all(frame == 10)
-
-    key_pass = [{
-        "event_code": "football.pass", "importance": 0.85, "frame_id": 25,
-        "player_jersey": "1", "player_team": "left",
-    }]
-    apply_event_beams(frame, 25, key_pass, {25: "1"}, {"1": annotations}, config)
-    assert np.any(frame != 10)
-
-
-def test_effect_events_are_optional():
-    assert load_effect_events(None) == []
-
-
-def test_effect_events_keep_key_pass_importance_and_timestamp(tmp_path: Path):
-    path = tmp_path / "events.json"
-    path.write_text(json.dumps({"events": [{
-        "event_code": "football.pass",
-        "importance": 0.85,
-        "timestamp_s": 5.0,
-    }]}), encoding="utf-8")
-
-    event = load_effect_events(path)[0]
-
-    assert event["importance"] == 0.85
-    assert event["timestamp_s"] == 5.0
-
-
 def test_preview_does_not_infer_possession_without_ball():
     players = [item for item in _annotations("1") if item["attributes"]["role"] != "ball"]
 
@@ -233,28 +192,24 @@ def test_render_preview_keeps_full_sequence_and_window(tmp_path: Path):
     )
     output = tmp_path / "preview.mp4"
 
-    render_preview_video(
-        frames_dir,
-        predictions,
-        homography,
-        output,
-        window="0.5:1.0",
-        fps=2,
-        reencode_h264=False,
-    )
+    def render(window):
+        render_preview_video(
+            frames_dir, predictions, homography, output,
+            window=window, fps=2, reencode_h264=False,
+        )
+        capture = cv2.VideoCapture(str(output))
+        rendered = []
+        while True:
+            ok, image = capture.read()
+            if not ok:
+                break
+            rendered.append(image)
+        capture.release()
+        assert len(rendered) == 4
+        return [np.mean(np.abs(image.astype(float) - 10.0)) for image in rendered]
 
-    capture = cv2.VideoCapture(str(output))
-    rendered = []
-    while True:
-        ok, image = capture.read()
-        if not ok:
-            break
-        rendered.append(image)
-    capture.release()
+    windowed = render("0.5:1.0")
+    assert max(windowed[1:3]) > max(windowed[0], windowed[3]) + 1.0
 
-    assert len(rendered) == 4
-    changes = [
-        np.mean(np.abs(image.astype(float) - 10.0))
-        for image in rendered
-    ]
-    assert max(changes[1:3]) > max(changes[0], changes[3]) + 1.0
+    # No window means graphics over the whole clip, which is what Stage 4 runs.
+    assert min(render(None)) > max(windowed[0], windowed[3])

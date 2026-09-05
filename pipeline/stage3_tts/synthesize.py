@@ -60,13 +60,11 @@ def synthesize_fitting_segment(
     slot_s: float,
     synthesizer,
     probe: Callable[[Path], float] = audio_duration_s,
-    prefer_fallback: bool = False,
     **synthesis_kwargs,
 ) -> Path:
-    primary_field = f"fallback_text_{language}" if prefer_fallback else f"text_{language}"
-    primary_text = segment.get(primary_field)
-    if not primary_text:
-        raise ValueError(f"Missing {primary_field} in commentary segment")
+    text = segment.get(f"text_{language}")
+    if not text:
+        raise ValueError(f"Missing text_{language} in commentary segment")
 
     def synthesize_and_fit(text: str) -> bool:
         synthesizer.synthesize(text, output_path, **synthesis_kwargs)
@@ -76,21 +74,10 @@ def synthesize_fitting_segment(
         return (_speed_up_to_fit(output_path, duration, slot_s)
                 and probe(output_path) <= slot_s + 0.05)
 
-    if synthesize_and_fit(primary_text):
-        return output_path
-
-    if prefer_fallback:
-        output_path.unlink(missing_ok=True)
-        raise ValueError(f"Preferred fallback TTS exceeds slot: {slot_s:.2f}s slot")
-
-    fallback = segment.get(f"fallback_text_{language}")
-    if not fallback:
-        output_path.unlink(missing_ok=True)
-        raise ValueError(f"Missing fallback_text_{language} for overflowing TTS")
-    if synthesize_and_fit(fallback):
+    if synthesize_and_fit(text):
         return output_path
     output_path.unlink(missing_ok=True)
-    raise ValueError(f"TTS still exceeds slot after fallback: {slot_s:.2f}s slot")
+    raise ValueError(f"TTS exceeds its {slot_s:.2f}s slot even after speed-up")
 
 
 def assemble_timeline(

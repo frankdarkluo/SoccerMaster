@@ -1,16 +1,16 @@
-"""Render Stage 4 effects and atomically upgrade the final video."""
+"""Render Stage 4 tactical effects and mux the commentary audio into the final video."""
 from __future__ import annotations
 
 import argparse
 import os
-import sys
 from pathlib import Path
 
 from pipeline.config import PipelineConfig
 from pipeline.stage3_tts.mux import mux_audio_video
 from pipeline.stage4_effects.preview import render_preview_video
-from pipeline.stage4_effects.render import render_annotated_video
 from pipeline.topology.analysis import analyze_clip
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def replace_final_video(
@@ -36,119 +36,68 @@ def _require_file(path: Path) -> Path:
     return path
 
 
-def _select_audio(config: PipelineConfig, language: str) -> Path:
-    candidates = [
-        config.commentary_audio(language),
-        config.commentary_audio(language, default=True),
-    ]
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    raise FileNotFoundError(
-        "Stage 3 selected audio not found; expected one of: "
-        + ", ".join(str(path) for path in candidates)
-    )
-
-
 def run_stage4(
-    output_dir: Path,
-    clip_dir: Path | None = None,
+    config: PipelineConfig,
     language: str = "zh",
-    force: bool | None = None,
-    config: PipelineConfig | None = None,
+    *,
+    focus_track_id: int | None = None,
+    window: str | None = None,
 ) -> Path:
-    output_dir = Path(output_dir)
-    if config is None:
-        clip_dir = Path(clip_dir) if clip_dir is not None else output_dir
-        force = False if force is None else force
-        config = PipelineConfig(clip_dir=clip_dir, output_dir=output_dir, force=force)
-    else:
-        if output_dir != Path(config.output_dir):
-            raise ValueError("output_dir must match config.output_dir")
-        if clip_dir is not None and Path(clip_dir) != Path(config.clip_dir):
-            raise ValueError("clip_dir must match config.clip_dir")
-        clip_dir = Path(config.clip_dir)
-        force = config.force if force is None else force
-    predictions = _require_file(output_dir / "predictions.json")
-    events = output_dir / "comments" / "events.json"
-    frames = clip_dir / "img1"
-    if not frames.is_dir() or not next(frames.glob("*.jpg"), None):
+    output_dir = Path(config.output_dir)
+    frames = Path(config.clip_dir) / "img1"
+    if not next(frames.glob("*.jpg"), None):
         raise FileNotFoundError(f"Clip frames not found: {frames}")
-    audio = _select_audio(config, language)
-
-    annotated = config.annotated_video
-    final = config.final_video(language)
-    homography = config.homography_json
+    predictions = _require_file(output_dir / "predictions.json")
+    homography = _require_file(config.homography_json)
+    audio = _require_file(config.commentary_audio(language))
 
     topology = output_dir / "topo.json"
     if config.topology_lines_enabled:
         analyze_clip(
-            Path(__file__).resolve().parents[2],
+            REPO_ROOT,
             output_dir.name,
             topology,
             fps=config.fps,
-            force=bool(force),
+            force=config.force,
             preprocessing_root=output_dir.parent,
         )
-    if force or not annotated.is_file():
-        render_annotated_video(
-            frames, events if events.is_file() else None, predictions, annotated, config,
-            homography_json_path=homography if homography.is_file() else None,
+    annotated = config.annotated_video
+    if config.force or not annotated.is_file():
+        render_preview_video(
+            frames,
+            predictions,
+            homography,
+            annotated,
             topology_json_path=topology if topology.is_file() else None,
+            repo_root=REPO_ROOT,
+            focus_track_id=focus_track_id,
+            window=window,
+            fps=config.fps,
         )
-    return replace_final_video(annotated, audio, final)
+    return replace_final_video(annotated, audio, config.final_video(language))
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        epilog="Use `python -m pipeline.stage4_effects.run preview --help` for previews.",
-    )
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output_dir", type=Path)
-    parser.add_argument("--clip-dir", type=Path)
+    parser.add_argument("--clip-dir", type=Path, help="defaults to output_dir")
     parser.add_argument("--language", choices=["zh", "en"], default="zh")
+    parser.add_argument("--focus-track-id", type=int)
+    parser.add_argument("--window", help='limit graphics to "start:end" seconds')
     parser.add_argument("--force", action="store_true")
     return parser
 
 
-def build_preview_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Render a silent tactical preview.")
-    parser.add_argument("--frames-dir", type=Path, required=True)
-    parser.add_argument("--topology", type=Path)
-    parser.add_argument("--predictions", type=Path, required=True)
-    parser.add_argument("--homography", type=Path, required=True)
-    parser.add_argument("--style-profile", type=Path)
-    parser.add_argument("--focus-track-id", type=int)
-    parser.add_argument("--window", default="21:25")
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--fps", type=float, default=25)
-    return parser
-
-
 def main(argv: list[str] | None = None) -> None:
-    argv = list(sys.argv[1:] if argv is None else argv)
-    if argv[:1] == ["preview"]:
-        args = build_preview_arg_parser().parse_args(argv[1:])
-        print(render_preview_video(
-            args.frames_dir,
-            args.predictions,
-            args.homography,
-            args.output,
-            style_profile_path=args.style_profile,
-            topology_json_path=args.topology,
-            repo_root=Path(__file__).resolve().parents[2],
-            focus_track_id=args.focus_track_id,
-            window=args.window,
-            fps=args.fps,
-        ))
-        return
-
     args = build_arg_parser().parse_args(argv)
-    print(run_stage4(
-        args.output_dir,
-        clip_dir=args.clip_dir,
-        language=args.language,
+    config = PipelineConfig(
+        clip_dir=args.clip_dir or args.output_dir,
+        output_dir=args.output_dir,
         force=args.force,
+    )
+    print(run_stage4(
+        config, args.language,
+        focus_track_id=args.focus_track_id, window=args.window,
     ))
 
 

@@ -39,32 +39,6 @@ DEFAULT_STYLE = {
     "stripe_spacing": 16,
     "beam_alpha": 0.26,
 }
-_COLOR_KEYS = {
-    "attacker_color_bgr",
-    "defender_color_bgr",
-    "beam_color_bgr",
-    "white_color_bgr",
-    "inter_line_color_bgr",
-}
-
-
-def load_preview_style(path: Path | None) -> dict:
-    style = dict(DEFAULT_STYLE)
-    if path is None:
-        return style
-    with Path(path).open(encoding="utf-8") as handle:
-        payload = json.load(handle)
-    source = payload.get("stage4", payload) if isinstance(payload, dict) else {}
-    for key in style:
-        value = source.get(key)
-        if key in _COLOR_KEYS:
-            if isinstance(value, list) and len(value) == 3:
-                style[key] = tuple(int(max(0, min(255, item))) for item in value)
-        elif isinstance(value, (int, float)):
-            style[key] = value
-    return style
-
-
 def parse_window(value: str) -> tuple[float, float]:
     try:
         start, end = (float(item) for item in value.split(":", 1))
@@ -245,16 +219,15 @@ def render_preview_video(
     homography_json_path: Path,
     output_path: Path,
     *,
-    style_profile_path: Path | None = None,
     topology_json_path: Path | None = None,
     repo_root: Path | None = None,
     focus_track_id: int | None = None,
-    window: str = "21:25",
+    window: str | None = None,
     fps: float = 25,
     reencode_h264: bool = True,
 ) -> Path:
-    """Render a full silent video, applying tactical graphics only in ``window``."""
-    start_s, end_s = parse_window(window)
+    """Render a full silent video; ``window`` limits graphics to "start:end" seconds."""
+    start_s, end_s = parse_window(window) if window else (0.0, float("inf"))
     frame_paths = sorted(Path(frames_dir).glob("*.jpg"))
     if not frame_paths:
         raise FileNotFoundError(f"No frames found in {frames_dir}")
@@ -272,7 +245,7 @@ def render_preview_video(
         annotations_path = labels_path
     frame_to_image_id, anns_by_image = load_predictions_index(annotations_path)
     homo_frames = load_homography(homography_json_path)
-    style = load_preview_style(style_profile_path)
+    style = DEFAULT_STYLE
     active = [
         anns_by_image.get(frame_to_image_id.get(int(path.stem), ""), [])
         for index, path in enumerate(frame_paths)
