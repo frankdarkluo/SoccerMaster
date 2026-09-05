@@ -1,14 +1,13 @@
 # Benchmark 数据说明
 
-`tactical_prototypes/` 只保留当前开放战术提名与 two-stage 解说的直接输入：
+`tactical_prototypes/` 只保留两段式解说（`pipeline/stage2b/tactical_commentary.py`）的直接输入：
 
 | 文件 | 用途 |
 |---|---|
-| `clip_manifest.jsonl` | 当前 OpenTAC 冻结的 67 个 clip 路径清单。 |
-| `recognition_review.jsonl` | two-stage 解说使用的人工确认战术事实。 |
-| `deep_commentary_exemplar_v2.json` | 第一阶段视频分析 prompt 的人工示例。 |
-| `scoring_rubric.md` | 战术识别与人工复核评分规范。 |
+| `recognition_review.jsonl` | 人工确认的战术事实，锁定 tag、证据文本和时间窗。 |
+| `deep_commentary_exemplar_v2.json` | 第一阶段视频分析 prompt 的人工方法示例。 |
 
-Active 开放提名结果位于 `outputs/tactical_claim_benchmark/opentac/`；已退役 closed-claim 代码通过 Git 历史追溯。
+两者都由 `scripts/run_tactical_commentary.py` 读取。
 
-完整 783 行来源标注总账保存在 `data/annotations/tactical_source_rows_full.jsonl`，不作为运行输入。
+multi-agent 两条臂的输入不在这里，在 `data/`：GT 是 `data/grounded_tactics/gsr2025_gt_37.csv`，
+战术词条是 `data/足球战术数据库_词条表_Grid.csv`。

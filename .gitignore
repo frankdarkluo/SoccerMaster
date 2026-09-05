@@ -1,10 +1,6 @@
 # Local datasets and generated artifacts
 !/data/
 /data/*
-!/data/annotations/
-/data/annotations/*
-!/data/annotations/tactical_source_rows_full.jsonl
-!/data/annotations/*.md
 datasets/
 outputs/
 data/FIFA Game Library/
@@ -79,3 +75,15 @@ Thumbs.db
 /data/grounded_tactics/*
 !/data/grounded_tactics/gsr2025_gt_37.csv
 !/data/足球战术数据库_词条表_Grid.csv
+
+# Internal working documents: research proposals, meeting transcripts, ethics
+# correspondence, annotation guides, and design plans. The published repo carries
+# code plus the multi-agent design doc, nothing else.
+/to-questionnaire-human-tactic-labellers.md
+/docs/ethics/
+/docs/plans/
+/docs/references/
+/docs/specs/
+/docs/proposals/*
+!/docs/proposals/2026-08-16-plan-multi-agent-tactic-recognition.md
+/images/

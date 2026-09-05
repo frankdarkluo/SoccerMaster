@@ -1,10 +1,8 @@
 # Plan — Multi-agent tactic recognition, pilot on 37 GSR-2025 GT clips
 
 **Date:** 2026-08-16
-**Status:** design settled (grilling session), not yet implemented
+**Status:** implemented — see `multi-agent/pilot.py` (A+B+rule→C) and `multi-agent/c_only.py` (control)
 **Goal:** raise model effort and lower human effort in tactic annotation, and prepare for automated scale-up. A working pilot is a small methodological contribution for the benchmark paper.
-
-Related: [`2026-08-16-handoff-aa-clip-selection.md`](2026-08-16-handoff-aa-clip-selection.md) · [`2026.8.15 Plan_ Soccer Tactic Understanding Benchmark.pdf`](2026.8.15%20Plan_%20Soccer%20Tactic%20Understanding%20Benchmark.pdf)
 
 ---
 

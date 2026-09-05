@@ -16,14 +16,26 @@ Official implementation of **SoccerMaster: A Vision Foundation Model for Soccer 
   </a>
 </div>
 
-<div align="center">
-   <img src="./images/teaser.jpg">
-</div>
-<p><em><strong>SoccerMaster</strong> is a unified soccer-specific vision foundation model that leverages diverse soccer content, including images and videos, to support a wide range of soccer understanding tasks, such as commentary generation, detection, tracking, classification, <em>etc</em>.</em></p>
-<div align="center">
-   <img src="./images/arch.jpg">
-</div>
-<p><em><strong>SoccerMaster Architecture.</strong> (a) The architecture of SoccerMaster, which encodes both soccer videos and images through spatial and temporal attention modules to generate semantically rich representations. (b) The pretraining tasks and downstream adaptations of SoccerMaster across both spatial perception and semantic understanding tasks.</em></p>
+> **This is a fork.** Everything above, plus `codes/` and the Quick Start / Data Pipeline
+> sections below, is the original SoccerMaster release by Haolin Yang, Jiayuan Rao, Haoning Wu
+> and Weidi Xie — see the [upstream repository](https://github.com/haolinyang-hlyang/SoccerMaster)
+> and [paper](https://arxiv.org/pdf/2512.11016) for figures, checkpoints and citation.
+>
+> This fork adds a tactical layer on top of SoccerMaster's game-state output, in `pipeline/` and
+> `multi-agent/`: visible-topology analysis, two-stage evidence-grounded Chinese commentary,
+> CosyVoice narration, rendered tactical effects, and a two-arm multi-agent tactic-recognition
+> experiment. Those parts are not from the paper and are not peer reviewed.
+
+## Repository layout
+
+| 目录 | 内容 |
+|---|---|
+| `codes/` | 上游 SoccerMaster：tracklab、sn-gamestate、SAM2、预训练代码 |
+| `pipeline/` | 本 fork：raw video → game state → 文字解说 → 语音 → 特效 |
+| `multi-agent/` | 本 fork：战术识别的两条臂 —— A+B+rule→C 与 C-only |
+| `scripts/` | 各阶段的命令行入口 |
+| `benchmark/` | 两段式解说的人工输入（见 `benchmark/README.md`） |
+| `tests/` | 离线测试，不打网络 |
 
 ## Quick Start
 
@@ -120,6 +132,20 @@ Please organize `/data/zhangzheng/pretrained_models/` as follows:
 
 The dataset lives under `data/GSR-2025/`. Splits come from `sequences_info.json`; directory parents do not encode the split. Point elsewhere with `PipelineConfig(gsr_dataset_root=...)`.
 
+### 5. API Keys (tactical layer only)
+
+The game-state pipeline above needs no keys. Commentary and multi-agent recognition call an
+external video model, so copy `.env.example` to `.env` and fill in what you use:
+
+| 变量 | 用途 |
+|---|---|
+| `ARK_API_KEY` | Doubao（火山方舟）。`--provider doubao` 必需 |
+| `GEMINI_API_KEY` | Gemini。`--provider gemini` 必需；`GEMINI_API_KEY1/2/3` 可选，用于多 key 轮换 |
+| `ARK_BASE_URL` / `ARK_RESPONSES_MODEL` | 可选，覆盖 Ark 的默认地址与模型 |
+| `DOUBAO_TTS_*` | Stage 3 语音合成 |
+
+每个会把视频上传到外部 API 的命令都要显式加 `--allow-external-upload`，避免误传。
+
 ## Data Pipeline
 
 ### Input Data Format
@@ -207,7 +233,9 @@ CUDA_VISIBLE_DEVICES=0 python -m tracklab.main -cn gsr_step_3_example_accelerate
 
 ## Tactical Analysis and Effects
 
-### GT-first Visible Topology
+Runs on top of Stage 1's `predictions.json`, in this order: topology → commentary → audio → effects.
+
+### Stage 2a: GT-first Visible Topology
 
 The topology analyzer uses SoccerNet GameState labels when available and falls back to `outputs/preprocessing/<clip>/predictions.json`. It only describes stable lines formed by visible players; uncertain candidates remain in the JSON and are not rendered.
 
@@ -216,6 +244,19 @@ python scripts/run_tactical_topology.py analyze --clip-uid SNGS-148
 ```
 
 The default output is `outputs/tactical_topology/SNGS-148.json`. Each one-second window records the position source, visible-player evidence, accepted lines, and rejected candidates.
+
+### Stage 2b: Two-stage Tactical Commentary
+
+The maintained commentary path first analyzes video evidence with reviewed tactical facts and visible topology, then asks the same provider to write the final commentary. External upload must be explicitly enabled.
+
+```bash
+python scripts/run_tactical_commentary.py run \
+  --provider doubao \
+  --clip-uid soccernetgs:SNGS-148 \
+  --allow-external-upload
+```
+
+Results are written to `outputs/tactical_commentary/<provider>/<clip>.json`. Topology generation does not add another model call.
 
 ### Stage 3: Commentary Audio
 
@@ -235,19 +276,6 @@ pins the vertical beam to one track.
 ```bash
 bash scripts/run_stage4.sh outputs/SNGS-148 --clip-dir data/GSR-2025/images/SNGS-148
 ```
-
-### Two-stage Tactical Commentary
-
-The maintained commentary path first analyzes video evidence with reviewed tactical facts and visible topology, then asks the same provider to write the final commentary. External upload must be explicitly enabled.
-
-```bash
-python scripts/run_tactical_commentary.py run \
-  --provider doubao \
-  --clip-uid soccernetgs:SNGS-148 \
-  --allow-external-upload
-```
-
-Results are written to `outputs/tactical_commentary/<provider>/<clip>.json`. Topology generation does not add another model call.
 
 ## Multi-Agent Tactic Recognition
 
@@ -285,7 +313,7 @@ python multi-agent/test_pilot.py
 
 ## TODO
 - [x] Add pretraining code.
-- [] Refine pretraining code.
+- [ ] Refine pretraining code.
 - [x] Release SoccerMaster checkpoints.
 - [x] Add instructions for quick start.
 - [ ] Release datasets.
