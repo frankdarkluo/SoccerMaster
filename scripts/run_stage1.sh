@@ -7,22 +7,21 @@
 # Step 3 default uses HuggingFace (Qwen2.5-VL-7B-Instruct, gsr_step_3_example_accelerate).
 # Run two-stage commentary, Stage 3 TTS, and optional Stage 4 Effects separately.
 #
-# The clip_dir path selects both the split and the sequence, e.g.:
-#   .../test/SNGS-148  → only test/SNGS-148
-#   .../sn500/SNGS-148 → only sn500/SNGS-148
+# The clip_dir may use the flat GSR-2024 images root or the legacy split tree.
+# The source split comes from sequences_info.json (or GSR_SPLIT when provided).
 #
 # Usage:
 #   bash scripts/run_stage1.sh
 #   bash scripts/run_stage1.sh \
-#     codes/sn-gamestate/datasets/SoccerNetGS/test/SNGS-148 \
+#     data/GSR-2024/images/SNGS-148 \
 #     outputs/SNGS-148
 #
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-DEFAULT_CLIP="codes/sn-gamestate/datasets/SoccerNetGS/test/SNGS-148"
+DEFAULT_CLIP="data/GSR-2024/images/SNGS-148"
 if [[ ! -d "$DEFAULT_CLIP/img1" ]]; then
-  DEFAULT_CLIP="codes/sn-gamestate/datasets/SoccerNetGS/sn500/SNGS-148"
+  DEFAULT_CLIP="codes/sn-gamestate/datasets/SoccerNetGS/test/SNGS-148"
 fi
 
 CLIP_DIR="${1:-$DEFAULT_CLIP}"
@@ -113,7 +112,7 @@ export GPU_LIST="${GPU_LIST:-0}"
 export MAX_PROCESSES_PER_GPU="${MAX_PROCESSES_PER_GPU:-1}"
 
 SEQ_NAME="$(basename "$CLIP_DIR")"
-SPLIT_NAME="$(basename "$(dirname "$CLIP_DIR")")"
+SPLIT_NAME="${GSR_SPLIT:-metadata}"
 
 echo "=== Stage 1: SoccerMaster Inference (single clip) ==="
 echo "  clip_dir:    $CLIP_DIR"
@@ -139,7 +138,7 @@ from pathlib import Path
 import logging
 import os
 
-from pipeline.config import PipelineConfig
+from pipeline.config import PipelineConfig, source_split_for_clip
 from pipeline.stage1_inference.pklz_to_json import convert_pklz_to_json
 from pipeline.stage1_inference.run_gsr import run_step1, run_step2, run_step3
 
@@ -156,11 +155,22 @@ if input_video is not None and (not input_video.exists() or input_video.stat().s
     input_video = None
 
 phase = "${STAGE1_PHASE}"
+parent_name = clip_dir.parent.name
+legacy_splits = {"train", "valid", "validation", "test", "challenge", "sn500"}
+frames_root = clip_dir.parent.parent if parent_name in legacy_splits else clip_dir.parent
+source_split = (
+    os.environ.get("GSR_SPLIT")
+    or source_split_for_clip(frames_root, clip_dir.name)
+    or (parent_name if parent_name in legacy_splits else None)
+)
+if source_split is None:
+    raise ValueError("Source split is absent from sequences_info.json; set GSR_SPLIT")
 config = PipelineConfig(
     clip_dir=clip_dir,
     output_dir=output_dir,
     sequence_prefix=clip_dir.name,
-    gsr_split=clip_dir.parent.name,
+    gsr_split=source_split,
+    gsr_frames_root=frames_root,
     force=False,
 )
 
@@ -168,7 +178,12 @@ if phase in {"all", "step1"}:
     if not (clip_dir / "img1").is_dir() or not any((clip_dir / "img1").glob("*.jpg")):
         # Keep video preprocessing with Step 1 so later batch phases are fully resumable.
         from pipeline.stage1_inference.preprocess import preprocess_video
-        preprocess_video(input_video, sequence_name=config.sequence_prefix, split=config.gsr_split)
+        preprocess_video(
+            input_video,
+            sequence_name=config.sequence_prefix,
+            split=config.gsr_split,
+            dataset_root=config.gsr_frames_root,
+        )
     run_step1(config)
 
 if phase in {"all", "step2"}:

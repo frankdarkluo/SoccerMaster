@@ -21,6 +21,30 @@ log = logging.getLogger(__name__)
 DEFAULT_SPLITS = ("train", "valid", "test", "challenge")
 
 
+def _metadata_path(dataset_path: Path) -> Path | None:
+    for candidate in (
+        dataset_path / "sequences_info.json",
+        dataset_path.parent / "sequences_info.json",
+    ):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _flat_split_names(dataset_path: Path, split: str) -> list[str] | None:
+    metadata_path = _metadata_path(dataset_path)
+    if metadata_path is None or not any(dataset_path.glob("SNGS-*")):
+        return None
+    with metadata_path.open(encoding="utf-8") as handle:
+        metadata = json.load(handle)
+    key = "validation" if split == "valid" else split
+    entries = metadata.get(key, [])
+    names = [entry.get("name") for entry in entries if entry.get("name")]
+    if not names:
+        raise ValueError(f"No {key!r} entries in {metadata_path}")
+    return names
+
+
 class SoccerNetGameState(TrackingDataset):
     def __init__(
         self,
@@ -45,16 +69,23 @@ class SoccerNetGameState(TrackingDataset):
         splits = _configured_splits(self.dataset_path, vids_dict, eval_set)
         sets = {}
         for split in splits:
-            split_path = self.dataset_path / split
-            if not split_path.exists():
+            legacy_path = self.dataset_path / split
+            flat_names = _flat_split_names(self.dataset_path, split)
+            if legacy_path.is_dir():
+                split_path = legacy_path
+            elif flat_names is not None:
+                split_path = self.dataset_path
+            else:
                 log.warning(
                     "Warning: The '%s' set does not exist in the SoccerNetGS dataset at '%s'.",
                     split,
                     self.dataset_path,
                 )
                 continue
-            vids_filter = vids_dict.get(split, [])
-            sets[split] = load_set(split_path, nvid, vids_filter, start_vid, end_vid)
+            vids_filter = vids_dict.get(split, []) or flat_names
+            sets[split] = load_set(
+                split_path, nvid, vids_filter, start_vid, end_vid, split_name=split
+            )
 
         assert sets, f"No SoccerNetGS splits found under '{self.dataset_path}'. Tried: {splits}"
 
@@ -172,6 +203,8 @@ def _configured_splits(dataset_path: Path, vids_dict: dict, eval_set: str | None
         configured.extend(vids_dict.keys())
     if not configured:
         configured.extend(split for split in DEFAULT_SPLITS if (dataset_path / split).exists())
+    if not configured and _metadata_path(dataset_path):
+        configured.extend(DEFAULT_SPLITS)
 
     seen = set()
     splits = []
@@ -364,14 +397,19 @@ def video_dir_to_dfs(args):
     }
 
 
-def load_set(dataset_path, nvid=-1, vids_filter_set=None, start_vid=None, end_vid=None):
+def load_set(
+    dataset_path, nvid=-1, vids_filter_set=None, start_vid=None, end_vid=None, split_name=None
+):
     video_metadatas_list = []
     image_metadata_list = []
     annotations_pitch_camera_list = []
     detections_list = []
     categories_list = []
-    split = os.path.basename(dataset_path)
-    video_list = sorted(os.listdir(dataset_path))
+    split = split_name or os.path.basename(dataset_path)
+    video_list = sorted(
+        name for name in os.listdir(dataset_path)
+        if os.path.isdir(os.path.join(dataset_path, name))
+    )
 
     if vids_filter_set:
         missing_videos = set(vids_filter_set) - set(video_list)

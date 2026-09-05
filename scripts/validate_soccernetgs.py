@@ -1,4 +1,4 @@
-"""Read-only integrity checks for SoccerNetGS train/valid splits."""
+"""Read-only integrity checks for legacy or flat SoccerNetGS layouts."""
 
 from __future__ import annotations
 
@@ -92,11 +92,24 @@ def _finite_pitch(annotation: object) -> bool:
     )
 
 
-def validate_sequence(sequence_dir: Path, *, split: str) -> SequenceReport:
+def validate_sequence(
+    sequence_dir: Path, *, split: str, allow_missing_label: bool = False
+) -> SequenceReport:
     """Read and validate one sequence without writing to it."""
     label_path = sequence_dir / LABEL_NAME
     if not label_path.is_file():
-        return _report(sequence_dir, split, errors=("missing_label",))
+        if not allow_missing_label:
+            return _report(sequence_dir, split, errors=("missing_label",))
+        image_dir = sequence_dir / "img1"
+        frames = sorted(image_dir.glob("*.jpg")) if image_dir.is_dir() else []
+        return _report(
+            sequence_dir,
+            split,
+            errors=() if frames else ("missing_frames",),
+            warnings=("unlabeled_challenge",),
+            frame_count=len(frames),
+            image_count=len(frames),
+        )
 
     try:
         data = json.loads(label_path.read_text(encoding="utf-8"))
@@ -212,27 +225,43 @@ def validate_sequence(sequence_dir: Path, *, split: str) -> SequenceReport:
     )
 
 
+def _sequence_dirs(root: Path, split: str) -> list[Path]:
+    legacy_split = "valid" if split == "validation" else split
+    legacy_dir = root / legacy_split
+    if legacy_dir.is_dir():
+        return sorted(path for path in legacy_dir.iterdir() if path.is_dir())
+
+    metadata_path = root / "sequences_info.json"
+    if not metadata_path.is_file():
+        metadata_path = root.parent / "sequences_info.json"
+    if not metadata_path.is_file():
+        return []
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    key = "validation" if split == "valid" else split
+    return [root / entry["name"] for entry in metadata.get(key, [])]
+
+
 def validate_dataset(
     root: Path,
     *,
     splits: tuple[str, ...],
     expected_counts: dict[str, int] | None = None,
 ) -> list[SequenceReport]:
-    """Validate selected splits and detect duplicate info.id/name values."""
+    """Validate selected logical splits and detect duplicate IDs or names."""
     reports: list[SequenceReport] = []
     for split in splits:
         start = len(reports)
-        split_dir = root / split
-        sequence_dirs = (
-            sorted(path for path in split_dir.iterdir() if path.is_dir())
-            if split_dir.is_dir()
-            else []
+        sequence_dirs = _sequence_dirs(root, split)
+        reports.extend(
+            validate_sequence(
+                path, split=split, allow_missing_label=split == "challenge"
+            )
+            for path in sequence_dirs
         )
-        reports.extend(validate_sequence(path, split=split) for path in sequence_dirs)
         if expected_counts is not None and len(sequence_dirs) != expected_counts.get(split):
             if start == len(reports):
                 reports.append(
-                    _report(split_dir, split, errors=("unexpected_sequence_count",))
+                    _report(root / split, split, errors=("unexpected_sequence_count",))
                 )
             else:
                 for index in range(start, len(reports)):

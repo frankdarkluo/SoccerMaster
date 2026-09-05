@@ -118,30 +118,29 @@ Please organize `/data/zhangzheng/pretrained_models/` as follows:
 - **jn**: Download Qwen2.5-VL models from the [Qwen2.5-VL Collection](https://huggingface.co/collections/Qwen/qwen25-vl) on Hugging Face.
 - **yolo**: Move `yolo_v8x6_finetuned.pt` to `/data/zhangzheng/pretrained_models/yolo/`. This file can be obtained from [https://huggingface.co/xleprime/SoccerMaster](https://huggingface.co/xleprime/SoccerMaster).
 
-All datasets for the data pipeline live under `codes/sn-gamestate/datasets/SoccerNetGS/` (see [Input Data Format](#input-data-format) below). The pretraining code in `codes/SoccerMaster/` reads models and data from `../sn-gamestate/` via config paths.
+The audited GSR-2024 source lives under `data/GSR-2024/`. Logical source splits remain in `sequences_info.json` and `clip_manifest.jsonl`; directory parents no longer encode the split. Runtime loaders retain one migration cycle of legacy split-tree fallback.
 
 ## Data Pipeline
 
 ### Input Data Format
 
-The data pipeline follows the [SoccerNet Game State Recognition (GSR)](https://github.com/soccernet/sn-gamestate) format. You need to organize your input video frames into the following directory structure. Here we use two video sequences (`SNGS-10001` with 750 frames and `SNGS-10002` with 722 frames) as an example:
+The data pipeline follows the [SoccerNet Game State Recognition (GSR)](https://github.com/soccernet/sn-gamestate) format. You need to organize your input video frames into the following directory structure. The audited layout uses `SNGS-001` through `SNGS-200`; one sequence is shown below:
 
 ```
-codes/sn-gamestate/datasets/SoccerNetGS/
+data/GSR-2024/
 ├── sequences_info.json
-└── sn500/
-    ├── SNGS-10001/
+├── clip_manifest.jsonl
+├── videos/
+│   ├── SNGS-001.mp4
+│   └── ...
+└── images/
+    ├── SNGS-001/
     │   └── img1/
     │       ├── 000001.jpg
     │       ├── 000002.jpg
     │       ├── ...
     │       └── 000750.jpg
-    └── SNGS-10002/
-        └── img1/
-            ├── 000001.jpg
-            ├── 000002.jpg
-            ├── ...
-            └── 000722.jpg
+    └── ...
 ```
 
 Each video sequence should be extracted into individual frames (`.jpg`), placed under `<sequence_name>/img1/`, and named with zero-padded 6-digit indices starting from `000001.jpg`.
@@ -150,24 +149,23 @@ You also need to prepare a `sequences_info.json` file that registers all sequenc
 
 ```json
 {
-    "sn500": [
-        {
-            "id": 0,
-            "name": "SNGS-10001",
-            "n_frames": 750
-        },
+    "version": "1.3",
+    "train": [
         {
             "id": 1,
-            "name": "SNGS-10002",
-            "n_frames": 722
+            "name": "SNGS-001",
+            "n_frames": 750
         }
-    ]
+    ],
+    "validation": [],
+    "test": [],
+    "challenge": []
 }
 ```
 
 Each entry contains:
 - `id`: a unique integer index for the sequence.
-- `name`: the directory name of the sequence (must match the folder name under `sn500/`).
+- `name`: the directory name of the sequence (must match the folder name under `images/`).
 - `n_frames`: the total number of frames in the sequence.
 
 ### Pipeline Steps
@@ -226,7 +224,7 @@ Stage 4 can render a silent preview from existing frames, positions, homography,
 
 ```bash
 python -m pipeline.stage4_effects.run preview \
-  --frames-dir codes/sn-gamestate/datasets/SoccerNetGS/test/SNGS-148/img1 \
+  --frames-dir data/GSR-2024/images/SNGS-148/img1 \
   --predictions outputs/preprocessing/SNGS-148/predictions.json \
   --homography outputs/preprocessing/SNGS-148/homography_per_frame.json \
   --topology outputs/tactical_topology/SNGS-148.json \

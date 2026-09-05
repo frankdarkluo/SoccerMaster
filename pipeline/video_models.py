@@ -14,12 +14,12 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-DOUBAO_MODEL = "doubao-seed-2-0-lite-260428"
-GEMINI_MODEL = "gemini-3.6-flash"
+DOUBAO_MODEL = "doubao-seed-2-1-pro-260628"
+GEMINI_MODEL = "gemini-3.7-flash"
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 TIMEOUT_S = 300.0
 TRANSPORT_RETRIES = 2
-_GEMINI_KEYS = ("GEMINI_API_KEY", "GEMINI_API_KEY1", "GEMINI_API_KEY2")
+_GEMINI_KEYS = ("GEMINI_API_KEY", "GEMINI_API_KEY1", "GEMINI_API_KEY2", "GEMINI_API_KEY3")
 _GEMINI_LOCK = threading.Lock()
 _GEMINI_INDEX = 0
 _GEMINI_SUSPENDED: set[str] = set()
@@ -60,6 +60,32 @@ def temporary_window_clip(video_path: Path, start_s: float, end_s: float, *, pla
             text=True,
         )
         yield target
+
+
+@contextmanager
+def temporary_compact_clip(video_path: Path, *, height: int = 720, crf: int = 28, fps: float | None = None) -> Iterator[Path]:
+    """Yield a downscaled copy of `video_path` small enough to inline as base64 without timing out."""
+    if height < 1:
+        raise ValueError(f"height must be positive, got {height}")
+    if fps is not None and fps <= 0:
+        raise ValueError(f"fps must be positive when set, got {fps}")
+    with tempfile.TemporaryDirectory(prefix="compact-clip-") as directory:
+        target = Path(directory) / "compact.mp4"
+        subprocess.run(
+            [
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                "-i", str(video_path), "-an",
+                *(["-r", f"{fps:g}"] if fps is not None else []),
+                "-vf", f"scale=-2:{height}",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", str(crf),
+                "-movflags", "+faststart", str(target),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        yield target
+
 
 def model_name(provider: str) -> str:
     if provider == "doubao":
@@ -141,7 +167,7 @@ def _doubao(
             "content": content + [{"type": "input_text", "text": prompt}],
         }],
         temperature=temperature,
-        max_output_tokens=12000,
+        max_output_tokens=32768,
         text={"format": {
             "type": "json_schema",
             "name": "tactical_response",
@@ -213,10 +239,6 @@ def _gemini(
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     import httpx
 
-    if fps is not None:
-        raise ValueError("Gemini Interactions API has no fps field; preprocess video playback instead")
-    if temperature is not None:
-        raise ValueError("Gemini 3.6 Flash does not support temperature")
     inputs: list[dict[str, Any]] = []
     if video_path is not None:
         inputs.append({

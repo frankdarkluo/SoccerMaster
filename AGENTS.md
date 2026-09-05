@@ -2,6 +2,8 @@
 
 ## Project Priority Skills
 
+中文: 面对问题时，要做做根因修复 ，用正确逻辑直接覆盖，不要打补丁，禁止写否定的否定，直接写肯定性的描述。对应英文翻译是: When dealing with an issue, please think and fix root causes directly. Replace flawed logic with correct code, not patches. Use affirmative language; avoid double negations.
+
 This repository should prioritize these two skills whenever they match the task:
 
 1. `karpathy-guidelines` (always on — trigger whenever the agent is invoked)

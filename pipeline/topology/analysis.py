@@ -69,6 +69,10 @@ def resolve_position_source(
             "gt" if candidate.name == "Labels-GameState.json" else "soccer_master"
         )
 
+    flat_gt = repo_root / "data" / "GSR-2024" / "images" / clip / "Labels-GameState.json"
+    if flat_gt.is_file():
+        return flat_gt.resolve(), "gt"
+
     gt_root = repo_root / "codes/sn-gamestate/datasets/SoccerNetGS"
     matches = sorted(gt_root.glob(f"*/{clip}/Labels-GameState.json"))
     if len(matches) > 1:

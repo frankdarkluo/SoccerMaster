@@ -671,9 +671,13 @@ def process_single_video(video_id, args, gpu_id, progress_manager, result_collec
             progress_manager.video_completed(video_id)
             return
         
-        # Build video frame directory
-        video_dir = os.path.join(args.dataset_root, args.split, f"SNGS-{video_id}", "img1")
-        if not os.path.exists(video_dir):
+        # Prefer the flat frame root; retain the legacy split layout for rollback.
+        video_dir = os.path.join(args.dataset_root, f"SNGS-{video_id}", "img1")
+        if not os.path.isdir(video_dir):
+            video_dir = os.path.join(
+                args.dataset_root, args.split, f"SNGS-{video_id}", "img1"
+            )
+        if not os.path.isdir(video_dir):
             raise FileNotFoundError(f"Video frame directory does not exist: {video_dir}")
 
         # Load video frames

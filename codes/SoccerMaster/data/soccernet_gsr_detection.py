@@ -99,8 +99,33 @@ class SoccerNetGSR_Detection(Dataset):
         return self.image_paths
 
     def _get_sequence_names(self):
-        sequence_names = os.listdir(os.path.join(self.data_dir, 'SoccerNetGS', self.split))
-        return [name for name in sequence_names if os.path.isdir(os.path.join(self.data_dir, 'SoccerNetGS', self.split, name))]
+        legacy = os.path.join(self.data_dir, 'SoccerNetGS', self.split)
+        if os.path.isdir(legacy):
+            return [
+                name for name in os.listdir(legacy)
+                if os.path.isdir(os.path.join(legacy, name))
+            ]
+        frames_root = self._flat_frames_root(self.data_dir)
+        metadata_path = os.path.join(os.path.dirname(frames_root), "sequences_info.json")
+        if not os.path.isfile(metadata_path):
+            raise FileNotFoundError(f"Missing flat SoccerNetGS metadata: {metadata_path}")
+        with open(metadata_path) as handle:
+            metadata = json.load(handle)
+        key = "validation" if self.split == "valid" else self.split
+        return [entry["name"] for entry in metadata.get(key, [])]
+
+
+    def _flat_frames_root(data_dir):
+        configured = os.environ.get("GSR_FRAMES_ROOT")
+        candidates = [
+            configured,
+            os.path.join(data_dir, "GSR-2024", "images"),
+            os.path.join(data_dir, "images"),
+        ]
+        for candidate in candidates:
+            if candidate and os.path.isdir(candidate):
+                return candidate
+        raise FileNotFoundError("Set DATA_ROOT or GSR_FRAMES_ROOT to the flat GSR-2024 images root")
 
     def _get_sequence_infos(self):
         sequence_names = self._get_sequence_names()

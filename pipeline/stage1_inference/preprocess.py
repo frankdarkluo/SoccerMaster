@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from pipeline.config import DATASET_ROOT
+from pipeline.config import DATASET_ROOT, sequences_info_path
 from pipeline.utils.video import extract_frames, get_video_info
 
 
@@ -15,6 +15,7 @@ def _update_sequences_info(seq_info_path: Path, split: str, sequence_name: str, 
         with open(seq_info_path, encoding="utf-8") as f:
             existing = json.load(f)
 
+    split = "validation" if split == "valid" else split
     split_entries = list(existing.get(split, []))
     updated = False
     for entry in split_entries:
@@ -45,10 +46,11 @@ def preprocess_video(
     video_path = Path(video_path)
     root = Path(dataset_root) if dataset_root else DATASET_ROOT
     info = get_video_info(video_path)
-    seq_dir = root / split / sequence_name / "img1"
+    flat = root.name == "images"
+    seq_dir = (root / sequence_name if flat else root / split / sequence_name) / "img1"
     n_frames = extract_frames(video_path, seq_dir)
 
-    seq_info_path = root / "sequences_info.json"
+    seq_info_path = sequences_info_path(root)
     _update_sequences_info(seq_info_path, split, sequence_name, n_frames)
 
     return {

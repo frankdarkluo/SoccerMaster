@@ -9,7 +9,12 @@ import sys
 import zipfile
 from pathlib import Path
 
-from pipeline.config import GSR_ROOT, REPO_ROOT, PipelineConfig
+from pipeline.config import (
+    GSR_ROOT,
+    REPO_ROOT,
+    PipelineConfig,
+    source_split_for_clip,
+)
 from pipeline.stage1_inference.cpu_guard import (
     apply_cpu_limits,
     gsr_num_threads,
@@ -32,11 +37,19 @@ def _sequence_id(config: PipelineConfig) -> str:
 
 
 def _split_name(config: PipelineConfig) -> str:
-    """Infer split from clip_dir parent (test/sn500/train/…), else config.gsr_split."""
+    """Resolve TrackLab's logical split independently of the physical path."""
     parent = Path(config.clip_dir).parent.name
+    if parent == "validation":
+        return "valid"
     if parent in {"train", "valid", "test", "challenge", "sn500"}:
         return parent
-    return config.gsr_split
+    configured = config.gsr_split
+    if configured in {"train", "valid", "validation", "test", "challenge", "sn500"}:
+        return "valid" if configured == "validation" else configured
+    detected = source_split_for_clip(config.gsr_frames_root, _sequence_name(config))
+    if detected:
+        return "valid" if detected == "validation" else detected
+    raise ValueError(f"Cannot resolve source split for {_sequence_name(config)}")
 
 
 def _gsr_output_base(config: PipelineConfig) -> Path:
@@ -166,6 +179,7 @@ def run_step1(config: PipelineConfig, dry_run: bool = False) -> Path:
         f"hydra.run.dir={_rel_to_gsr(out_dir)}",
         f"use_rich={os.environ.get('GSR_USE_RICH', 'false')}",
         *hydra_cpu_overrides(),
+        f"dataset.dataset_path={Path(config.gsr_frames_root).resolve()}",
     ]
     _run(cmd, GSR_ROOT, dry_run=dry_run)
     return states_dir
@@ -244,7 +258,7 @@ def run_step2(config: PipelineConfig, dry_run: bool = False) -> Path:
         "--sam_checkpoint", sam_checkpoint,
         "--sam_config", "configs/sam2.1/sam2.1_hiera_l.yaml",
         "--input_pklz", str(input_pklz),
-        "--dataset_root", str(GSR_ROOT / "datasets" / "SoccerNetGS"),
+        "--dataset_root", str(Path(config.gsr_frames_root).resolve()),
         "--output_dir", str(output_dir),
         "--split", split,
         "--fps", str(config.fps),
@@ -272,7 +286,7 @@ def run_step2(config: PipelineConfig, dry_run: bool = False) -> Path:
     merge_cmd = [
         "python", "merge_pkl.py",
         "--input_pklz", str(input_pklz),
-        "--dataset_root", str(GSR_ROOT / "datasets" / "SoccerNetGS"),
+        "--dataset_root", str(Path(config.gsr_frames_root).resolve()),
         "--output_dir", str(output_dir),
         "--split", split,
         "--fix_duplicate_track_ids",
@@ -304,6 +318,7 @@ def run_step3(config: PipelineConfig, dry_run: bool = False) -> Path:
         "-cn", config.step3_config,
         f"experiment_subname=step_3_{split}_{seq_name}",
         f"dataset.eval_set={split}",
+        f"dataset.dataset_path={Path(config.gsr_frames_root).resolve()}",
         f"dataset.start_vid={seq_id}",
         f"dataset.end_vid={seq_id}",
         f"state.load_file={load_file}",
