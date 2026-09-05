@@ -16,10 +16,14 @@ knq-vision-service/
 codes/CosyVoice/
 docs/**/*.pdf
 
+.pytest_cache/
 __pycache__/
 *.py[cod]
 *$py.class
 
+# Temporary files and patch backups
+*.tmp
+*.orig
 tmp
 pretrained_models
 
