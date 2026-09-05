@@ -12,6 +12,7 @@ import time
 import unittest
 from pathlib import Path
 
+import c_only
 import pilot
 
 
@@ -352,25 +353,25 @@ class InputAndRunTests(unittest.TestCase):
             retried = pilot.run_pilot("r1", clip_ids=["SNGS-010"], retry_failed=True, generator=good, output_root=output)
             self.assertEqual((failed["failed"], skipped["skipped"], retried["success"]), (1, 1, 1))
 
-    def test_r4_uses_fifteen_event_b_budget(self):
+    def test_gemini_gets_no_fps_or_temperature(self):
         seen = []
         a, b = FIXTURES["counter-attack"]
 
-        def generator(_provider, prompt, schema, **_kwargs):
-            events = schema.get("properties", {}).get("events")
+        def generator(provider, _prompt, schema, **kwargs):
+            seen.append((provider, sorted(kwargs)))
             if schema is pilot.A_SCHEMA:
                 return copy.deepcopy(a), [{"tokens": 1}], 1
-            if isinstance(events, dict):
-                seen.append(events.get("maxItems"))
-                self.assertIn("最多15条", prompt)
-                self.assertIn("不要补满15条", prompt)
+            if schema is pilot.B_SCHEMA:
                 return copy.deepcopy(b), [{"tokens": 1}], 1
-            return copy.deepcopy({"label": None, "rationale": "none fit", "objections": []}), [{"tokens": 1}], 1
+            return {"label": None, "rationale": "none fit", "objections": []}, [{"tokens": 1}], 1
 
-        with tempfile.TemporaryDirectory() as directory:
-            counts = pilot.run_pilot("r4", clip_ids=["SNGS-010"], generator=generator, output_root=Path(directory))
-        self.assertEqual(counts["success"], 1)
-        self.assertEqual(seen, [15])
+        pilot.run_clip(pilot.VIDEO_ROOT / "SNGS-010.mp4", pilot.load_criteria(), generator, provider="gemini")
+        self.assertEqual({item[0] for item in seen}, {"gemini"})
+        self.assertEqual({tuple(item[1]) for item in seen}, {("video_path",)})
+
+        seen.clear()
+        pilot.run_clip(pilot.VIDEO_ROOT / "SNGS-010.mp4", pilot.load_criteria(), generator, provider="doubao")
+        self.assertEqual({tuple(item[1]) for item in seen}, {("fps", "temperature", "video_path")})
 
 
 class ReportingTests(unittest.TestCase):
@@ -389,13 +390,12 @@ class ReportingTests(unittest.TestCase):
     def test_metrics_cover_classification_baseline_and_temporal_grounding(self):
         results = self.perfect_results()
         metrics = pilot.classification_metrics(results)
-        self.assertEqual(metrics["correct_n"], 37)
+        self.assertEqual(metrics["correct_n"], pilot.EXPECTED_CLIPS)
         self.assertEqual(metrics["accuracy"], 1.0)
         self.assertEqual(metrics["macro_f1"], 1.0)
         self.assertAlmostEqual(metrics["majority_baseline"], 15 / 37)
         self.assertEqual(metrics["temporal"]["eligible_n"], 36)
         self.assertEqual(metrics["temporal"]["mean_iou"], 1.0)
-        self.assertTrue(metrics["pilot_success"])
 
         results[0]["rule"]["label"] = "long-ball"
         metrics = pilot.classification_metrics(results)
@@ -407,20 +407,6 @@ class ReportingTests(unittest.TestCase):
         metrics = pilot.classification_metrics(results)
         self.assertAlmostEqual(metrics["temporal"]["mean_iou"], 35 / 36)
 
-    def test_manual_review_descriptive_metrics(self):
-        rows = [
-            {"review_seconds": 10, "replayed_video": False, "a_material_error": True, "b_material_error": False, "c_objections_valid": [True]},
-            {"review_seconds": 20, "replayed_video": True, "a_material_error": False, "b_material_error": True, "c_objections_valid": [False]},
-        ]
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "reviews.jsonl"
-            path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
-            metrics = pilot.manual_review_metrics(path)
-        self.assertEqual(metrics["review_seconds_median"], 15)
-        self.assertEqual(metrics["video_replay_rate"], 0.5)
-        self.assertEqual(metrics["c_objection_precision"], 0.5)
-        self.assertEqual(metrics["c_clip_error_recall"], 0.5)
-
     def test_report_writes_requested_artifacts(self):
         a, b = FIXTURES["counter-attack"]
         with tempfile.TemporaryDirectory() as directory:
@@ -428,9 +414,66 @@ class ReportingTests(unittest.TestCase):
             pilot.run_pilot("r0", clip_ids=["SNGS-010"], generator=fake_generator_with(a, b), output_root=output)
             metrics = pilot.report("r0", output)
             run_dir = output / "r0"
-            self.assertTrue(all((run_dir / name).is_file() for name in ("results.jsonl", "metrics.json", "review.md", "manual_review.jsonl")))
+            self.assertTrue(all((run_dir / name).is_file() for name in ("results.jsonl", "metrics.json", "review.md")))
             self.assertEqual(metrics["n_success"], 1)
             self.assertIn("GT: counter-attack", (run_dir / "review.md").read_text(encoding="utf-8"))
+
+
+class COnlyTests(unittest.TestCase):
+    """The control arm shares pilot's GT, metrics and reporting; only the call differs."""
+
+    @staticmethod
+    def verdict(label: str = "counter-attack") -> dict:
+        return {"label": label, "evidence_interval": {"start_s": 2.0, "end_s": 9.5}, "rationale": "断球后直接推进"}
+
+    def test_validate_rejects_off_grid_and_unordered_intervals(self):
+        c_only.validate(self.verdict())
+        for interval in ({"start_s": 2.3, "end_s": 9.5}, {"start_s": 9.5, "end_s": 2.0}):
+            with self.assertRaises(ValueError):
+                c_only.validate({**self.verdict(), "evidence_interval": interval})
+        with self.assertRaises(ValueError):
+            c_only.validate({**self.verdict(), "label": "not-a-tactic"})
+
+    def test_prompt_names_every_tactic_and_no_rule_or_agent_output(self):
+        prompt = c_only.build_prompt(pilot.load_criteria())
+        for tactic in pilot.TACTICS:
+            self.assertIn(tactic, prompt)
+        for leaked in ("rule 打分", "A=", "B=", "候选"):
+            self.assertNotIn(leaked, prompt)
+
+    def test_provider_tuning_matches_pilot(self):
+        seen = []
+
+        def generator(provider, _prompt, _schema, **kwargs):
+            seen.append((provider, sorted(kwargs)))
+            return self.verdict(), [{"tokens": 1}], 1
+
+        video = pilot.VIDEO_ROOT / "SNGS-010.mp4"
+        result = c_only.run_clip(video, "prompt", generator, provider="gemini")
+        self.assertEqual(result["final"], {
+            "label": "counter-attack", "source": "direct_c",
+            "interval": {"start_s": 2.0, "end_s": 9.5},
+        })
+        c_only.run_clip(video, "prompt", generator, provider="doubao")
+        self.assertEqual(seen, [
+            ("gemini", ["video_path"]),
+            ("doubao", ["fps", "temperature", "video_path"]),
+        ])
+
+    def test_run_and_report_share_pilot_metrics(self):
+        def generator(_provider, _prompt, _schema, **_kwargs):
+            return self.verdict(), [{"tokens": 1}], 1
+
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            counts = c_only.run("smoke", clip_ids=["SNGS-010"], generator=generator, output_root=output)
+            self.assertEqual(counts["success"], 1)
+            self.assertEqual(c_only.run("smoke", clip_ids=["SNGS-010"], generator=generator, output_root=output)["skipped"], 1)
+            metrics = c_only.report("smoke", output)
+            run_dir = output / "smoke"
+            self.assertTrue(all((run_dir / name).is_file() for name in ("results.jsonl", "metrics.json", "review.md")))
+            self.assertEqual(metrics["n_expected"], pilot.EXPECTED_CLIPS)
+            self.assertEqual(metrics["n_success"], 1)
 
 
 if __name__ == "__main__":

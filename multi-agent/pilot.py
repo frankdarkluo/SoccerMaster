@@ -28,18 +28,12 @@ GT_PATH = ROOT / "data/grounded_tactics/gsr2025_gt_37.csv"
 GLOSSARY_PATH = ROOT / "data/足球战术数据库_词条表_Grid.csv"
 VIDEO_ROOT = ROOT / "data/GSR-2025/videos"
 OUTPUT_ROOT = Path(__file__).resolve().parent / "outputs/multiagent_pilot"
-PROVIDER = "doubao"
+PROVIDERS = ("doubao", "gemini")
 MODEL_FPS = {"A": 2.0, "B": 4.0, "C": 2.0}
 TEMPERATURE = 0.0
 MIN_SCORE = 0.5
-# Weight of each former hard gate once gates became scored terms instead of a binary AND.
-# Per-tactic soft weights sum to 1.0, so with 2 gates the gates carry 2*GATE_WEIGHT/(2*GATE_WEIGHT+1)
-# of the normalised score. Scores are normalised per tactic so the 8 rules stay comparable.
-# Offline sweep over stored A/B (r2 lite 37 clips, r2_pro 26 clips) — gates help when perception
-# is noisy and hurt when it is good, so this knob trades the two off:
-#   gate_weight  0.0 -> lite 32%, pro 58%   |  0.25 -> lite 38%, pro 50%
-#                0.5 -> lite 38%, pro 42%   |  old binary AND: lite 38%, pro 35%
-# 0.25 is the best pro score that costs nothing on lite. Re-tune if perception changes again.
+# Former hard gates are scored terms, not a binary AND. Per-tactic soft weights sum to 1.0, so
+# two gates carry 2*GATE_WEIGHT/(2*GATE_WEIGHT+1) of the normalised score. Re-tune if A/B change.
 GATE_WEIGHT = 0.25
 # Inline base64 upload of the 1080p25 source timed out on 17/37 r0 clips; downscale once per clip.
 VIDEO_PREPROCESS = {"height": 720, "crf": 28, "fps": None}
@@ -50,9 +44,9 @@ IMMEDIATE_FORWARD_WINDOW_S = 4.0
 # A wall pass returns within about a second; 2.0s is an engineering tolerance for frame-sampled
 # timing, not part of any published definition of a one-two.
 WALL_PASS_RETURN_S = 2.0
+EXPECTED_CLIPS = 37
 RULE_VERSION = "multiagent-pilot-rules-v1"
 SCHEMA_VERSION = "gsr2025-multiagent-pilot-v1"
-RUN_IDS = ("r0", "r1", "r2", "r3", "r2_gemini", "r2_pro", "r4")
 
 TACTICS = (
     "counter-attack",
@@ -163,38 +157,36 @@ A_SCHEMA = {
     "required": ["possession_change", "ball_progression", "key_spatial_facts"],
     "additionalProperties": False,
 }
-def build_b_schema(max_items: int = 6) -> dict[str, Any]:
-    if max_items < 1:
-        raise ValueError("B max_items must be positive")
-    return {
-        "type": "object",
-        "properties": {
-            "events": {
-                "type": "array", "maxItems": max_items,
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "time": {"type": "number"},
-                        "action": {"type": "string", "enum": list(ACTIONS)},
-                        "actor": {"type": "string", "enum": list(ACTORS)},
-                    },
-                    "required": ["time", "action", "actor"],
-                    "additionalProperties": False,
+B_MAX_EVENTS = 6
+
+
+B_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "events": {
+            "type": "array", "maxItems": B_MAX_EVENTS,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "time": {"type": "number"},
+                    "action": {"type": "string", "enum": list(ACTIONS)},
+                    "actor": {"type": "string", "enum": list(ACTORS)},
                 },
+                "required": ["time", "action", "actor"],
+                "additionalProperties": False,
             },
-            "defensive_change": {"type": "string", "enum": list(DEFENSIVE_CHANGES)},
         },
-        "required": ["events", "defensive_change"],
-        "additionalProperties": False,
-    }
+        "defensive_change": {"type": "string", "enum": list(DEFENSIVE_CHANGES)},
+    },
+    "required": ["events", "defensive_change"],
+    "additionalProperties": False,
+}
 
-
-B_SCHEMA = build_b_schema()
-# C now arbitrates instead of only annotating errors. It picks among the Rule's top candidates or
-# rejects them all, and its choice is recorded separately from the Rule's so the rule-only vs
-# rule+C ablation stays measurable. Rationale: as a pure error-spotter C's flag predicted a wrong
-# Rule label at precision 0.69 against a 0.65 base rate — essentially no signal — while the Rule's
-# top-3 contained the right answer on 73% of r2_pro clips, so the headroom is in choosing, not flagging.
+# C arbitrates rather than only flagging errors: it picks among the Rule's top candidates or
+# rejects them all, and `final.source` records which of the two produced the answer. As a pure
+# error-spotter its flag predicted a wrong Rule label at precision 0.69 against a 0.65 base rate —
+# no signal — while the Rule's top-3 held the right answer 73% of the time, so choosing is where
+# the headroom is.
 C_SCHEMA = {
     "type": "object",
     "properties": {
@@ -256,26 +248,7 @@ events的取舍规则（条数不是目标）：
 
 只输出JSON。"""
 
-B_TWO_LEG_RULE = (
-    "若同一连贯序列中，球在两名同队球员之间快速传出并回做，去球和回传必须各记录为一条传球事件；"
-    "不要用接球或带球代替任一脚传球。能确认接应者一脚回给原传球者时，第二脚写 "
-    "one_touch_return_pass；否则按实际方向和高度写普通传球。"
-)
-
-
-def build_b_prompt(max_items: int = 6, two_leg: bool = False) -> str:
-    if max_items < 1:
-        raise ValueError("B max_items must be positive")
-    prompt = _BASE_B_PROMPT.replace("最多6条", f"最多{max_items}条").replace(
-        "不要补满6条", f"不要补满{max_items}条",
-    )
-    if two_leg:
-        marker = "- 只描述同一段连贯攻防序列内的动作。"
-        prompt = prompt.replace(marker, f"- {B_TWO_LEG_RULE}\n{marker}")
-    return prompt
-
-
-B_PROMPT = build_b_prompt()
+B_PROMPT = _BASE_B_PROMPT
 
 
 def _schema_keys(payload: dict[str, Any], expected: set[str], name: str) -> None:
@@ -306,13 +279,11 @@ def validate_a(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def validate_b(payload: dict[str, Any], max_items: int = 6) -> dict[str, Any]:
-    if max_items < 1:
-        raise ValueError("B max_items must be positive")
+def validate_b(payload: dict[str, Any]) -> dict[str, Any]:
     _schema_keys(payload, {"events", "defensive_change"}, "B")
     events = payload["events"]
-    if not isinstance(events, list) or len(events) > max_items:
-        raise ValueError(f"B.events must contain 0-{max_items} events")
+    if not isinstance(events, list) or len(events) > B_MAX_EVENTS:
+        raise ValueError(f"B.events must contain 0-{B_MAX_EVENTS} events")
     previous = -1.0
     for event in events:
         _schema_keys(event, {"time", "action", "actor"}, "B event")
@@ -381,8 +352,8 @@ def parse_interval(value: str) -> dict[str, float]:
 def load_gt(path: Path = GT_PATH, video_root: Path = VIDEO_ROOT) -> list[dict[str, Any]]:
     with path.open(encoding="utf-8-sig", newline="") as handle:
         raw_rows = list(csv.DictReader(handle))
-    if len(raw_rows) != 37 or len({row["clip"] for row in raw_rows}) != 37:
-        raise ValueError(f"expected 37 unique GT clips, got {len(raw_rows)} rows")
+    if len(raw_rows) != EXPECTED_CLIPS or len({row["clip"] for row in raw_rows}) != EXPECTED_CLIPS:
+        raise ValueError(f"expected {EXPECTED_CLIPS} unique GT clips, got {len(raw_rows)} rows")
     rows = []
     for raw in raw_rows:
         tactic = GT_ALIASES.get(raw["tactic"], raw["tactic"])
@@ -729,9 +700,9 @@ RULES = (
 )
 
 
-def classify(a: dict[str, Any], b: dict[str, Any], b_max_items: int = 6) -> dict[str, Any]:
+def classify(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     validate_a(a)
-    validate_b(b, b_max_items)
+    validate_b(b)
     ranked = sorted((rule(a, b) for rule in RULES), key=lambda item: (-item["score"], item["tactic"]))
     qualified = [item for item in ranked if item["score"] >= MIN_SCORE]
     result: dict[str, Any] = {"label": None, "score": None, "interval": None, "reason": "no_match"}
@@ -748,10 +719,6 @@ def classify(a: dict[str, Any], b: dict[str, Any], b_max_items: int = 6) -> dict
             )
     result["ranked"] = ranked
     return result
-
-
-def c_candidates(rule: dict[str, Any]) -> list[str]:
-    return [item["tactic"] for item in rule["ranked"][:C_CANDIDATES]]
 
 
 def c_candidates(rule: dict[str, Any]) -> list[str]:
@@ -812,16 +779,13 @@ def run_clip(
     criteria: dict[str, dict[str, str]],
     generator: Generator = generate_json,
     *,
-    b_max_items: int = 6,
+    provider: str = "doubao",
 ) -> dict[str, Any]:
-    b_prompt, b_schema = (B_PROMPT, B_SCHEMA) if b_max_items == 6 else (build_b_prompt(b_max_items), build_b_schema(b_max_items))
-
     def call(upload: Path, role: str, prompt: str, schema: dict[str, Any], validator: Callable[[dict[str, Any]], dict[str, Any]]) -> dict[str, Any]:
         started = time.monotonic()
-        payload, usage, attempts = generator(
-            PROVIDER, prompt, schema, video_path=upload,
-            fps=MODEL_FPS[role], temperature=TEMPERATURE,
-        )
+        # Gemini's Interactions API takes neither fps nor temperature; Ark takes both.
+        tuning = {"fps": MODEL_FPS[role], "temperature": TEMPERATURE} if provider == "doubao" else {}
+        payload, usage, attempts = generator(provider, prompt, schema, video_path=upload, **tuning)
         validator(payload)
         return {
             "output": payload,
@@ -829,15 +793,15 @@ def run_clip(
             "attempts": attempts,
             "elapsed_s": round(time.monotonic() - started, 3),
             "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
-            "fps": MODEL_FPS[role],
+            "fps": tuning.get("fps"),
         }
 
     with temporary_compact_clip(video_path, **VIDEO_PREPROCESS) as upload:
         with ThreadPoolExecutor(max_workers=2) as executor:
             future_a = executor.submit(call, upload, "A", A_PROMPT, A_SCHEMA, validate_a)
-            future_b = executor.submit(call, upload, "B", b_prompt, b_schema, lambda payload: validate_b(payload, b_max_items))
+            future_b = executor.submit(call, upload, "B", B_PROMPT, B_SCHEMA, validate_b)
             agent_a, agent_b = future_a.result(), future_b.result()
-        rule = classify(agent_a["output"], agent_b["output"], b_max_items)
+        rule = classify(agent_a["output"], agent_b["output"])
         c_prompt = build_c_prompt(agent_a["output"], agent_b["output"], rule, criteria)
         candidates = c_candidates(rule)
         # A C failure must never discard a valid A/B/Rule prediction; `final` falls back to the Rule.
@@ -860,13 +824,13 @@ def manifest_signature(
     criteria: dict[str, dict[str, str]],
     gt_path: Path = GT_PATH,
     glossary_path: Path = GLOSSARY_PATH,
-    b_max_items: int = 6,
+    *,
+    provider: str = "doubao",
 ) -> dict[str, Any]:
-    b_prompt = B_PROMPT if b_max_items == 6 else build_b_prompt(b_max_items)
     value = {
         "schema_version": SCHEMA_VERSION,
-        "model": model_name(PROVIDER),
-        "provider": PROVIDER,
+        "model": model_name(provider),
+        "provider": provider,
         "fps": MODEL_FPS,
         "temperature": TEMPERATURE,
         "min_score": MIN_SCORE,
@@ -878,7 +842,7 @@ def manifest_signature(
         "rule_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "prompt_sha256": {
             "A": hashlib.sha256(A_PROMPT.encode()).hexdigest(),
-            "B": hashlib.sha256(b_prompt.encode()).hexdigest(),
+            "B": hashlib.sha256(B_PROMPT.encode()).hexdigest(),
         },
         "gt_sha256": sha256_file(gt_path),
         "glossary_sha256": sha256_file(glossary_path),
@@ -891,10 +855,11 @@ def ensure_manifest(
     run_dir: Path,
     run_id: str,
     criteria: dict[str, dict[str, str]],
-    b_max_items: int = 6,
+    *,
+    provider: str = "doubao",
 ) -> dict[str, Any]:
     path = run_dir / "manifest.json"
-    current = manifest_signature(criteria, b_max_items=b_max_items)
+    current = manifest_signature(criteria, provider=provider)
     if path.is_file():
         existing = json.loads(path.read_text(encoding="utf-8"))
         if existing.get("signature") != current["signature"]:
@@ -903,9 +868,8 @@ def ensure_manifest(
     manifest = {
         **current,
         "run_id": run_id,
-        "status": "frozen_baseline" if run_id == "r0" else "exploratory_same_set",
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "expected_clips": 37,
+        "expected_clips": EXPECTED_CLIPS,
         "criteria_snapshot": criteria,
     }
     write_json(path, manifest)
@@ -915,6 +879,7 @@ def ensure_manifest(
 def run_pilot(
     run_id: str,
     *,
+    provider: str = "doubao",
     clip_ids: Iterable[str] | None = None,
     retry_failed: bool = False,
     generator: Generator = generate_json,
@@ -926,8 +891,7 @@ def run_pilot(
     rows = load_gt(gt_path, video_root)
     criteria = load_criteria(glossary_path)
     run_dir = output_root / run_id
-    b_max_items = 15 if run_id == "r4" else 6
-    ensure_manifest(run_dir, run_id, criteria, b_max_items=b_max_items)
+    ensure_manifest(run_dir, run_id, criteria, provider=provider)
     selected = set(clip_ids or (row["clip"] for row in rows))
     known = {row["clip"] for row in rows}
     if unknown := selected - known:
@@ -944,7 +908,7 @@ def run_pilot(
                 continue
         started = time.monotonic()
         try:
-            value = run_clip(gt["video_path"], criteria, generator, b_max_items=b_max_items)
+            value = run_clip(gt["video_path"], criteria, generator, provider=provider)
             result = {"status": "success", **value}
         except Exception as exc:
             result = {"status": "failed", "error_type": type(exc).__name__, "error": str(exc)[:1000]}
@@ -969,26 +933,6 @@ def temporal_iou(predicted: dict[str, Any] | None, expected: dict[str, Any]) -> 
     return intersection / union if union else 0.0
 
 
-def _ablation(results: list[dict[str, Any]], key: str) -> dict[str, Any]:
-    """Accuracy of one prediction path ("rule" = Rule alone, "final" = Rule + arbiter C)."""
-    by_clip = {result["clip"]: result for result in results}
-    correct = scored = abstained = 0
-    for gt in load_gt():
-        result = by_clip.get(gt["clip"])
-        if result is None or result["status"] != "success" or key not in result:
-            continue
-        scored += 1
-        label = result[key].get("label")
-        correct += label == gt["tactic"]
-        abstained += label is None
-    return {
-        "n_scored": scored,
-        "correct_n": correct,
-        "accuracy": correct / scored if scored else 0.0,
-        "abstained_n": abstained,
-    }
-
-
 def classification_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     by_clip = {result["clip"]: result for result in results}
     gt_rows = load_gt()
@@ -1005,9 +949,9 @@ def classification_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
             predicted, bucket, interval = None, "failed", None
         else:
             success += 1
-            # Headline metrics score the system's actual output: the arbiter's verdict when there
-            # is one, else the Rule. Runs predating the arbiter have no "final" and stay comparable.
-            rule = result["rule"]
+            # Score the system's actual output: the arbiter's verdict when there is one, else the
+            # Rule. `rule` is absent from C-only results, which share this function.
+            rule = result.get("rule", {})
             chosen = result.get("final") or rule
             predicted, interval = chosen.get("label"), chosen.get("interval")
             if predicted:
@@ -1042,7 +986,6 @@ def classification_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "majority_baseline": majority,
         "accuracy_lift_over_majority": accuracy - majority,
         "per_class": per_class,
-        "ablation": {"rule_only": _ablation(results, "rule"), "rule_plus_arbiter": _ablation(results, "final")},
         "confusion_matrix": confusion,
         "temporal": {
             "eligible_n": len(temporal),
@@ -1050,44 +993,8 @@ def classification_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
             "tiou_at_0_5": sum(value >= 0.5 for value in temporal) / len(temporal) if temporal else 0.0,
             "missing_interval_counts_as_zero": True,
         },
-        "pilot_success": len(pairs) == 37 and success == 37 and correct >= 26,
     }
 
-
-
-def manual_review_metrics(path: Path) -> dict[str, Any] | None:
-    if not path.is_file():
-        return None
-    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
-    completed = [row for row in rows if row.get("review_seconds") is not None]
-    if not completed:
-        return {"completed_n": 0}
-    times = [float(row["review_seconds"]) for row in completed]
-    quartiles = statistics.quantiles(times, n=4, method="inclusive") if len(times) > 1 else [times[0]] * 3
-    objections = [value for row in completed for value in (row.get("c_objections_valid") or []) if isinstance(value, bool)]
-    error_rows = [row for row in completed if row.get("a_material_error") is True or row.get("b_material_error") is True]
-    return {
-        "completed_n": len(completed),
-        "review_seconds_median": statistics.median(times),
-        "review_seconds_iqr": [quartiles[0], quartiles[2]],
-        "video_replay_rate": sum(row.get("replayed_video") is True for row in completed) / len(completed),
-        "c_objection_precision": sum(objections) / len(objections) if objections else None,
-        "c_clip_error_recall": sum(any(value is True for value in (row.get("c_objections_valid") or [])) for row in error_rows) / len(error_rows) if error_rows else None,
-    }
-
-
-def _review_template(result: dict[str, Any]) -> dict[str, Any]:
-    objections = result.get("agents", {}).get("C", {}).get("output", {}).get("objections", [])
-    return {
-        "clip": result["clip"],
-        "review_seconds": None,
-        "replayed_video": None,
-        "a_material_error": None,
-        "b_material_error": None,
-        "rule_correct": None,
-        "c_objections_valid": [None] * len(objections),
-        "notes": "",
-    }
 
 
 def _render_review(results: list[dict[str, Any]], metrics: dict[str, Any]) -> str:
@@ -1132,19 +1039,19 @@ def _render_review(results: list[dict[str, Any]], metrics: dict[str, Any]) -> st
     return "\n".join(lines)
 
 
+def load_results(run_dir: Path) -> list[dict[str, Any]]:
+    if not (run_dir / "manifest.json").is_file():
+        raise FileNotFoundError(f"missing manifest in {run_dir}")
+    return [json.loads(path.read_text(encoding="utf-8")) for path in sorted((run_dir / "clips").glob("*.json"))]
+
+
 def report(run_id: str, output_root: Path = OUTPUT_ROOT) -> dict[str, Any]:
     run_dir = output_root / run_id
-    if not (run_dir / "manifest.json").is_file():
-        raise FileNotFoundError(f"missing manifest for {run_id}")
-    results = [json.loads(path.read_text(encoding="utf-8")) for path in sorted((run_dir / "clips").glob("*.json"))]
-    results_path = run_dir / "results.jsonl"
-    results_path.write_text("".join(json.dumps(item, ensure_ascii=False) + "\n" for item in results), encoding="utf-8")
-    review_path = run_dir / "manual_review.jsonl"
-    existing_reviews = {row["clip"]: row for row in ([json.loads(line) for line in review_path.read_text(encoding="utf-8").splitlines() if line.strip()] if review_path.is_file() else [])}
-    reviews = [existing_reviews.get(item["clip"], _review_template(item)) for item in results]
-    review_path.write_text("".join(json.dumps(item, ensure_ascii=False) + "\n" for item in reviews), encoding="utf-8")
+    results = load_results(run_dir)
+    (run_dir / "results.jsonl").write_text(
+        "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in results), encoding="utf-8",
+    )
     metrics = classification_metrics(results)
-    metrics["manual_review"] = manual_review_metrics(review_path)
     write_json(run_dir / "metrics.json", metrics)
     (run_dir / "review.md").write_text(_render_review(results, metrics), encoding="utf-8")
     return metrics
@@ -1154,12 +1061,13 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     commands = result.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run")
-    run.add_argument("--run-id", required=True, choices=RUN_IDS)
+    run.add_argument("--run-id", required=True)
+    run.add_argument("--provider", required=True, choices=PROVIDERS)
     run.add_argument("--clip-id", action="append", dest="clip_ids")
     run.add_argument("--retry-failed", action="store_true")
     run.add_argument("--allow-external-upload", action="store_true")
     report_parser = commands.add_parser("report")
-    report_parser.add_argument("--run-id", required=True, choices=RUN_IDS)
+    report_parser.add_argument("--run-id", required=True)
     return result
 
 
@@ -1168,7 +1076,10 @@ def main() -> None:
     if args.command == "run":
         if not args.allow_external_upload:
             raise SystemExit("Refusing external video upload without --allow-external-upload")
-        value = run_pilot(args.run_id, clip_ids=args.clip_ids, retry_failed=args.retry_failed)
+        value = run_pilot(
+            args.run_id, provider=args.provider,
+            clip_ids=args.clip_ids, retry_failed=args.retry_failed,
+        )
     else:
         value = report(args.run_id)
     print(json.dumps(value, ensure_ascii=False, indent=2))
