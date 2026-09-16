@@ -103,11 +103,11 @@ def run_stage3_tts(
     config = PipelineConfig(output_dir=output_dir)
     config.voice_dir.mkdir(parents=True, exist_ok=True)
     commentary = Path(commentary_record) if commentary_record else output_dir / "comments" / "commentary.json"
-    clip = output_dir / "clip.mp4"
+    clip = config.gsr_video_root / f"{output_dir.name}.mp4"
     if not commentary.is_file():
         raise FileNotFoundError(f"commentary not found: {commentary}")
     if not clip.is_file():
-        raise FileNotFoundError(f"clip.mp4 not found: {clip}")
+        raise FileNotFoundError(f"source video not found: {clip}")
 
     duration_s = _video_duration_s(clip)
     segments = _load_segments(commentary, duration_s)

@@ -8,9 +8,10 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
+from pipeline.config import GSR_DATASET_ROOT
 from pipeline.topology.analysis import analyze_clip
 from pipeline.utils.video import get_video_info
-from pipeline.video_models import generate_json, model_name
+from pipeline.video_models import generate_json, model_name, temporary_compact_clip
 
 PROMPT_VERSION = "tactical-commentary-two-stage-v2-topology"
 ANALYSIS_FIELDS = (
@@ -53,7 +54,7 @@ def load_exemplar(path: Path) -> dict[str, Any]:
     return value
 
 
-def analysis_schema() -> dict[str, Any]:
+def analysis_schema(topology_fact_ids: list[str]) -> dict[str, Any]:
     nullable = {"type": ["string", "null"]}
     properties: dict[str, Any] = {
         "fact_index": {"type": "integer", "enum": [0]},
@@ -74,7 +75,10 @@ def analysis_schema() -> dict[str, Any]:
         "confidence": {"type": "integer", "minimum": 0, "maximum": 100, "multipleOf": 10},
         "confidence_reasons": {"type": "array", "minItems": 1, "items": {"type": "string"}},
         "evidence_gaps": {"type": "array", "items": {"type": "string"}},
-        "topology_fact_ids": {"type": "array", "uniqueItems": True, "items": {"type": "string"}},
+        "topology_fact_ids": {
+            "type": "array", "uniqueItems": True,
+            "items": {"type": "string", "enum": topology_fact_ids},
+        },
     }
     return {"type": "object", "properties": properties, "required": list(ANALYSIS_FIELDS), "additionalProperties": False}
 
@@ -221,6 +225,7 @@ def run(
     force: bool = False,
     repo_root: Path | None = None,
     topology_root: Path | None = None,
+    video_root: Path | None = None,
 ) -> list[dict[str, Any]]:
     exemplar = load_exemplar(exemplar_path)
     repo_root = Path(repo_root) if repo_root else Path(__file__).resolve().parents[2]
@@ -228,6 +233,7 @@ def run(
         Path(topology_root) if topology_root
         else repo_root / "outputs/tactical_topology"
     )
+    video_root = Path(video_root) if video_root else GSR_DATASET_ROOT / "videos"
     outcomes = []
     for clip_uid in clip_uids:
         clip = clip_uid.split(":", 1)[-1]
@@ -235,7 +241,7 @@ def run(
         if target.is_file() and not force:
             outcomes.append({"clip_uid": clip_uid, "status": "skipped"})
             continue
-        fact, video = load_fact(review_path, clip_uid), preprocessing_root / clip / "clip.mp4"
+        fact, video = load_fact(review_path, clip_uid), video_root / f"{clip}.mp4"
         if not video.is_file():
             raise FileNotFoundError(video)
         topology_path = topology_root / f"{clip}.json"
@@ -251,9 +257,14 @@ def run(
         analysis_prompt = build_analysis_prompt(
             fact, float(get_video_info(video)["duration_s"]), exemplar, locked_topology,
         )
-        analysis, usage1, attempts1 = generate_json(
-            provider, analysis_prompt, analysis_schema(), video_path=video,
-        )
+        # The 1080p source inlines as ~44MB of base64 and times out; multi-agent/pilot.py
+        # downscales for the same reason.
+        with temporary_compact_clip(video) as upload:
+            analysis, usage1, attempts1 = generate_json(
+                provider, analysis_prompt,
+                analysis_schema([item["fact_id"] for item in locked_topology]),
+                video_path=upload,
+            )
         validate_topology_citations(analysis, locked_topology)
         writer_prompt = build_writer_prompt(fact, analysis, locked_topology)
         written, usage2, attempts2 = generate_json(provider, writer_prompt, WRITER_SCHEMA)

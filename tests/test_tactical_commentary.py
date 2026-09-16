@@ -1,3 +1,4 @@
+import contextlib
 import json
 
 import pytest
@@ -42,7 +43,7 @@ def test_two_stage_runner_has_no_single_stage_output(tmp_path, monkeypatch, prov
         "schema_version": "deep-commentary-exemplar-v2",
         "locked_fact": {}, "response": {},
     }), encoding="utf-8")
-    clip = tmp_path / "preprocessing/0006/clip.mp4"
+    clip = tmp_path / "videos/0006.mp4"
     clip.parent.mkdir(parents=True)
     clip.write_bytes(b"video")
     calls = []
@@ -82,6 +83,10 @@ def test_two_stage_runner_has_no_single_stage_output(tmp_path, monkeypatch, prov
         return (ANALYSIS if video_path else {"text_zh": TEXT}), [], 1
 
     monkeypatch.setattr(tactical_commentary, "generate_json", fake_generate)
+    monkeypatch.setattr(
+        tactical_commentary, "temporary_compact_clip",
+        lambda path, **_: contextlib.nullcontext(path),
+    )
     monkeypatch.setattr(tactical_commentary, "analyze_clip", fake_analyze)
     monkeypatch.setattr(
         tactical_commentary, "get_video_info", lambda _: {"duration_s": 12.0},
@@ -90,6 +95,7 @@ def test_two_stage_runner_has_no_single_stage_output(tmp_path, monkeypatch, prov
     tactical_commentary.run(
         review, tmp_path / "preprocessing", output, exemplar,
         repo_root=tmp_path, topology_root=tmp_path / "topology",
+        video_root=tmp_path / "videos",
         provider=provider, clip_uids=["event_clips:0006"],
     )
     record = json.loads((output / provider / "0006.json").read_text())

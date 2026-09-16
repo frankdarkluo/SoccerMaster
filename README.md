@@ -216,19 +216,20 @@ flowchart LR
 ```
 
 下文 `$OUT` 指每个 clip 的工作目录 `outputs/preprocessing/<clip>/`，所有阶段共用。
+②b 和 ③ 要用的原始视频直接从 `data/GSR-2025/videos/<clip>.mp4` 读，不用手动拷贝。
 
 | 阶段 | 做什么 | 为什么需要 | 产物 |
 |---|---|---|---|
 | ① 状态识别 | 检测跟踪球员和球，SAM2 精修，再做场地标定、球衣号、队伍识别 | 得到每一帧「谁在球场哪个位置」，是 ④ 画图的坐标来源 | `$OUT/predictions.json`<br/>`$OUT/homography_per_frame.json` |
 | ②a 阵型线 | 每秒找出可见球员稳定排成的锋线、中场线、后防线；看不清的只记录、不下结论 | 给解说提供客观的几何证据，不让模型凭空说「打穿了防线」 | `outputs/tactical_topology/<clip>.json` |
 | ②b 文字解说 | 先让模型看视频、围绕人工锁定的战术整理证据链；再只凭这条证据链写 2–3 句解说 | 拆成两步，保证解说的每句话都能追溯到画面 | `outputs/tactical_commentary/<provider>/<clip>.json` |
-| ③ 配音 | 本地 CosyVoice 合成中文语音，从战术发生的时刻起贴回视频 | 把文字变成能直接播的解说 | `$OUT/voice/commentary_zh.mp3`<br/>`$OUT/voice/final_video.mp4` |
+| ③ 配音 | 本地 CosyVoice 合成中文语音，从战术发生的时刻起贴回视频；解说必须能装进「战术时刻 → 片尾」这段时间 | 把文字变成能直接播的解说 | `$OUT/voice/commentary_zh.mp3`<br/>`$OUT/voice/final_video.mp4` |
 | ④ 特效 | 给球员画光圈、给持球人打光柱、叠上阵型线（内部重算，不依赖 ②a 的输出），再混入 ③ 的配音 | 让观众看见解说里说的战术结构 | `$OUT/annotated_video.mp4`，并覆盖 `final_video.mp4` |
 
 ### 跑通一个 clip
 
 ```bash
-CLIP=SNGS-148
+CLIP=SNGS-050
 OUT=outputs/preprocessing/$CLIP     # ②a/②b 固定从这里读，不要改
 DATA=data/GSR-2025
 mkdir -p $OUT
@@ -240,7 +241,6 @@ bash scripts/run_stage1.sh $DATA/images/$CLIP $OUT
 python scripts/run_tactical_topology.py analyze --clip-uid $CLIP
 
 # ②b 文字解说
-cp $DATA/videos/$CLIP.mp4 $OUT/clip.mp4     # 没有阶段会生成它，②b 和 ③ 都要读
 python scripts/run_tactical_commentary.py run --provider doubao \
     --clip-uid soccernetgs:$CLIP --allow-external-upload
 
@@ -254,6 +254,11 @@ bash scripts/run_stage4.sh $OUT --clip-dir $DATA/images/$CLIP
 
 **能解说哪些 clip：** ②b 只处理在 `benchmark/tactical_prototypes/recognition_review.jsonl` 里
 有一条人工锁定战术（`verdict: correct`）的 clip，目前是 27 个 GSR-2025 clip。其余参数见各脚本 `--help`。
+
+**注意锁定窗口的位置。** ③ 把解说排在「战术时刻 → 片尾」之间，而 ②b 写的是 50–140 字，
+最多加速 1.5 倍。锁定窗口越靠后、可用时间越短：27 个 clip 的中位数是 20 秒，但有 8 个不足 12 秒
+（SNGS-038/063/088/148/045 等），这些 clip 的 ③ 大概率会报槽位不足。上面的 SNGS-050 窗口从 0 秒起，
+整条链实测可以跑通。
 
 <details>
 <summary>上游手动运行 GSR 三步（<code>run_stage1.sh</code> 已封装，单独调试 Stage ① 时才需要）</summary>
@@ -336,7 +341,7 @@ python multi-agent/c_only.py report --run-id g1
 |---|---|
 | `ARK_API_KEY is not set` / `no Gemini API key is set` | `.env` 不会自动加载，先 `set -a && source .env && set +a` |
 | `ARK_RESPONSES_MODEL must be ...` | 把 `.env` 里这一项留空 |
-| 找不到 `clip.mp4` | 没有阶段会生成它：`cp data/GSR-2025/videos/<clip>.mp4 $OUT/clip.mp4` |
+| `source video not found: ...` | ②b 和 ③ 直接读 `data/GSR-2025/videos/<clip>.mp4`，确认视频在那儿 |
 | `must have exactly one correct locked fact` | 这个 clip 没有人工锁定的战术，②b 不能处理 |
 | `TTS exceeds its ...s slot even after speed-up` | 配音从战术时刻播到片尾，最多加速 1.5 倍仍放不下：解说太长，或战术发生得太晚 |
 | 改了代码重跑，结果没变 | ②a、②b、④ 发现产物已存在会直接跳过，加 `--force` |
