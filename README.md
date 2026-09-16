@@ -1,7 +1,7 @@
 # SoccerMaster: A Vision Foundation Model for Soccer Understanding
 
 > **这是 SoccerMaster 的 fork。** `codes/` 和下方折叠的上游说明来自论文作者，引用与权重见
-> [上游仓库](https://github.com/haolinyang-hlyang/SoccerMaster)。`pipeline/` 与 `multi-agent/`
+> [上游仓库](https://github.com/haolinyang-hlyang/SoccerMaster)。`pipeline/`
 > 是本 fork 在上游识别结果之上新增的战术层，不属于论文，也未经同行评审。
 
 ## 仓库里有什么
@@ -9,11 +9,12 @@
 | 部分 | 解决什么问题 | 位置 |
 |---|---|---|
 | **pipeline** | 把一段 30 秒比赛视频做成带中文战术解说、配音和战术图形的成片 | `pipeline/`，入口在 `scripts/` |
-| **multi-agent** | 实验：让模型「先描述画面、规则打分、再裁决」，能否比直接问模型更准地识别战术 | `multi-agent/` |
 
-两部分运行上互不依赖，只共用 `pipeline/video_models.py` 调用 Doubao / Gemini。
-其余目录：`codes/` 是上游代码，`benchmark/` 放 ②b 的人工输入，`data/` 下的两个 csv 是
-multi-agent 的标注，`tests/` 是离线测试。
+其余目录：`codes/` 是上游代码，`benchmark/` 放 ②b 的人工输入，`tests/` 是离线测试。
+
+战术 benchmark 与智能体（A+B+rule→C、C-only、12 类证据打分）在
+[SoccerTactics](https://github.com/frankdarkluo/SoccerTactics)，两个仓库只共用
+`pipeline/video_models.py` 一个文件。
 
 ## 环境准备
 
@@ -31,7 +32,7 @@ pip install openai httpx pytest
 `pipeline/stage3_tts/cosyvoice.py`，以及 `codes/sn-gamestate/sn_gamestate/sn_gamestate/configs/`
 下的 `gsr_step_1_example.yaml`、`gsr_step_3_example_accelerate.yaml`。
 
-**API Key**（只有 ②b 和 multi-agent 调模型）。代码只读环境变量，不会自动加载 `.env`：
+**API Key**（只有 ②b 调模型）。代码只读环境变量，不会自动加载 `.env`：
 
 ```bash
 cp .env.example .env            # 填 ARK_API_KEY（Doubao）或 GEMINI_API_KEY（Gemini）
@@ -185,7 +186,7 @@ Each entry contains:
 
 </details>
 
-## 一、pipeline：从比赛视频到带解说和特效的成片
+## pipeline：从比赛视频到带解说和特效的成片
 
 ```mermaid
 flowchart LR
@@ -285,45 +286,10 @@ CUDA_VISIBLE_DEVICES=0 python -m tracklab.main -cn gsr_step_3_example_accelerate
 
 </details>
 
-## 二、multi-agent：战术识别对照实验
-
-直接问视频大模型「这是什么战术」，它容易凭整体印象猜。这里把判断拆开，看能不能更准。
-两条臂在同一批 37 个人工标注 clip 上、用同一套指标对比：
-
-| 臂 | 流程 | 文件 |
-|---|---|---|
-| **A+B+rule→C** | A 只描述空间（球推进到哪个区域、防线是否站好…），B 只列动作时间线（传球、抢断…），两者都不许说战术名；8 条写死的规则据此给 8 种战术打分；C 再看视频，从得分前三里裁决 | `multi-agent/pilot.py` |
-| **C-only**（对照组） | 一次调用，模型直接看视频八选一 | `multi-agent/c_only.py` |
-
-两条臂都支持 `--provider doubao` / `--provider gemini`。
-
-```bash
-# 先用 1 个 clip 冒烟，确认 key 和视频都没问题
-python multi-agent/pilot.py run --provider doubao --run-id smoke --clip-id SNGS-010 --allow-external-upload
-
-# 全量 37 个 clip，跑完出报告；中途失败的 clip 加 --retry-failed 补跑
-python multi-agent/pilot.py  run    --provider doubao --run-id r5 --allow-external-upload
-python multi-agent/pilot.py  report --run-id r5
-python multi-agent/c_only.py run    --provider gemini --run-id g1 --allow-external-upload
-python multi-agent/c_only.py report --run-id g1
-```
-
-结果在 `multi-agent/outputs/multiagent_pilot/<run-id>/`（C-only 在 `.../c_only/<run-id>/`）：
-
-| 文件 | 看什么 |
-|---|---|
-| `metrics.json` | `accuracy`、`macro_f1`。先和 `majority_baseline`（永远猜最常见的战术）比，高出才有意义 |
-| `review.md` | 逐 clip 的判断依据和最终答案，人工复查读这个 |
-| `clips/<clip>.json` | 单 clip 完整记录；`final.source` 标明答案来自 C 还是规则 |
-
-输入：视频 `data/GSR-2025/videos/`，标注 `data/grounded_tactics/gsr2025_gt_37.csv`，
-战术定义 `data/足球战术数据库_词条表_Grid.csv`。
-
 ## 测试
 
 离线运行，不调用任何 API：
 
 ```bash
-python -m pytest tests -q            # pipeline
-python multi-agent/test_pilot.py     # multi-agent：规则、两条臂的流程与指标
+python -m pytest tests -q
 ```

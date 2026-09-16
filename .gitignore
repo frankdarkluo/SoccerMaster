@@ -73,21 +73,13 @@ docs/superpowers/
 ehthumbs.db
 Thumbs.db
 
-# Inputs the delivered multi-agent pipeline cannot run without. These sit under
-# /data/* and match *.csv, so both blanket rules have to be reopened here.
-!/data/grounded_tactics/
-/data/grounded_tactics/*
-!/data/grounded_tactics/gsr2025_gt_37.csv
-!/data/足球战术数据库_词条表_Grid.csv
-
 # Internal working documents: research proposals, meeting transcripts, ethics
 # correspondence, annotation guides, and design plans. The published repo carries
-# code plus the multi-agent design doc, nothing else.
+# code only.
 /to-questionnaire-human-tactic-labellers.md
 /docs/ethics/
 /docs/plans/
 /docs/references/
 /docs/specs/
-/docs/proposals/*
-!/docs/proposals/2026-08-16-plan-multi-agent-tactic-recognition.md
+/docs/proposals/
 /images/
