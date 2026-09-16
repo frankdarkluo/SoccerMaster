@@ -1,20 +1,4 @@
 # SoccerMaster: A Vision Foundation Model for Soccer Understanding
-Official implementation of **SoccerMaster: A Vision Foundation Model for Soccer Understanding** (CVPR 2026 Oral)
-
-[*Haolin Yang*](https://haolinyang-hlyang.github.io/),
-[*Jiayuan Rao*](https://jyrao.github.io/),
-[*Haoning Wu*](https://haoningwu3639.github.io/),
-[*Weidi Xie*](https://weidixie.github.io/)
-
-
-<div style="line-height: 1;">
-  <a href="https://haolinyang-hlyang.github.io/SoccerMaster/" target="_blank" style="margin: 2px;">
-    <img alt="Website" src="https://img.shields.io/badge/Website🌐-SoccerMaster-536af5?color=536af5&logoColor=white" style="display: inline-block; vertical-align: middle;"/>
-  </a>
-  <a href="https://arxiv.org/pdf/2512.11016" target="_blank" style="margin: 2px;">
-    <img alt="Arxiv" src="https://img.shields.io/badge/Arxiv📄-SoccerMaster-red?logo=%23B31B1B" style="display: inline-block; vertical-align: middle;"/>
-  </a>
-</div>
 
 > **这是 SoccerMaster 的 fork。** `codes/` 和下方折叠的上游说明来自论文作者，引用与权重见
 > [上游仓库](https://github.com/haolinyang-hlyang/SoccerMaster)。`pipeline/` 与 `multi-agent/`
@@ -334,18 +318,6 @@ python multi-agent/c_only.py report --run-id g1
 
 输入：视频 `data/GSR-2025/videos/`，标注 `data/grounded_tactics/gsr2025_gt_37.csv`，
 战术定义 `data/足球战术数据库_词条表_Grid.csv`。
-
-## 常见报错
-
-| 报错 | 原因与处理 |
-|---|---|
-| `ARK_API_KEY is not set` / `no Gemini API key is set` | `.env` 不会自动加载，先 `set -a && source .env && set +a` |
-| `ARK_RESPONSES_MODEL must be ...` | 把 `.env` 里这一项留空 |
-| `source video not found: ...` | ②b 和 ③ 直接读 `data/GSR-2025/videos/<clip>.mp4`，确认视频在那儿 |
-| `must have exactly one correct locked fact` | 这个 clip 没有人工锁定的战术，②b 不能处理 |
-| `TTS exceeds its ...s slot even after speed-up` | 配音从战术时刻播到片尾，最多加速 1.5 倍仍放不下：解说太长，或战术发生得太晚 |
-| 改了代码重跑，结果没变 | ②a、②b、④ 发现产物已存在会直接跳过，加 `--force` |
-| `manifest does not match ... use a new run-id` | multi-agent 改了 prompt、规则或数据后，要换一个新 `--run-id` |
 
 ## 测试
 
