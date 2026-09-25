@@ -1,0 +1,7 @@
+shapely
+numpy
+pandas
+scipy
+xmltodict
+tqdm
+lap

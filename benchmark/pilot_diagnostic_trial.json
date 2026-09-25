@@ -1,0 +1,399 @@
+{
+  "version": "football-relations-diagnostic-v0.1",
+  "date": "2026-09-22",
+  "author": "GitHub Copilot",
+  "status": "machine_draft",
+  "source_csv": "data/pilot_study.csv",
+  "source_sha256": "71da85185514cdb6ca82f8332eb78efb01c248583261905c5a52a3c24d2f74f5",
+  "source_updates": [
+    {
+      "previous_sha256": "6512007baddfdce673bfe49c86a4a8ec6bb232e1abd1adc3ac173ea61a5871c2",
+      "current_sha256": "71da85185514cdb6ca82f8332eb78efb01c248583261905c5a52a3c24d2f74f5",
+      "note": "整理期间用户更新了非试标行 AA-train-103 的 AI 末句；已保留。261 行及24条试标来源内容均未改变，历史 AA 发布指纹不代表这次用户编辑后的 CSV。"
+    }
+  ],
+  "definition_source": "benchmark/pilot_reference_protocol.md",
+  "purpose": "AI 先填、人工逐项确认的协议开发试标；不是模型评测结果或人审 GT。",
+  "method": "重新查看既有采样拼图及部分原帧拼图，结合原 CSV 和 AA/GSR 参考账本整理；不是 24 个视频的完整连续播放，也不是双人独立标注。",
+  "time_origin": "original_video_start",
+  "time_precision": "检查区间用于定位证据，不宣称精确动作边界。AA 图像时间以 review_frames.json 的实际 PTS 为准；GSR 按原记录的采样步长和图像起点解释。",
+  "item_columns": ["id", "dimension", "kind", "scope", "span_s", "claim", "verdict", "observation", "evidence_images"],
+  "review_options": ["同意", "修改", "看不清"],
+  "human_reviewer": null,
+  "human_reviewed_at": null,
+  "review_instructions": "同意表示认可该行 AI 判断（包括矛盾或未知），不表示命题必然为真；修改时填写最终判断及说明。整条标签是否保留、修窗或待定须另行裁决。",
+  "limitations": [
+    "样例按原始标签每类两条选取，包含待裁决和证据不足记录，不是每类两个确认正例。",
+    "套边两条均为外侧子型，内切套上子型、各类完整困难负例和来源独立测试覆盖仍未补齐。",
+    "所有 supported/contradicted/unknown 都是机器候选；未确认的定义分歧不能计为模型错误。",
+    "diagnostic_probe 是供审核的过度推断探针，并非被测模型实际输出，也不表示当前润色犯了该错误。",
+    "rule_probe 检查候选定义中的充分条件，不是视频事实；context 检查窗口范围。两者均不进入事实幻觉统计。多项审核可能复述同一底层事实，正式计分前须去重。",
+    "已有原文与 AI 润色参与了选择和解释，本轮非盲标；不据此计算独立一致率。",
+    "target_window 与 context_only 分开，窗外证据不自动计入窗内；未知和未发生严格区分。",
+    "未改写源 CSV、历史参考账本、词条库或冻结评分规范。"
+  ],
+  "records": [
+    {
+      "clip": "GSR-003", "tactic": "long-ball", "interval": "00:06-00:12",
+      "reference_team": "蓝队", "selection_role": "典型：后场高球和前方争点", "stage": "pattern_observed",
+      "decision": "候选保留；第二落点为扩展观察，不设为所有长传的必要条件。",
+      "summary": "蓝队门将在本方禁区内直接起高球，越过中线联系白队半场中圈前方的接应区域。双方球员迎球起跳，蓝队附近队友继续向后续落球靠近。空间主线是后场直接连接前方争点，不是逐点短传；争点和跟进不等于每次都赢得球权。",
+      "review_question": "是否同意把首次迎球与后续跟进分开，而不要求长传必须争得第二点？",
+      "items": [
+        ["LB1", "Evidence", "core", "target_window", [6,7], "蓝队门将从本方后场直接起高球。", "supported", "门将在本方禁区内助跑出球，球离地向前。", ["native-6.00-7.00.jpg"]],
+        ["LB2", "Where", "core", "target_window", [6,10], "出球以长距离线路越过中场，联系前方目标区域。", "supported", "起球与中线另一侧的落球区域由同一高球连接。", ["native-6.00-7.00.jpg", "06-12-02.jpg", "06-12-03.jpg"]],
+        ["LB3", "Evidence", "core", "target_window", [8,12], "前方迎球争抢与门将出球连续相连。", "supported", "蓝白双方靠向来球并争顶，附近队友继续参与后续球。", ["06-12-02.jpg", "06-12-03.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [6,7], "起球点位于蓝队本方禁区内。", "supported", "以禁区线和门将脚下位置定位。", ["native-6.00-7.00.jpg"]],
+        ["W2", "Where", "anchor", "target_window", [8,12], "主要迎球区域位于对方半场、中圈前方附近。", "supported", "以中线、中圈和迎球者地面站位判断，不投影空中球。", ["06-12-02.jpg", "06-12-03.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [8,12], "蓝队无对抗地稳定控制第一、第二落点。", "contradicted", "首次迎球存在对手争抢，不能把连续参与等同于无对抗控制。", ["06-12-02.jpg", "06-12-03.jpg"]]
+      ]
+    },
+    {
+      "clip": "GSR-094", "tactic": "long-ball", "interval": "00:16-00:26",
+      "reference_team": "白绿条纹队", "selection_role": "边界：原标签与关键出球形态不符", "stage": "unresolved",
+      "decision": "优先人工裁决标签；不把禁区前地面配合改写成长传冲吊。",
+      "summary": "白绿条纹队从右侧向禁区前内侧带动，再沿地面联系中路队友。此次关键出球发生在前场禁区周边，球路连接的是附近中路接应，不是从后场或中场起高球越过中间组织。接应后起脚的结果不用于反向证明 long-ball 标签。",
+      "review_question": "是否将此条移出 long-ball 正例集合，另行裁决标签而保留可见配合？",
+      "items": [
+        ["LB1", "Evidence", "core", "target_window", [21,23], "关键出球为后方直接起高球。", "contradicted", "关键出球是禁区前的地面传递。", ["native-21.60-22.60.jpg", "16-26-04.jpg"]],
+        ["LB2", "Where", "core", "target_window", [21,24], "关键出球跨越中场组织区连接前场目标。", "contradicted", "传球双方已处于禁区前的同一前场组织区域。", ["native-21.60-22.60.jpg", "16-26-04.jpg"]],
+        ["LB3", "Evidence", "core", "target_window", [21,24], "本次长距离高球引出前方迎球或争点。", "contradicted", "可见接应对应地面分球，而非该条声称的后方高球。", ["native-21.60-22.60.jpg", "16-26-04.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [21,23], "出球者在对方禁区外侧向内带动。", "supported", "持球者与禁区侧方标线的相对位置可见。", ["native-21.60-22.60.jpg"]],
+        ["W2", "Where", "relation", "target_window", [21,24], "出球联系禁区前较靠中路的队友。", "supported", "球沿地面从侧方进入中路接应方向。", ["native-21.60-22.60.jpg", "16-26-04.jpg"]],
+        ["H1", "Definition", "rule_probe", "target_window", [16,26], "因为后续形成射门，所以这次出球属于长传冲吊。", "contradicted", "射门结果不能替代出球形态和起终点关系。", ["16-26-04.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-train-1641", "tactic": "line-breaking-pass", "interval": "00:14-00:17",
+      "reference_team": "红队", "selection_role": "典型：传球穿线连接前插", "stage": "completion_observed",
+      "decision": "候选保留；越线接应与越位合法性分开。",
+      "summary": "红队在白蓝队禁区前向左侧禁区送出低平斜传，球穿过近处防守者之间的间隙，连接持续前插的同队球员。接应者继续向球门方向处理，原防守者转身追赶。可核对的重点是出球时的防守单元与接应者位置变化，非单纯向前传球。",
+      "review_question": "是否能把画面中被穿越的单元确认为后卫线；接应与合法越位位置是否需要分开？",
+      "items": [
+        ["LP1", "Evidence", "core", "target_window", [14,16], "红队实际送出向前传球，而非仅带球过人。", "supported", "球由禁区前持球者脚下沿地面离开。", ["window-14-17-01.jpg"]],
+        ["LP2", "Where", "core", "target_window", [14,17], "球穿越禁区前可辨认的防守单元。", "supported", "球从防守者之间送至更接近球门的位置，守者转身。", ["window-14-17-01.jpg"]],
+        ["LP3", "Evidence", "core", "target_window", [14,17], "穿线传球与同队前插接应相连。", "supported", "左侧跑者持续进入禁区迎向来球。", ["window-14-17-01.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [14,16], "起脚处在对方禁区前，目标方向在禁区左侧。", "supported", "用禁区线及红队进攻朝向定位两端。", ["window-14-17-01.jpg"]],
+        ["W2", "Where", "relation", "target_window", [14,17], "接应者追到球时已位于被穿越守者的身后。", "supported", "接应者向球门推进，原守者回转追赶。", ["window-14-17-01.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [14,17], "传球瞬间接应者确定没有越位。", "unknown", "本轮未标定触球时刻、球和倒数第二名防守者的越位关系。", ["window-14-17-01.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-train-1914", "tactic": "line-breaking-pass", "interval": "00:13-00:20",
+      "reference_team": "黑衣队", "selection_role": "边界：带球突破后分边", "stage": "unresolved",
+      "decision": "暂不作为确定破线正例；请人工确认分球穿越了哪条防守单元。",
+      "summary": "黑衣队先从中线附近带球进入红白队半场，红白队球员随持球者收拢；随后持球者联系右侧宽位队友。画面明确支持带球推进和向侧方出球，但不能用此前带球越过的防守位置替代传球本身的破线证据。",
+      "review_question": "最终分边是否真的穿越一条可辨认防线，还是推进主要由带球完成？",
+      "items": [
+        ["LP1", "Evidence", "core", "target_window", [18,20], "带球后存在实际传球动作。", "supported", "持球者调整后把球交向右侧接应者。", ["native-18.00-19.00-01.jpg", "window-13-20-02.jpg"]],
+        ["LP2", "Where", "core", "target_window", [18,20], "该次分球穿越了一条完整可辨认防守单元。", "unknown", "可见中路守者靠拢及分边，但本轮未能把出球前后绑定到同一完整防守单元。", ["native-18.00-19.00-01.jpg", "window-13-20-02.jpg"]],
+        ["LP3", "Evidence", "core", "target_window", [18,20], "队友的接应属于该次传球越线后的接应。", "unknown", "右侧接应可见，但其是否位于被穿越单元之后依赖 LP2 的裁决。", ["window-13-20-02.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [16,20], "关键分球发生在黑衣队的进攻半场。", "supported", "持球者已从中线附近推进至对方半场。", ["window-13-20-02.jpg"]],
+        ["W2", "Where", "relation", "target_window", [18,20], "接应点相对于持球者更靠右侧宽位。", "supported", "黑衣队右侧队友提供侧向接应。", ["native-18.00-19.00-01.jpg", "window-13-20-02.jpg"]],
+        ["H1", "Definition", "rule_probe", "target_window", [16,20], "只要持球者此前带球突破，这脚分边就确定是破线传球。", "contradicted", "带球与传球是不同动作，前者不能补足 LP2。", ["window-13-20-02.jpg"]]
+      ]
+    },
+    {
+      "clip": "GSR-043", "tactic": "run-in-behind", "interval": "00:19-00:23",
+      "reference_team": "绿白队", "selection_role": "典型候选：传跑进入纵深", "stage": "pattern_observed",
+      "decision": "保留传跑结构候选；精确平齐、不越位和成功控球不自动确认。",
+      "summary": "绿白队在黄队半场靠近中圈处向前挑球，前方队友从防守者附近向纵深启动并追向同一来球。黄队球员转身回追，球与跑者进入原防守站位之后。关系核验以出球附近的防线站位为参照，不根据终点倒推合法启动。",
+      "review_question": "是否同意最后防线身后这一层级；是否仍应把精确平齐和不越位保留未知？",
+      "items": [
+        ["RB1", "Evidence", "core", "target_window", [19,21], "前方跑者从防守者附近向纵深启动。", "supported", "跑者与附近守者在出球前后改变前后位置。", ["native-19.40-20.40.jpg"]],
+        ["RB2", "Where", "core", "target_window", [19,23], "跑者进入当时可辨认的最后防线身后。", "supported", "可见靠后防守单元回转追球，跑者沿其间方向向禁区前进；该层级仍需人工复核。", ["native-19.40-20.40.jpg", "19-23-02.jpg"]],
+        ["RB3", "Evidence", "core", "target_window", [19,23], "跑动方向与向前挑传对应。", "supported", "跑者追向队友出球的纵深区域。", ["native-19.40-20.40.jpg", "19-23-02.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [19,21], "跑者启动处已在绿白队的进攻半场。", "supported", "跑者位于出球者前方，同在黄队半场。", ["native-19.40-20.40.jpg"]],
+        ["W2", "Where", "relation", "target_window", [19,23], "球和跑者共同向防守者原站位之后发展。", "supported", "守者回转，跑者和来球方向一致。", ["19-23-02.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [19,21], "跑者起跑时与最后防线精确平齐且合法。", "unknown", "未作越位线标定，广角画面不提供该精度。", ["native-19.40-20.40.jpg"]]
+      ]
+    },
+    {
+      "clip": "GSR-070", "tactic": "run-in-behind", "interval": "00:24-00:27",
+      "reference_team": "白蓝队", "selection_role": "边界：传跑可见但原文记录越位", "stage": "unresolved",
+      "decision": "保留动作事实；原文越位结论保留来源，最后一线关系和合法性待人工。",
+      "summary": "白蓝队从中线附近向前送球，前方队友沿绿队防守者附近的路线向纵深加速，守者转身回撤。传球与跑动的方向关系可以单独审核；原人工依据记有越位，不等于本轮已经独立核实越位。传球者和跑者的起点也不能合并。",
+      "review_question": "是否能确认最后一线；原文越位判断依据在哪里，是否仅保留为来源结论？",
+      "items": [
+        ["RB1", "Evidence", "core", "target_window", [24,27], "前方队友在出球附近向纵深加速。", "supported", "白蓝跑者沿守者附近线路继续前插。", ["native-24.80-25.80.jpg", "24-27-02.jpg"]],
+        ["RB2", "Where", "core", "target_window", [24,27], "跑者从最后防线附近进入其身后。", "unknown", "局部守者与纵深跑动可见，但本轮不足以稳定核定出球瞬间整条最后一线及跑者前后关系。", ["native-24.80-25.80.jpg", "24-27-02.jpg"]],
+        ["RB3", "Evidence", "core", "target_window", [24,27], "前插方向与队友向前斜传对应。", "supported", "球和跑者共同向对方半场纵深发展。", ["native-24.80-25.80.jpg", "24-27-02.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [24,26], "传球者在本方半场靠近中线处出球。", "supported", "以中线与传球者地面站位定位。", ["native-24.80-25.80.jpg"]],
+        ["W2", "Where", "anchor", "target_window", [24,26], "跑者在对方半场启动，与传球者不共用起点。", "supported", "前方接应者位于中线另一侧。", ["native-24.80-25.80.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [24,27], "本轮画面已独立证明这次跑动合法不越位。", "unknown", "未独立标定；原人工依据反而注明越位，二者须由人工核对。", ["native-24.80-25.80.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-train-462", "tactic": "one-two", "interval": "00:04-00:08",
+      "reference_team": "绿队", "selection_role": "典型：同一出球者前插再接应", "stage": "completion_observed",
+      "decision": "候选保留；号码不作为必填，原出球者的同一身份才是判据。",
+      "summary": "绿队在本方半场靠近中线的右侧把球交给内侧队友，原出球者立即绕过上抢者向前移动。内侧队友将球回送到该球员前进线路，原出球者继续接应。这里需要绑定两次触球之间的同一跑者，不能只统计两脚短传。",
+      "review_question": "是否确认接回球的是原出球者，而非第三人？",
+      "items": [
+        ["OT1", "Evidence", "core", "target_window", [4,6], "A 把球传给附近的 B。", "supported", "右侧持球者向内侧队友短传。", ["window-04-08-01.jpg"]],
+        ["OT2", "Evidence", "core", "target_window", [4,7], "A 出球后继续绕过局部防守前移。", "supported", "原出球者没有停留，沿上抢者侧后继续前进。", ["window-04-08-01.jpg", "window-04-08-02.jpg"]],
+        ["OT3", "Evidence", "core", "target_window", [5,8], "B 实际向同一 A 的前进路线回送。", "supported", "回送与原出球者的再接应相连。", ["window-04-08-01.jpg", "window-04-08-02.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [4,6], "第一次出球发生在本方半场靠近中线的右侧。", "supported", "中线与绿队进攻朝向提供参照。", ["window-04-08-01.jpg"]],
+        ["W2", "Where", "relation", "target_window", [4,8], "回送目标是 A 移动后的位置，而非其原地站位。", "supported", "A 的接应位置较首次出球位置前移。", ["window-04-08-01.jpg", "window-04-08-02.jpg"]],
+        ["H1", "Definition", "rule_probe", "target_window", [4,8], "只要 A-B-A 互传，就已经证明绕过防守完成撞墙配合。", "contradicted", "本例支持来自额外的传后前移和绕行；静止互传本身不包含该关系。", ["window-04-08-01.jpg", "window-04-08-02.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-train-3468", "tactic": "one-two", "interval": "00:03-00:10",
+      "reference_team": "白队", "selection_role": "边界：有传跑前缀但未回送", "stage": "prefix_only",
+      "decision": "标作配合前缀；完整 one-two 正例资格由人工按统一定义裁决。",
+      "summary": "白队球员在中圈右侧传给前方同侧队友后立即前移。接球队友在黄绿队压迫下将球处理向边线，原出球者继续跑动但未接到与其线路对应的回送。前插不应被改写为已经完成回传再接应。",
+      "review_question": "是否同意只确认传后前插，而不把缺少回送的前缀纳入完整撞墙配合？",
+      "items": [
+        ["OT1", "Evidence", "core", "target_window", [3,6], "A 向同侧前方 B 出球。", "supported", "白队持球者把球交给前方右侧队友。", ["window-03-10-01.jpg"]],
+        ["OT2", "Evidence", "core", "target_window", [4,7], "A 出球后继续向局部防守之后前移。", "supported", "出球者随即向前跑动，进入可回送方向。", ["window-03-10-01.jpg", "native-05.00-07.00-01.jpg"]],
+        ["OT3", "Evidence", "core", "target_window", [5,10], "B 完成了向 A 跑动线路的回送。", "contradicted", "B 受压处理向边线，随后过程没有形成向 A 的对应回送。", ["native-05.00-07.00-01.jpg", "window-03-10-02.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [3,7], "配合起始发生在中圈附近右侧。", "supported", "中圈和边路方向清楚，起点不强分单一半场。", ["window-03-10-01.jpg"]],
+        ["W2", "Where", "relation", "target_window", [5,10], "后续球路与 A 的前插路线形成明确回送对应。", "contradicted", "向边线处理和前插者线路没有形成原文期待的配合。", ["window-03-10-02.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [5,10], "A 已经接回球并摆脱防守。", "contradicted", "本段未完成所声称的回接，实际在边路受阻。", ["window-03-10-02.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-train-740", "tactic": "overlap-underlap", "interval": "00:10-00:12",
+      "reference_team": "白队", "selection_role": "外侧套边子型", "stage": "pattern_observed",
+      "decision": "候选保留为 overlap；不计作 underlap 覆盖。",
+      "summary": "白队持球者在进攻左侧边路护球，支援队友从其身后沿更靠边线的一侧加速超越。持球者向前处理来球，跑者继续追向同侧线路。可见的核心是相对于持球者的由后到前、由外侧经过；不需要把两人的固定场上职位或号码作为必答项。",
+      "review_question": "跑者是否确实从持球者身后经过更靠边线的一侧？",
+      "items": [
+        ["OU1", "Evidence", "core", "target_window", [10,11.5], "支援者起初位于持球者后方。", "supported", "白队跑者从护球者身后方向进入画面并追近。", ["window-10-12-01.jpg", "native-10.50-12.00-01.jpg"]],
+        ["OU2", "Where", "core", "target_window", [10.5,12], "跑者经持球者外侧向前超越。", "supported", "跑者经过更靠近边线的一侧，随后出现在持球者前方。", ["native-10.50-12.00-01.jpg"]],
+        ["OU3", "Evidence", "core", "target_window", [10,12], "外侧前插与同侧持球发展构成接应关系。", "supported", "跑者持续向持球者前方的边路线移动，球也向该方向处理。", ["window-10-12-01.jpg", "native-10.50-12.00-01.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [10,12], "行动位于白队进攻左侧边路。", "supported", "边线与该段球队朝向对应，不能按画面左右直接命名。", ["window-10-12-01.jpg"]],
+        ["W2", "Where", "relation", "target_window", [10.5,12], "跑者比持球者更靠边线。", "supported", "外侧路线由两人及边线相对位置确定。", ["native-10.50-12.00-01.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [10,12], "该跑动属于从内侧穿过的 underlap。", "contradicted", "可见路线在持球者外侧，不能用同一行补充内侧子型覆盖。", ["native-10.50-12.00-01.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-test-280", "tactic": "overlap-underlap", "interval": "00:23-00:29",
+      "reference_team": "红队", "selection_role": "另一来源的外侧套边", "stage": "completion_observed",
+      "decision": "候选保留为 overlap；两个样例均为外侧，内侧子型仍缺。",
+      "summary": "红队在白蓝队半场右侧边路组织，支援者从持球者后方沿更靠边线的通道向前超越，随后球队把球送向这一移动接应点。右侧继续发展并向禁区送球。后续传中是另一个动作，套边判断首先依赖跑者与原持球者的相对路线。",
+      "review_question": "是否确认后方超越者与接应同侧出球的是同一人？",
+      "items": [
+        ["OU1", "Evidence", "core", "target_window", [23,26], "支援队友从持球人后方向前接近。", "supported", "右侧红队队友沿边路线加速。", ["window-23-29-01.jpg"]],
+        ["OU2", "Where", "core", "target_window", [25.5,27.5], "跑者由外侧完成从后到前的超越。", "supported", "连续帧中跑者在更靠边线一侧超过原持球位置。", ["native-25.50-27.50-01.jpg", "native-25.50-27.50-02.jpg"]],
+        ["OU3", "Evidence", "core", "target_window", [25.5,29], "支援跑动与红队同侧出球衔接。", "supported", "球向外侧前方发展，红队继续沿该侧接应。", ["native-25.50-27.50-02.jpg", "window-23-29-02.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [23,29], "配合位于红队进攻右侧、对方半场。", "supported", "根据球门、禁区与边线确定红队朝向。", ["window-23-29-01.jpg", "window-23-29-02.jpg"]],
+        ["W2", "Where", "relation", "target_window", [25.5,27.5], "超越线路在持球者外侧而非向中路穿过。", "supported", "边线一侧的前插与内侧防守者位置可区分。", ["native-25.50-27.50-01.jpg", "native-25.50-27.50-02.jpg"]],
+        ["H1", "Definition", "rule_probe", "target_window", [23,29], "只凭后续传中就能认定前面发生套边。", "contradicted", "传中本身不包含后方跑者的外侧超越；本例须依赖前段路线证据。", ["window-23-29-01.jpg", "window-23-29-02.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-train-1082", "tactic": "switch-of-play", "interval": "00:04-00:08",
+      "reference_team": "黄绿队", "selection_role": "典型：本方半场内跨侧转移", "stage": "completion_observed",
+      "decision": "候选保留；两端都在本方半场不妨碍跨侧关系成立。",
+      "summary": "黄绿队从本方半场左侧起高球，经中间区域联系右侧队友，远侧接应者控制并继续处理。纵向半场可以不变，横向球侧却发生了变化。这是检验半场准确率之外的空间能力的样例。",
+      "review_question": "是否同意两端半场不变但左右换侧，应有独立空间关系分？",
+      "items": [
+        ["SW1", "Where", "core", "target_window", [4,5], "转移前球位于黄绿队进攻左侧。", "supported", "左侧持球者面对靠近的白队球员出球。", ["window-04-08-01.jpg"]],
+        ["SW2", "Evidence", "core", "target_window", [4,8], "一次高球越过中间区域联系另一侧。", "supported", "飞行过程将两个宽位接应区域相连。", ["window-04-08-01.jpg", "window-04-08-02.jpg"]],
+        ["SW3", "Where", "core", "target_window", [6,8], "目标是原球侧对面的右侧接应者。", "supported", "右侧黄绿队队友接续来球。", ["window-04-08-02.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [4,8], "起点和接应点主要都在黄绿队本方半场。", "supported", "中线提供纵向定位，两端并非本方到对方的跨半场。", ["window-04-08-01.jpg", "window-04-08-02.jpg"]],
+        ["W2", "Where", "relation", "target_window", [4,8], "进攻由左侧转到右侧。", "supported", "球队相对左右发生变化，不以镜头平移当作球侧变化。", ["window-04-08-01.jpg", "window-04-08-02.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [4,8], "这次传球已经把球送入对方禁区。", "contradicted", "接应仍在本方半场附近的宽位区域。", ["window-04-08-02.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-test-339", "tactic": "switch-of-play", "interval": "00:08-00:11",
+      "reference_team": "红队", "selection_role": "边界：中路到边路的斜长传", "stage": "unresolved",
+      "decision": "原标签待裁决；不把中路分边自动计为完整跨侧转移。",
+      "summary": "红队从中圈附近偏中路起高球，联系左侧纵深的队友。斜向和长距离是可见特征，但现有起点并不明确位于右侧宽位。应先确认“原球侧到对面球侧”的条件，再决定是否计为 switch-of-play。",
+      "review_question": "你们是否将中路分边纳入大范围转移，还是必须一侧到另一侧？",
+      "items": [
+        ["SW1", "Where", "core", "target_window", [8,9], "此次出球从右侧宽位开始。", "contradicted", "画面起脚区域更接近中圈附近的中路。", ["window-08-11-01.jpg"]],
+        ["SW2", "Evidence", "core", "target_window", [8,11], "传球完成从一侧宽位跨过中路到另一侧的完整链条。", "unknown", "能确认中路斜传至边路，不能确认本窗口内存在前一个宽位起点。", ["window-08-11-01.jpg"]],
+        ["SW3", "Where", "core", "target_window", [8,11], "接应者位于原球侧的对面宽位。", "unknown", "左侧接应方向可见，但相对于缺失的原侧起点不能确认跨侧。", ["window-08-11-01.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [8,9], "起脚区域是中圈附近偏中路。", "supported", "用中圈和球员地面站位定位。", ["window-08-11-01.jpg"]],
+        ["W2", "Where", "relation", "target_window", [8,11], "球由中路斜向联系进攻左侧的前方队友。", "supported", "球路及队友追球方向指向较宽的左侧区域。", ["window-08-11-01.jpg"]],
+        ["H1", "Definition", "rule_probe", "target_window", [8,11], "出现斜长传就足以证明左右跨侧转移。", "contradicted", "球路长度和斜向本身不能补出右侧起点。", ["window-08-11-01.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-test-508", "tactic": "cutback", "interval": "00:03-00:06",
+      "reference_team": "红队", "selection_role": "典型候选：左侧深位向内侧后方回送", "stage": "pattern_observed",
+      "decision": "候选保留；初始回送方向与封堵后的球路分开，传达结果不强填。",
+      "summary": "红队跑者在禁区左侧接到纵深来球，继续靠近底线后把球送向禁区内侧、相对出球点更靠后的区域，白蓝队防守者下地封堵。判别依据是以底线和出球点为参照的向内、向后初始线路，而不是后续球被碰后的方向。是否准确到达包抄队友不作为倒三角出现的必要条件。",
+      "review_question": "请重点核对3-5秒：初始出球是否向内且向后，并与防守触球后的方向变化分开？",
+      "items": [
+        ["CB1", "Where", "core", "target_window", [3,5], "出球者到达禁区左侧较深、接近底线的位置。", "supported", "红队跑者接到纵深球后继续靠近底线再出球。", ["window-03-06-01.jpg", "native-03.00-05.80-02.jpg"]],
+        ["CB2", "Where", "core", "target_window", [3,5], "初始球路同时向内且相对出球点向后。", "supported", "球从底线侧方回到内侧较靠后的区域；需以地面标线核对，不能把封堵后球路混入。", ["window-03-06-01.jpg", "native-03.00-05.80-02.jpg"]],
+        ["CB3", "Evidence", "core", "target_window", [3,6], "回送指向禁区内侧的接应方向。", "supported", "内侧红队队友处在接应方向上，白蓝队守者同时收缩。", ["window-03-06-01.jpg", "native-03.00-05.80-02.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [3,5], "起球处位于对方半场禁区左侧、底线附近。", "supported", "球队进攻朝向与禁区、底线共同定位。", ["window-03-06-01.jpg"]],
+        ["W2", "Where", "relation", "target_window", [4,6], "回送线路受到回追者下地封堵。", "supported", "连续帧显示防守者向出球线路倒地伸腿。", ["native-03.00-05.80-02.jpg", "native-03.00-05.80-03.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [3,6], "球已无干扰地准确送到包抄队友脚下。", "contradicted", "下地封堵可见，不能将回送尝试写成无干扰的准确传达。", ["native-03.00-05.80-02.jpg", "native-03.00-05.80-03.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-train-1318", "tactic": "cutback", "interval": "00:11-00:14",
+      "reference_team": "绿队", "selection_role": "边界：下底高球传中不等于倒三角", "stage": "unresolved",
+      "decision": "请人工裁决回送方向；不只因高球否决，也不只因下底保留。",
+      "summary": "回放中绿队从右路靠近底线处起高球，寻找门前争顶者。边路深位出球可确认，但观察到的主要线路是朝门前输送，尚缺足够清楚的向后回做关系。高球或头球本身不是否决条件，真正需要审核的是球路相对出球点的前后方向。",
+      "review_question": "此球是否有清晰向后的回送分量，还是普通下底高球传中？",
+      "items": [
+        ["CB1", "Where", "core", "target_window", [11,12], "出球者处于禁区右侧靠近底线的深位。", "supported", "右侧推进到较深位置后起脚。", ["window-11-14-01.jpg", "native-11.00-12.00-01.jpg"]],
+        ["CB2", "Where", "core", "target_window", [11,14], "球路相对起球点清楚向内且向后。", "unknown", "可确认向门前输送，尚不足以稳定分辨向后分量，不能从标签补出。", ["native-11.00-12.00-01.jpg", "window-11-14-01.jpg"]],
+        ["CB3", "Evidence", "core", "target_window", [11,14], "出球与门前同队迎球方向相连。", "supported", "高球指向小禁区附近的争顶区域。", ["window-11-14-01.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [11,14], "传球由进攻右侧深位送向门前中部。", "supported", "出球和门前迎球区域处于不同横向位置。", ["window-11-14-01.jpg"]],
+        ["W2", "Where", "relation", "target_window", [11,14], "接应区域确定比起球点更远离对方球门线。", "unknown", "这正是倒三角与普通传中需要裁决的关系，不以头球动作替代。", ["window-11-14-01.jpg"]],
+        ["H1", "Definition", "rule_probe", "target_window", [11,14], "只要下底后传入禁区，就确定是倒三角。", "contradicted", "还需向后回送关系，深位起球和进入禁区并不充分。", ["window-11-14-01.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-train-2746", "tactic": "high-press", "interval": "00:20-00:30",
+      "reference_team": "绿队", "selection_role": "典型：追压后卫并延续到门将", "stage": "pattern_observed",
+      "decision": "候选保留；长开是后续观察，不等于已证明因果或夺球。",
+      "summary": "橙队在本方后场传递，绿队施压者跟随回传继续前追，一人进入禁区靠近门将，附近队友也向接应区域移动。门将接回传后长距离出球。空间重点是压迫深入对手禁区前及禁区内，而不是只记“位于对方半场”；结果只确认出球，不补远端球权归属。",
+      "review_question": "是否同意把接续施压、门将长开和最终夺球分开审核？",
+      "items": [
+        ["HP1", "Where", "core", "target_window", [23,30], "压迫发生在对手后场出球区域。", "supported", "橙队后卫回交门将，绿队靠近对手禁区。", ["window-20-30-02.jpg", "window-20-30-03.jpg"]],
+        ["HP2", "Evidence", "core", "target_window", [23,30], "施压不止一次孤立追球，附近队友参与接应区域干预。", "supported", "绿队前方与禁区外队友共同前压。", ["window-20-30-02.jpg", "window-20-30-03.jpg"]],
+        ["HP3", "Evidence", "core", "target_window", [23,30], "压力从后卫回传继续延伸到门将持球点。", "supported", "追压者随回传向禁区内前进，门将随后出球。", ["window-20-30-02.jpg", "window-20-30-03.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [23,30], "施压区域属于绿队的对方半场。", "supported", "参照固定为施压绿队，不能误记为橙队本方后场值。", ["window-20-30-02.jpg"]],
+        ["W2", "Where", "relation", "target_window", [23,30], "球回到门将后，最近追压者也向门将靠近。", "supported", "球与施压目标的变化相互对应。", ["window-20-30-02.jpg", "window-20-30-03.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [28,30], "绿队已稳定赢得门将长开的落点。", "unknown", "所看窗末主要呈现高球运行，未完整核实落点后的控制。", ["window-20-30-03.jpg"]]
+      ]
+    },
+    {
+      "clip": "GSR-197", "tactic": "high-press", "interval": "00:00-00:10",
+      "reference_team": "白队", "selection_role": "边界：中线协同争抢", "stage": "unresolved",
+      "decision": "协同施压可以保留；是否达到 high-press 区域要求待定义裁决。",
+      "summary": "白队多人在中线附近持续贴近红队持球者，随其护球和处理球改变位置。局部协同争抢清楚，但发生在对手半场不等于深入对手后场。需分别确认半场、实际压迫高度和协同关系，不能由标签倒推出禁区前高压。",
+      "review_question": "你们的 high-press 是否包括这一中线附近的施压，边界应怎样固定？",
+      "items": [
+        ["HP1", "Where", "core", "target_window", [4,9], "施压发生在已明确的对手后场出球深区。", "unknown", "可定位中线周边；该区域是否计入高位需统一定义，不能自动算深区。", ["00-10-03.jpg"]],
+        ["HP2", "Evidence", "core", "target_window", [4,9], "存在多人针对同一持球点的接续施压。", "supported", "白队从不同方向持续贴防。", ["00-10-03.jpg"]],
+        ["HP3", "Evidence", "core", "target_window", [4,9], "施压随红队护球、转身和处理来球延续。", "supported", "不是单次跑向球后便停止的动作。", ["00-10-03.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [4,9], "实际施压主要在中线附近。", "supported", "中线与近侧争球者同时可见。", ["00-10-03.jpg"]],
+        ["W2", "Where", "relation", "target_window", [4,9], "白队多人从持球者不同侧持续靠近。", "supported", "局部前后和侧方压力可见。", ["00-10-03.jpg"]],
+        ["H1", "Definition", "rule_probe", "target_window", [4,9], "因为白队在对方半场，所以可确定已经压到对方禁区前。", "contradicted", "对方半场与禁区前不是同一粒度，图中实际为中线附近。", ["00-10-03.jpg"]]
+      ]
+    },
+    {
+      "clip": "GSR-118", "tactic": "counter-attack", "interval": "00:04-00:16",
+      "reference_team": "白衣绿裤队", "selection_role": "典型：断球后多人持续推进", "stage": "pattern_observed",
+      "decision": "候选保留；射门另记，不作为反击必需条件。",
+      "summary": "白衣绿裤队在本方半场靠近中线处截到球，右侧接应者立即向前带动，多名队友分路前插，红队转身回追。推进由右侧向中路衔接，并到达对方禁区前。起点的控球转换、持续向前与队友跟进共同构成反击依据，不用最终效果补足起点。",
+      "review_question": "是否能确认防守后接管球和立即推进，而不是仅见高速进攻后半段？",
+      "items": [
+        ["CA1", "Evidence", "core", "target_window", [4,6], "白衣绿裤队接管红队来球后进入本队控球。", "supported", "截球与后续接应在局部原帧中相连。", ["native-4.20-5.20.jpg", "04-16-02.jpg"]],
+        ["CA2", "Evidence", "core", "target_window", [4,16], "得球后通过连续传带立即向前发展。", "supported", "从中线附近推进到禁区前，没有看到停下重组的完整阶段。", ["04-16-02.jpg", "04-16-05.jpg"]],
+        ["CA3", "Evidence", "core", "target_window", [5,16], "队友前插与对手回撤同时发生。", "supported", "进攻者分路跟进，红队向球门方向回追。", ["04-16-02.jpg", "04-16-05.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [4,6], "得球区域在本方半场靠近中线处。", "supported", "中线与夺球后持球者可作地面参照。", ["native-4.20-5.20.jpg"]],
+        ["W2", "Where", "relation", "target_window", [5,16], "推进从右侧向前发展并与中路跟进者衔接。", "supported", "边侧带动后球转到禁区前中路。", ["04-16-02.jpg", "04-16-05.jpg"]],
+        ["H1", "Definition", "rule_probe", "target_window", [4,16], "必须形成射门才能确认前面的反击结构。", "contradicted", "夺球、立即推进和回撤中的接应已是独立结构，射门属于可选后续。", ["04-16-02.jpg", "04-16-05.jpg"]]
+      ]
+    },
+    {
+      "clip": "GSR-122", "tactic": "counter-attack", "interval": "00:10-00:22",
+      "reference_team": "红队", "selection_role": "边界：解围后展开但对手接管", "stage": "prefix_only",
+      "decision": "保留向前展开事实，不作为已确认持续反击正例；起点和球权待裁决。",
+      "summary": "红队处理本方禁区前来球后有向前展开的跑动，但中线附近的后续球由白衣绿裤队接管并继续处理。不能把解围飞行和队友向前跑动合并成红队已经连续控球推进。窗口内的控球主体需要跟随实际触球而非原标签固定。",
+      "review_question": "红队是否在解围后真正接管过球权，还是只有出球与前冲前缀？",
+      "items": [
+        ["CA1", "Evidence", "core", "target_window", [10,14], "红队在本窗防守后已清楚接管后续球权。", "unknown", "防守结束的关键起点紧邻窗口边界，后续首先可确认的控制属于对手。", ["10-22-01.jpg", "10-22-02.jpg"]],
+        ["CA2", "Evidence", "core", "target_window", [10,16], "红队完成了连续受控的向前传带。", "contradicted", "后续球由白衣绿裤队接管，未形成所声称的红队持续推进。", ["10-22-01.jpg", "10-22-02.jpg"]],
+        ["CA3", "Evidence", "core", "target_window", [10,16], "红队持球推进与多人接应持续发生在对手回撤阶段。", "unknown", "前冲跑动可见，但缺少红队持续持球过程来确认整条关系。", ["10-22-01.jpg", "10-22-02.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [10,14], "红队本次反击有可定位的受控推进起点。", "unknown", "不能用窗外解围点替代窗内受控推进起点。", ["10-22-01.jpg"]],
+        ["W2", "Where", "relation", "target_window", [10,16], "后续球向中线发展，但接球主体换为白衣绿裤队。", "supported", "中线附近对手迎球并继续组织。", ["10-22-01.jpg", "10-22-02.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [10,16], "红队已经稳定带球越过中场完成反击推进。", "contradicted", "该阶段可见的后续控制属于另一队。", ["10-22-02.jpg"]]
+      ]
+    },
+    {
+      "clip": "GSR-140", "tactic": "short-corner", "interval": "00:01-00:13",
+      "reference_team": "白队", "selection_role": "典型：短传启动后回做传中", "stage": "completion_observed",
+      "decision": "候选保留；第一脚与后续传中分别记录。",
+      "summary": "白队左侧角球先沿地面联系角旗附近队友，接应者回做，球队随后再起球传入禁区。短角球的核心发生在第一脚的近处接应，后续传中是另一个阶段；不能把传中落点当作第一脚的空间目标。",
+      "review_question": "是否同意第一脚目标只标近处接应者，而非后续禁区落点？",
+      "items": [
+        ["SC1", "Evidence", "core", "target_window", [5,10], "本窗可见角球启动。", "supported", "角旗附近的静止开球与第一脚出球相连。", ["01-13-03.jpg"]],
+        ["SC2", "Evidence", "core", "target_window", [5,10], "第一脚短距离联系角旗附近队友。", "supported", "近处白队接应者迎向地面球。", ["01-13-03.jpg", "01-13-04.jpg"]],
+        ["SC3", "Evidence", "core", "target_window", [5,10], "第一脚没有直接送向禁区内争点目标。", "supported", "第一接应发生在边路，后续才传中。", ["01-13-03.jpg", "01-13-04.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [5,10], "第一脚起点为进攻左侧角旗附近。", "supported", "角旗与白队进攻球门提供参照。", ["01-13-03.jpg"]],
+        ["W2", "Where", "relation", "target_window", [5,13], "第一接应者与后续传中目标位于不同区域。", "supported", "近处回做先发生，随后才向门前起球。", ["01-13-03.jpg", "01-13-04.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [5,13], "角球第一脚直接进入禁区争顶区。", "contradicted", "近处短传和回做在传中之前。", ["01-13-03.jpg", "01-13-04.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-train-1911", "tactic": "short-corner", "interval": "00:25-00:30",
+      "reference_team": "黄绿队", "selection_role": "边界：启动在目标窗之前", "stage": "unresolved",
+      "decision": "建议先复核窗口；不能把前文的短传启动计成25-30秒内发生。",
+      "summary": "25秒开始时，黄绿队已在角旗附近处理短角球后的来球，并在防守者靠近下带动、调整后向禁区输送。第一脚的短传启动不完整位于目标窗内；应保留“角球后的边路组织”，另列修窗候选，而非通过润色补出窗内开球。",
+      "review_question": "是否将目标窗前移以覆盖角球第一脚，还是保留当前窗只评后续组织？",
+      "items": [
+        ["SC1", "Evidence", "core", "target_window", [25,30], "目标窗内完整呈现角球启动。", "unknown", "窗口开始已进入后续组织；未知指窗内证据缺口，不是否认窗前开球。", ["window-25-30-01.jpg"]],
+        ["SC2", "Evidence", "core", "target_window", [25,30], "目标窗内完整呈现角球第一脚的短传接应。", "unknown", "当前窗无法独立确认第一脚，不能从边路控球反推。", ["window-25-30-01.jpg"]],
+        ["SC3", "Evidence", "core", "target_window", [25,30], "目标窗内可直接判断第一脚没有传入禁区。", "unknown", "判断第一脚需要前移观察范围。", ["window-25-30-01.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [25,28], "目标窗前段的持球位置在角旗附近边路。", "supported", "黄绿队在边线与角旗附近面对防守。", ["window-25-30-01.jpg"]],
+        ["W2", "Where", "relation", "target_window", [25,28], "持球者先调整和带动，并非窗一起就立即传中。", "supported", "面对两名靠近者仍在边路处理。", ["window-25-30-01.jpg"]],
+        ["C1", "When", "context", "context_only", [23,25], "应在窗前23-25秒附近核对角球启动。", "supported", "本轮查看了窗前连续帧；这一区间只作为人工回看入口，不冻结新起点。", ["native-23.00-25.00-01.jpg", "window-25-30-01.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [25,30], "25-30秒里已经完整覆盖角球第一脚。", "contradicted", "不能把窗前观察归入当前目标窗。", ["window-25-30-01.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-train-1554", "tactic": "back-line-possession-management", "interval": "00:01-00:18",
+      "reference_team": "白队", "selection_role": "典型：门将与后卫循环接应", "stage": "pattern_observed",
+      "decision": "候选保留；本轮核对其中两段循环，不声称全窗逐帧看过。",
+      "summary": "白队在本方禁区周边通过门将和两侧后卫反复接应，出现回传及换侧出球。黄绿队在后段逐渐靠近，白队仍重新分配球权。可见过程支持后场循环，不需要附加“对方完全不施压”或“每一脚都不向前”的条件。",
+      "review_question": "是否同意对手有阶段性靠近、己方有小幅前进也可保留后场循环？",
+      "items": [
+        ["BP1", "Evidence", "core", "target_window", [5,18], "门将与后场队友之间存在连续传递。", "supported", "两段所看图中可见回交门将和向侧方出球。", ["window-01-18-02.jpg", "window-01-18-04.jpg"]],
+        ["BP2", "Evidence", "core", "target_window", [5,18], "出现向后回收及横向换侧。", "supported", "球队利用后方接应点改变出球方向。", ["window-01-18-02.jpg", "window-01-18-04.jpg"]],
+        ["BP3", "Evidence", "core", "target_window", [5,18], "所看的循环阶段由白队保持控球。", "supported", "接应和重新分配均由白队完成。", ["window-01-18-02.jpg", "window-01-18-04.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [5,18], "循环主要发生在白队本方禁区及其外侧。", "supported", "本方球门、禁区线和接应点提供定位。", ["window-01-18-02.jpg", "window-01-18-04.jpg"]],
+        ["W2", "Where", "relation", "target_window", [15,18], "门将向侧方队友出球后，接应者仍可向前带动。", "supported", "后场循环与局部向前动作并不矛盾。", ["window-01-18-04.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [15,18], "黄绿队全窗完全没有靠近施压。", "contradicted", "后段可见对方球员逐渐靠近持球者。", ["window-01-18-04.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-test-496", "tactic": "back-line-possession-management", "interval": "00:10-00:28",
+      "reference_team": "红队", "selection_role": "边界：后场循环后转入推进", "stage": "pattern_observed",
+      "decision": "保留前段控球循环，另标后段推进；不自动改原时间窗。",
+      "summary": "红队在本方后场横传和回交，随后侧方接应者带球向中线发展，窗口后段再向中场及前方送球。原长窗口包含后场循环到进攻推进的阶段变化，因此不应把整段概括为完全没有向前传递。",
+      "review_question": "是否需要把循环阶段与后段推进分开标注，而不是要求整个窗口保持静态后场？",
+      "items": [
+        ["BP1", "Evidence", "core", "target_window", [10,18], "红队后场接应点之间存在多次传递。", "supported", "禁区外和侧方接应连续展开。", ["window-10-28-01.jpg", "window-10-28-02.jpg"]],
+        ["BP2", "Evidence", "core", "target_window", [10,18], "前段包含横向或向后循环。", "supported", "红队在后场回收并换侧。", ["window-10-28-01.jpg", "window-10-28-02.jpg"]],
+        ["BP3", "Evidence", "core", "target_window", [10,18], "循环阶段红队保持球权并重新组织。", "supported", "后场同队接应没有被直接改为对手控球。", ["window-10-28-01.jpg", "window-10-28-02.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [10,18], "控球循环起始于红队本方半场。", "supported", "本方禁区与中线位置可辨认。", ["window-10-28-01.jpg", "window-10-28-02.jpg"]],
+        ["W2", "Where", "relation", "target_window", [23,28], "后段持球和出球向中场及前方发展。", "supported", "位置不再只围绕禁区外横向循环。", ["window-10-28-04.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [10,28], "红队整个窗口都没有向前推进或传球。", "contradicted", "后段已经出现向中场发展的动作。", ["window-10-28-02.jpg", "window-10-28-04.jpg"]]
+      ]
+    },
+    {
+      "clip": "AA-train-210", "tactic": "tactical-foul", "interval": "00:13-00:16",
+      "reference_team": "黄绿队", "selection_role": "候选：回追接触打断推进", "stage": "unresolved",
+      "decision": "确认推进、追防与倒地链；犯规责任及战术性由人工裁决，不替裁判推意图。",
+      "summary": "白队在中线附近向前推进，黄绿队从侧后方追上并下地伸腿，白队持球者随即失衡倒地，球继续滚离。接触位置在黄绿队本方半场靠近中线。该过程支持推进被中断，但具体先触球还是先触人、犯规责任和主观目的仍需人工复核。",
+      "review_question": "是否存在足够明确的犯规依据；能否仅确认接触中断而不要求主观意图？",
+      "items": [
+        ["TF1", "Evidence", "core", "target_window", [13,15], "接触前白队球员正在向前推进。", "supported", "白队持球者向中线另一侧带球，黄绿队追赶。", ["window-13-16-01.jpg"]],
+        ["TF2", "Evidence", "core", "target_window", [13.6,15], "防守接触已具备可独立确认的犯规依据。", "unknown", "下地伸腿和倒地可见，但本轮未独立裁清触球先后和犯规责任。", ["native-13.60-14.80-01.jpg", "window-13-16-01.jpg"]],
+        ["TF3", "Evidence", "core", "target_window", [13.6,16], "接触后持球者原有推进中断。", "supported", "持球者倒地，球与其分离。", ["native-13.60-14.80-01.jpg", "window-13-16-01.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [13.6,15], "接触点在黄绿队本方半场、中线附近。", "supported", "参照队是防守执行方，不能与白队本方混淆。", ["window-13-16-01.jpg"]],
+        ["W2", "Where", "relation", "target_window", [13.6,15], "防守者从推进者侧后方下地。", "supported", "连续帧呈现追赶者与持球者的前后关系。", ["native-13.60-14.80-01.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [13,16], "防守者确定是故意用黄牌代价阻止反击。", "unknown", "可见接触不能直接证明主观目的，本窗也不独立确认处罚。", ["window-13-16-01.jpg"]]
+      ]
+    },
+    {
+      "clip": "GSR-099", "tactic": "tactical-foul", "interval": "00:20-00:22",
+      "reference_team": "深色队", "selection_role": "边界：只覆盖倒地后续", "stage": "unresolved",
+      "decision": "优先修窗复核；当前窗只评倒地与停顿，不补入窗前接触。",
+      "summary": "20秒窗口开始时红队球员已倒地，球离开其控制，深色队守者在附近；后续裁判靠近并示意。窗前19秒附近的接触可作为人工寻找新起点的入口，但不计入20-22秒内的接触证据，犯规责任也不因倒地而自动成立。",
+      "review_question": "是否前移窗口以包含推进和接触；当前窗是否只能作为事件后续？",
+      "items": [
+        ["TF1", "Evidence", "core", "target_window", [20,22], "目标窗内可见接触前持续推进。", "unknown", "开始时持球人已倒地，起因不完整。", ["native-20.00-21.00.jpg"]],
+        ["TF2", "Evidence", "core", "target_window", [20,22], "目标窗内可独立核实防守接触和犯规依据。", "unknown", "直接接触位于此前，不能回填。", ["native-20.00-21.00.jpg"]],
+        ["TF3", "Evidence", "core", "target_window", [20,22], "目标窗独立展示接触导致推进中断的连续链。", "unknown", "可见中断后的状态，缺少接触起因。", ["native-20.00-21.00.jpg"]],
+        ["W1", "Where", "anchor", "target_window", [20,21], "倒地后的球员位于深色队禁区前中路。", "supported", "可定位的是倒地后位置，不等同于接触发生点。", ["native-20.00-21.00.jpg"]],
+        ["W2", "Where", "anchor", "target_window", [20,22], "本窗可以独立给出实际接触位置。", "unknown", "需要窗前画面，不能直接用倒地位置替代。", ["native-20.00-21.00.jpg"]],
+        ["C1", "When", "context", "context_only", [19.2,20], "接触过程应在20秒前的相邻原帧中审核。", "supported", "已查看19.20-20.20秒图，接触与倒地发生于当前窗口起点之前。", ["native-19.20-20.20.jpg"]],
+        ["H1", "Faithfulness", "diagnostic_probe", "target_window", [20,22], "20-22秒完整呈现从侧后方接触到持球者倒地。", "contradicted", "当前窗开始时已经倒地，原叙述需注明上下文来源或修窗。", ["native-20.00-21.00.jpg"]]
+      ]
+    }
+  ]
+}

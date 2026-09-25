@@ -1,4 +1,4 @@
-"""End-to-end pipeline orchestrator with flexible entry points."""
+"""Stage 1 SoccerMaster inference entrypoint."""
 from __future__ import annotations
 
 import argparse
@@ -105,7 +105,7 @@ def run_stage1(config: PipelineConfig) -> None:
         ball_labels_path=labels_path if labels_path.is_file() else None,
     )
 
-def run_pipeline(config: PipelineConfig, effects: bool = False) -> Path:
+def run_pipeline(config: PipelineConfig) -> Path:
     config.output_dir.mkdir(parents=True, exist_ok=True)
     if config.should_run_stage1():
         log.info("=== Stage 1: SoccerMaster Inference ===")
@@ -118,36 +118,11 @@ def run_pipeline(config: PipelineConfig, effects: bool = False) -> Path:
         target = config.output_dir / "predictions.json"
         if source.resolve() != target.resolve():
             atomic_copy(source, target)
-
-
-
-    from pipeline.stage2b.run import run_stage2b
-    from pipeline.stage3_tts.run import run_stage3_tts
-    from pipeline.stage4_effects.run import run_stage4
-
-    result = run_stage2b(
-        config.output_dir,
-        config.clip_dir,
-        mode=config.commentary_mode,
-        force=config.force,
-    )
-    for language in config.languages:
-        result = run_stage3_tts(
-            config.output_dir,
-            language=language,
-            force=config.force,
-        )
-        if effects:
-            result = run_stage4(
-                config.output_dir,
-                language=language,
-                config=config,
-            )
-    return result
+    return config.output_dir / "predictions.json"
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="SoccerMaster inference and commentary pipeline")
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--clip-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/pipeline_run"))
     parser.add_argument("--input-video", type=Path)
@@ -156,10 +131,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--existing-pklz-path", type=Path)
     parser.add_argument("--pklz-video-id")
     parser.add_argument("--fps", type=int, default=25)
-    parser.add_argument("--lang", nargs="+", default=["en", "zh"])
-    parser.add_argument("--mode", choices=["direct", "hybrid"], default="hybrid")
     parser.add_argument("--force", action="store_true")
-    parser.add_argument("--effects", action="store_true")
     return parser
 
 
@@ -173,15 +145,13 @@ def config_from_args(args: argparse.Namespace) -> PipelineConfig:
         existing_pklz_path=args.existing_pklz_path,
         pklz_video_id=args.pklz_video_id,
         fps=args.fps,
-        languages=args.lang,
-        commentary_mode=args.mode,
         force=args.force,
     )
 
 
 def main(argv: Optional[list[str]] = None) -> None:
     args = build_arg_parser().parse_args(argv)
-    run_pipeline(config_from_args(args), effects=args.effects)
+    run_pipeline(config_from_args(args))
 
 
 if __name__ == "__main__":

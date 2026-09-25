@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
 from pipeline.config import PipelineConfig
 from pipeline.stage3_tts.mux import mux_audio_video
+from pipeline.stage4_effects.preview import render_preview_video
 from pipeline.stage4_effects.render import render_annotated_video
-from pipeline.stage4_effects.topology_analysis import run_topology_analysis
+from pipeline.topology.analysis import analyze_clip
 
 
 def replace_final_video(
@@ -78,19 +80,30 @@ def run_stage4(
     final = config.final_video(language)
     homography = config.homography_json
 
+    topology = output_dir / "topo.json"
+    if config.topology_lines_enabled:
+        analyze_clip(
+            Path(__file__).resolve().parents[2],
+            output_dir.name,
+            topology,
+            fps=config.fps,
+            force=bool(force),
+            preprocessing_root=output_dir.parent,
+        )
     if force or not annotated.is_file():
         render_annotated_video(
             frames, events, predictions, annotated, config,
             homography_json_path=homography if homography.is_file() else None,
+            topology_json_path=topology if topology.is_file() else None,
         )
-    topology = output_dir / "topo.json"
-    if config.topology_lines_enabled and (force or not topology.is_file()):
-        run_topology_analysis(predictions, topology, fps=config.fps)
     return replace_final_video(annotated, audio, final)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog="Use `python -m pipeline.stage4_effects.run preview --help` for previews.",
+    )
     parser.add_argument("output_dir", type=Path)
     parser.add_argument("--clip-dir", type=Path)
     parser.add_argument("--language", choices=["zh", "en"], default="zh")
@@ -98,8 +111,39 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
-    args = build_arg_parser().parse_args()
+def build_preview_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Render a silent tactical preview.")
+    parser.add_argument("--frames-dir", type=Path, required=True)
+    parser.add_argument("--topology", type=Path)
+    parser.add_argument("--predictions", type=Path, required=True)
+    parser.add_argument("--homography", type=Path, required=True)
+    parser.add_argument("--style-profile", type=Path)
+    parser.add_argument("--focus-track-id", type=int)
+    parser.add_argument("--window", default="21:25")
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--fps", type=float, default=25)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["preview"]:
+        args = build_preview_arg_parser().parse_args(argv[1:])
+        print(render_preview_video(
+            args.frames_dir,
+            args.predictions,
+            args.homography,
+            args.output,
+            style_profile_path=args.style_profile,
+            topology_json_path=args.topology,
+            repo_root=Path(__file__).resolve().parents[2],
+            focus_track_id=args.focus_track_id,
+            window=args.window,
+            fps=args.fps,
+        ))
+        return
+
+    args = build_arg_parser().parse_args(argv)
     print(run_stage4(
         args.output_dir,
         clip_dir=args.clip_dir,

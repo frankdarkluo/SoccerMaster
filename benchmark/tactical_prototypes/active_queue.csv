@@ -1,0 +1,60 @@
+query_id,clip_uid,tactic_id,window,selection_reason,human_label,failed_condition,notes
+92c4d39db47d18c9,germany_paraguay:0240,fast_break_pattern,00:00–00:14,hard_negative_candidate,,,
+32a5191babdb12ed,germany_paraguay:0115,run_in_behind,00:00–00:27,hard_negative_candidate,,,
+5350c4c4dfd01c98,soccernetgs:SNGS-017,cutback,00:00–00:30,hard_negative_candidate,needs_adjudication,首段边路送球的出脚点与方向仍有歧义,2026-07-17 Codex逐帧复核：全段有两次不同边路送球；后一脚像普通传中，但首段是否接近底线后回撤仍不稳定，本轮不晋升。
+c50737da4e30f42e,germany_paraguay:0034,overlap_run,00:00–00:07,hard_negative_candidate,,,
+7fa297ebe46a889e,germany_paraguay:0071,overlap_run,00:00–00:10,hard_negative_candidate,,,
+21c156fa6096df96,canada_bosnia:0042,run_in_behind,00:00–00:05,hard_negative_candidate,,,
+68dc5a94122cd90f,canada_bosnia:0108,fast_break_pattern,00:00–00:07,hard_negative_candidate,,,
+53f7caa3c2c469b8,canada_bosnia:0111,line_break,00:00–00:31,hard_negative_candidate,,,
+0a7630dccff63da7,germany_paraguay:0135,cutback,00:00–00:05,hard_negative_candidate,,,
+bc9bb64605ac2d97,canada_bosnia:0119,cutback,00:00–00:11,hard_negative_candidate,,,
+c0e9aab128b88c6e,soccernetgs:SNGS-170,line_break,00:00–00:30,rare_or_low_retrieval_coverage,unobservable,缺失：穿线出脚、稳定防线和线后接控无法同时辨清,2026-07-17 Codex逐帧复核：球体过小且多次转换，无法闭合破线传接链。
+72932817b0c275d4,canada_bosnia:0070,run_in_behind,00:00–00:05,rare_or_low_retrieval_coverage,,,
+7ad6a8eac53ce4f6,soccernetgs:SNGS-141,cutback,00:00–00:30,rare_or_low_retrieval_coverage,unobservable,缺失：右路出球接触点及回撤方向不清,2026-07-17 Codex逐帧复核：可见右路推进和禁区接应，但不能稳定区分向后回做与普通横传。
+fc7aec597875ef5a,soccernetgs:SNGS-160,fast_break_pattern,00:00–00:30,rare_or_low_retrieval_coverage,,,
+80da39b668fff9c0,event_clips:0008,fast_break_pattern,00:00–00:06,rare_or_low_retrieval_coverage,unobservable,缺失：时间跳变导致夺权与反击起点不连续,2026-07-17 Codex逐帧复核：约0.6秒比赛时钟与画面跳变，后段已在前场推进。
+9765eebd4c1d5377,soccernetgs:SNGS-161,line_break,00:00–00:30,rare_or_low_retrieval_coverage,,,
+4028efb011297d1e,soccernetgs:SNGS-174,cutback,00:00–00:30,rare_or_low_retrieval_coverage,,,
+7b2ff0936ee02917,soccernetgs:SNGS-161,fast_break_pattern,00:00–00:30,rare_or_low_retrieval_coverage,,,
+369316f212a80a84,soccernetgs:SNGS-139,overlap_run,00:00–00:30,rare_or_low_retrieval_coverage,,,
+0736f6cc99fe51ed,soccernetgs:SNGS-170,fast_break_pattern,00:00–00:30,rare_or_low_retrieval_coverage,,,
+67d9017c44ede27d,soccernetgs:SNGS-193,fast_break_pattern,00:00–00:30,deterministic_random_audit,,,
+738a7fe2cbce7db7,event_clips:0008,run_in_behind,00:00–00:06,deterministic_random_audit,unobservable,缺失：时间跳变导致传球释放和跑者起点缺失,2026-07-17 Codex逐帧复核：画面从中场跳到禁区前，只见后段持球推进与射门。
+55a5a6cfbbb01aca,soccernetgs:SNGS-179,fast_break_pattern,00:00–00:30,deterministic_random_audit,,,
+582cf76e4a531e03,soccernetgs:SNGS-143,fast_break_pattern,00:00–00:30,deterministic_random_audit,,,
+ed61bcf7074ae31d,soccernetgs:SNGS-128,fast_break_pattern,00:00–00:30,deterministic_random_audit,,,
+099240051ab6a6da,soccernetgs:SNGS-108,fast_break_pattern,00:00–00:30,quota_backfill,needs_adjudication,争得第二点后连续纵向推进并进入禁区，不能排除真实反击,2026-07-17 Codex逐帧复核：原文字称未持续反击，但画面显示赢下第二点后多人前插并推进到禁区，本轮不作困难反例。
+6a2dbf2f4f16d213,soccernetgs:SNGS-074,fast_break_pattern,00:00–00:30,quota_backfill,,,
+f4216df9176d0097,soccernetgs:SNGS-091,fast_break_pattern,00:00–00:30,quota_backfill,,,
+7e868d58f5baf0b3,soccernetgs:SNGS-042,fast_break_pattern,00:00–00:30,quota_backfill,,,
+07b6c20b04976d04,soccernetgs:SNGS-119,fast_break_pattern,00:00–00:30,quota_backfill,,,
+f69e4d451dc5f9fa,event_clips:0002,line_break,00:00–00:05,quota_backfill,,,
+4fa5e39058485bcb,soccernetgs:SNGS-171,overlap_run,00:00–00:30,quota_backfill,,,
+410d697acfa4623a,event_clips:0002,run_in_behind,00:00–00:05,quota_backfill,,,
+71f7743f33c2b67b,soccernetgs:SNGS-182,overlap_run,00:00–00:30,quota_backfill,targeted_negative,接应者出球前已在持球人身前外侧,2026-07-17 Codex逐帧复核：属于普通前方接应，未完成身后到身前的外侧超越。
+e2f15721d681e512,canada_bosnia:0090,fast_break_pattern,00:00–00:22,seed_gold_manual_review,targeted_negative,没有球权转换；白队防线已落位,2026-07-17 Codex逐帧复核：全段是禁区前沿与右路的稳定控球，缺少夺权后立即纵向冲击。
+99132f1f38e7a8c2,germany_paraguay:0014,fast_break_pattern,00:00–00:13,seed_gold_manual_review,targeted_negative,由边线球固定重启，随后为常规组织,2026-07-17 Codex逐帧复核：开端明确是掷界外球且守方已有站位，后续不满足快速反击链。
+76155907469ad770,soccernetgs:SNGS-139,fast_break_pattern,00:00–00:30,seed_gold_manual_review,targeted_negative,从既有阵地球权开始，未出现夺回球权节点,2026-07-17 Codex逐帧复核：中路转边后普通传中，防线随球落位，属于阵地推进。
+81fda78f3be5397e,canada_bosnia:0059,fast_break_pattern,00:00–00:11,seed_gold_manual_review,unobservable,缺失：片段开始前的球权归属与夺权节点,2026-07-17 Codex逐帧复核：首帧红队已经向前推进，无法判断是否由刚刚夺权触发。
+c04432dd9a6da245,germany_paraguay:0004,fast_break_pattern,00:00–00:13,seed_gold_manual_review,unobservable,缺失：近景开始前的夺权及第一次受控触球,2026-07-17 Codex逐帧复核：19号出场时已控球，随后多人前插且守方回追，反击形态接近但起点被截断。
+ff65cf79295b6f49,canada_bosnia:0137,cutback,00:00–00:13,seed_gold_manual_review,targeted_negative,来球朝门前横向或向前，没有向后回做,2026-07-17 Codex逐帧复核：决定性出球是普通传中，不是底线附近向禁区内部回撤。
+63a233536934a0f9,germany_paraguay:0133,cutback,00:00–00:08,seed_gold_manual_review,targeted_negative,边路起脚为普通横传中，未形成向后回传,2026-07-17 Codex逐帧复核：起脚和门前落点连续可见，未回做至后插上区域。
+e99e871cc09bd2bd,germany_paraguay:0024,cutback,00:00–00:12,seed_gold_manual_review,targeted_negative,出球者未到底线，来球向球门前送,2026-07-17 Codex逐帧复核：属于早传或普通传中；原silver不可观察分类改为困难反例。
+8eeeda250812864b,canada_bosnia:0070,cutback,00:00–00:05,seed_gold_manual_review,unobservable,缺失：关键接触点与球路被远景和比分条遮挡,2026-07-17 Codex逐帧复核：短片仅约4.2秒，不能确认末段来球是否向后回做。
+806685056c737509,germany_paraguay:0074,cutback,00:00–00:08,seed_gold_manual_review,unobservable,缺失：最后一脚的接触点、方向和落点,2026-07-17 Codex逐帧复核：存在倒三角可能，但球体过小且落点被遮挡，不能区分回传与横扫。
+2d1de6f9c18a9b8e,germany_paraguay:0056,line_break,00:00–00:31,seed_gold_manual_review,targeted_negative,外侧转移、带球和传中，没有受控传球穿过完整防线,2026-07-17 Codex逐帧复核：向前动作在防线外侧或由盘带完成，没有线前传球到线后接控。
+fce2289f1d25a625,canada_bosnia:0085,line_break,00:00–00:07,seed_gold_manual_review,targeted_negative,最后一脚为外侧传中或封堵球，线后无人受控接球,2026-07-17 Codex逐帧复核：没有穿过稳定横向防线并由队友在线后控制的传接链。
+a80970eebb6fcf07,germany_paraguay:0076,line_break,00:00–00:09,seed_gold_manual_review,targeted_negative,突破由持球者盘带完成，不是传球穿线,2026-07-17 Codex逐帧复核：盘带越过防守者不满足破线传球定义。
+e495fe3786928387,canada_bosnia:0098,line_break,00:00–00:06,seed_gold_manual_review,unobservable,缺失：镜头切走前的出脚、防线关系和接控结果,2026-07-17 Codex逐帧复核：球向左侧纵深发展后立即切近景，穿线与接控链不完整。
+36f1f424baf16768,germany_paraguay:0089,line_break,00:00–00:10,seed_gold_manual_review,unobservable,缺失：球与出脚过小，无法建立传球前后防线关系,2026-07-17 Codex逐帧复核：只能看到常规组织，无法稳定追踪传球—穿线—线后控制。
+a39aba146b38e777,canada_bosnia:0021,run_in_behind,00:00–00:23,seed_gold_manual_review,targeted_negative,接应者在防线前或侧前推进，没有自身越过最后线,2026-07-17 Codex逐帧复核：属于已有球权下常规推进，未见跑者由线前进入线后。
+f5cd44df487a4110,germany_paraguay:0144,run_in_behind,00:00–00:09,seed_gold_manual_review,targeted_negative,主动作是个人带球与对抗，没有线前到线后跑动,2026-07-17 Codex逐帧复核：周边队友没有可见的越过最后线动作。
+d1512a47db68948d,germany_paraguay:0177,run_in_behind,00:00–00:07,seed_gold_manual_review,targeted_negative,定位球高球进门前，没有跑者从线前进入身后,2026-07-17 Codex逐帧复核：静态门前站位和空中争抢不能替代跨越防线的时序证据。
+9af38d8a26bcb4e8,canada_bosnia:0091,run_in_behind,00:00–00:29,seed_gold_manual_review,unobservable,缺失：传球瞬间跑者相对最后线的起点,2026-07-17 Codex逐帧复核：越位结果可见，但回放不足以确认跑者由线前或平线启动。
+f811dbfd6a5dfabe,germany_paraguay:0001,run_in_behind,00:00–00:10,seed_gold_manual_review,unobservable,缺失：跑者起点、传球释放及与最后线的同步关系,2026-07-17 Codex逐帧复核：无法排除接应者原本已经在线后。
+286fa800493a9998,canada_bosnia:0011,overlap_run,00:00–00:11,seed_gold_manual_review,targeted_negative,接应者传球前已在持球人前方或侧前方,2026-07-17 Codex逐帧复核：属于普通前方接应，不是从身后经外侧超越。
+2f2139a154ae13da,germany_paraguay:0031,overlap_run,00:00–00:10,seed_gold_manual_review,targeted_negative,个人内切突破，没有第二名队友外侧超越,2026-07-17 Codex逐帧复核：外侧通道没有队友从持球人身后跑到身前。
+d08e9bc867ec3da9,canada_bosnia:0004,overlap_run,00:00–00:31,seed_gold_manual_review,unobservable,缺失：外侧跑者身后起点与完整超越过程,2026-07-17 Codex逐帧复核：长序列无法稳定绑定同一持球人与跑者。
+fe35b4d849654e9f,germany_paraguay:0006,overlap_run,00:00–00:22,seed_gold_manual_review,unobservable,缺失：外线队员是否从身后开始并越到身前,2026-07-17 Codex逐帧复核：镜头切换和近景遮断了两者前后关系变化。
+0eb0575373a6d51d,germany_paraguay:0074,overlap_run,00:00–00:08,seed_gold_manual_review,unobservable,缺失：右路跑者的身后起点与连续外侧超越帧,2026-07-17 Codex逐帧复核：短片有右路配合，但未覆盖跑者相对持球人的完整前后变化。

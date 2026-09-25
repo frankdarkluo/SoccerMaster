@@ -1,0 +1,132 @@
+{
+  "schema_version": "pilot-reference-draft-v1",
+  "source": {
+    "csv": "data/pilot_study.csv",
+    "clip": "GSR-001",
+    "tactic": "long-ball",
+    "interval": "00:17-00:22",
+    "original_rationale": "白队中场直接起高球越过中间组织区寻找前锋，前锋与蓝队中卫争抢第一落点后白队继续争夺第二点，符合长传冲吊。",
+    "video_path": "data/GSR_2025_videos/SNGS-001.mp4",
+    "video_duration_s": 30.0,
+    "video_fps": 25,
+    "time_origin": "original_video_start",
+    "target_window_s": [17.0, 22.0],
+    "view_window_s": [15.0, 24.0]
+  },
+  "annotation": {
+    "status": "machine_draft",
+    "author": "GitHub Copilot",
+    "date": "2026-09-20",
+    "method": "local_sampled_and_native_frame_review",
+    "sample_fps": 4,
+    "reviewed_window_s": [15.0, 24.0],
+    "human_reviewer": null,
+    "human_reviewed_at": null,
+    "limitations": [
+      "已对 21.76-22.36 秒补查原始帧，其余部分仍基于采样帧；尚未完成逐条人工复核。",
+      "采样部分的相邻帧间隔为 0.25 秒，事件时间范围为近似定位，不是精确触球时刻。",
+      "首次触球者、触球部位和球员固定场上位置未独立确认。"
+    ]
+  },
+  "output": {
+    "clip": "GSR-001",
+    "target_window_s": [17.0, 22.0],
+    "facts": [
+      {
+        "id": "f1",
+        "span_s": [17.0, 17.5],
+        "text": "白队球员在本方后场区域直接起高球，球向前飞行。"
+      },
+      {
+        "id": "f2",
+        "span_s": [17.5, 20.5],
+        "text": "球沿高空轨迹飞向蓝队禁区前沿的中路区域。"
+      },
+      {
+        "id": "f3",
+        "span_s": [20.5, 21.25],
+        "text": "一名白队球员与身旁的蓝队球员在落球区域起跳争抢。"
+      },
+      {
+        "id": "f4",
+        "span_s": [21.25, 22.0],
+        "text": "首次空中争抢后，球再次下落，附近的另一名白队球员向落球区域跟进。"
+      }
+    ],
+    "relations": [
+      {
+        "id": "r1",
+        "span_s": [17.0, 21.25],
+        "text": "白队从本方后场区域直接把球送到蓝队禁区前沿，由前方队友与蓝队球员争抢落球。",
+        "evidence_ids": ["f1", "f2", "f3"]
+      },
+      {
+        "id": "r2",
+        "span_s": [20.5, 22.0],
+        "text": "前方队友争抢第一落点后，附近的白队队友跟进争夺后续落球。",
+        "evidence_ids": ["f3", "f4"]
+      }
+    ],
+    "interpretation": {
+      "text": "白队球员在本方后场区域直接起高球，将球送向蓝队禁区前沿的中路区域。前方白队球员与蓝队球员起跳争抢第一落点，附近的另一名白队球员随后向落球区域跟进，参与第二落点的争夺。判别重点在于通过高空长距离传球直接连接后场与前场，并由前方队友争顶、附近队友跟进后续落球。",
+      "evidence_ids": ["f1", "f2", "f3", "f4"],
+      "relation_ids": ["r1", "r2"]
+    },
+    "commentary": {
+      "text": "白队在本方后场区域起高球直送蓝队禁区前沿，前方队友与蓝队球员争抢第一落点，另一名队友随后跟进争夺后续落球。",
+      "evidence_ids": ["f1", "f2", "f3", "f4"]
+    },
+    "uncertainties": [
+      {
+        "span_s": [20.5, 21.25],
+        "text": "首次触球者与触球部位在当前采样下无法确认。"
+      },
+      {
+        "span_s": [20.5, 22.0],
+        "text": "没有独立确认争抢双方的固定场上位置，因此不将前锋、中卫作为事实写入。"
+      }
+    ]
+  },
+  "review": {
+    "candidate_core_fact_ids": ["f1", "f2", "f3", "f4"],
+    "source_alignment": [
+      {
+        "source_claim": "白队中场直接起高球越过中间组织区寻找前锋",
+        "assessment": "qualified",
+        "evidence_ids": ["f1", "f2"],
+        "note": "根据用户对起球位置的更正，将整理版起点由中线附近改为白队后场区域；原文保留供追溯，不断言寻找某一固定位置球员的主观意图。"
+      },
+      {
+        "source_claim": "前锋与蓝队中卫争抢第一落点",
+        "assessment": "qualified",
+        "evidence_ids": ["f3"],
+        "note": "双方起跳争抢可见；使用白队球员与蓝队球员，不将固定场上位置或首次触球者视为已确认。"
+      },
+      {
+        "source_claim": "白队继续争夺第二点",
+        "assessment": "qualified",
+        "evidence_ids": ["f4"],
+        "note": "保留原文中跟进争夺后续落球的含义，不附加已控制球权的要求，也不将参与争夺改写为已经得球。"
+      }
+    ],
+    "video_added_details": [
+      {
+        "evidence_ids": ["f2"],
+        "text": "以蓝队禁区前沿的中路区域具体化前场落球位置，须人工确认。"
+      }
+    ],
+    "excluded_context": [
+      {
+        "span_s": [22.0, 24.0],
+        "reason": "目标窗口之后的继续争球与射门画面不写入 17-22 秒参考。"
+      }
+    ],
+    "human_checks_required": [
+      "核对视频与 CSV 行的对应关系以及近似动作时间。",
+      "以原帧率回看起球、首次争抢与窗口末端，审核所有 G1 事实。",
+      "核验首次争抢与后续跟进的动作关系，不将赢得第二点或稳定控球设为该判断依据的必要条件。",
+      "审核 G2 关系和 G3 解释是否被引用事实支持，并复核战术标签。",
+      "冻结核心评分要点后填写审核人和审核日期；未完成前不得作为正式 GT。"
+    ]
+  }
+}

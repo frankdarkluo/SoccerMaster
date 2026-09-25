@@ -11,7 +11,6 @@ codes/CosyVoice/
 *.txt
 *.pth
 *.csv
-.env
 datasets
 outputs
 /tests/
@@ -27,11 +26,17 @@ models/deformable_detr/ops/MultiScaleDeformableAttention.egg-info/PKG-INFO
 memory_demo.py
 
 .vscode
+.venv/
 
 models/bak
 .cursorignore
 pyrightconfig.json
 soccerbackbone.egg-info
+
+# Large local datasets excluded from the full_data snapshot
+data/GSR_2025_videos/
+data/SoccerNet-AA_clean_test_challenge/
+data/SoccerNet-AA_clean_train_valid/
 
 # Media files outside root images/
 *.jpg
@@ -51,5 +56,4 @@ soccerbackbone.egg-info
 .Trashes
 ehthumbs.db
 Thumbs.db
-.env
 .env

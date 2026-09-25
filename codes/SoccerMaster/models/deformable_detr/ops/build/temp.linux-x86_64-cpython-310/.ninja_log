@@ -1,0 +1,4 @@
+# ninja log v7
+0	4807	1783640620192664273	/home/zhangzheng/guoqing/SoccerMaster/codes/SoccerMaster/models/deformable_detr/ops/build/temp.linux-x86_64-cpython-310/home/zhangzheng/guoqing/SoccerMaster/codes/SoccerMaster/models/deformable_detr/ops/src/cpu/ms_deform_attn_cpu.o	a317c9942a382e44
+0	14161	1783640620192664273	/home/zhangzheng/guoqing/SoccerMaster/codes/SoccerMaster/models/deformable_detr/ops/build/temp.linux-x86_64-cpython-310/home/zhangzheng/guoqing/SoccerMaster/codes/SoccerMaster/models/deformable_detr/ops/src/vision.o	3e48e2632d87b0ff
+0	16523	1783640620192664273	/home/zhangzheng/guoqing/SoccerMaster/codes/SoccerMaster/models/deformable_detr/ops/build/temp.linux-x86_64-cpython-310/home/zhangzheng/guoqing/SoccerMaster/codes/SoccerMaster/models/deformable_detr/ops/src/cuda/ms_deform_attn_cuda.o	a62ab4eb1d4691a9

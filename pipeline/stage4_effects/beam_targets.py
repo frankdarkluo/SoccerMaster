@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from pipeline.utils.labels import frame_index_from_labels
-from pipeline.utils.pitch import GOAL_X
 
 
 def load_predictions_index(predictions_json: Path) -> Tuple[Dict[int, str], Dict[str, List[dict]]]:
@@ -31,16 +30,6 @@ def foot_point_from_bbox(bbox_image: dict) -> Optional[Tuple[int, int]]:
     if x_center is None or y is None or h is None:
         return None
     return int(round(float(x_center))), int(round(float(y) + float(h)))
-
-
-def center_point_from_bbox(bbox_image: dict) -> Optional[Tuple[int, int]]:
-    if not isinstance(bbox_image, dict):
-        return None
-    x_center = bbox_image.get("x_center")
-    y_center = bbox_image.get("y_center")
-    if x_center is None or y_center is None:
-        return None
-    return int(round(float(x_center))), int(round(float(y_center)))
 
 
 def _find_ball(annotations: List[dict]) -> Optional[dict]:
@@ -110,21 +99,11 @@ def _nearest_field_player_to_ball(
     return candidates[0][2] if candidates[0][0] <= max_dist_m else None
 
 
-def goal_center_pitch(team: Optional[str]) -> Tuple[float, float]:
-    attack_sign = 1.0 if team != "right" else -1.0
-    return GOAL_X * attack_sign, 0.0
-
-
-def resolve_beam_points(
+def resolve_beam_origin(
     event: dict,
     annotations: List[dict],
-    pitch_to_image_fn=None,
-) -> Optional[Tuple[Tuple[int, int], Tuple[int, int]]]:
-    """
-    Return (origin_img, target_img) for a light beam.
-
-    Uses bbox_image foot points. Target prefers ball center, then projected goal center.
-    """
+) -> Optional[Tuple[int, int]]:
+    """Resolve the highlighted creator's foot point."""
     ball = _find_ball(annotations)
     player = _find_player(
         annotations,
@@ -132,42 +111,12 @@ def resolve_beam_points(
         event.get("player_team"),
     )
     if player is None and ball is not None:
-        max_dist = 30.0 if event.get("event_code") in ("football.goal", "football.shoot") else 5.0
         player = _nearest_field_player_to_ball(
             annotations,
             ball,
-            max_dist_m=max_dist,
-            prefer_outfield=event.get("event_code") != "football.save",
+            max_dist_m=5.0,
+            prefer_outfield=True,
         )
     if player is None:
         return None
-
-    origin = foot_point_from_bbox(player.get("bbox_image") or {})
-    if origin is None:
-        return None
-
-    if event.get("target_jersey"):
-        target_player = _find_player(
-            annotations,
-            event.get("target_jersey"),
-            event.get("target_team"),
-        )
-        if target_player is not None:
-            target = foot_point_from_bbox(target_player.get("bbox_image") or {})
-            if target is not None:
-                return origin, target
-
-    if ball is not None:
-        target = center_point_from_bbox(ball.get("bbox_image") or {})
-        if target is not None:
-            return origin, target
-
-    if pitch_to_image_fn is not None:
-        gx, gy = goal_center_pitch(event.get("player_team"))
-        projected = pitch_to_image_fn((gx, gy))
-        if projected is not None:
-            return origin, projected
-
-    # Fallback: extend beam upward in image space toward top of frame.
-    tx, ty = origin
-    return origin, (tx, max(0, ty - 250))
+    return foot_point_from_bbox(player.get("bbox_image") or {})

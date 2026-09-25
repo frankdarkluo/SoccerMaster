@@ -1,0 +1,50 @@
+sample_id,pitch_zone_answer,body_part_answer,shot_posture_answer,pattern_of_play_answer,pass_direction_answer,save_technique_answer,ball_trajectory_answer,keeper_movement_answer,pass_height_answer,confidence,comment,raw_answer_path
+SNGS-116,outside_box,right_foot,n/a,,,,,,,0.86,corner taker strikes from corner area with right foot,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-117,outside_box,n/a,n/a,,,,,,,0.62,"offside actor is near the penalty-area edge, just outside box",/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-118,inside_box,right_foot,placed_shot,,,,,,,0.78,target shoots right-footed from inside the right side of the box,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-119,six_yard_box,right_foot,n/a,,,,,,,0.83,keeper clears with right foot from inside the goal area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-120,halfway_line,n/a,n/a,,,,,,,0.86,foul occurs in the center-circle area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-121,outside_box,n/a,n/a,,,,,,,0.66,card is shown just outside the penalty area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-122,outside_box,right_foot,n/a,,,,,,,0.9,free-kick taker strikes right-footed from outside the box,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-123,inside_box,right_foot,placed_shot,,,,,,,0.77,target controls and shoots right-footed inside the penalty area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-124,halfway_line,n/a,n/a,,,,,,,0.91,kick-off setup is at the center circle,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-125,outside_box,right_foot,n/a,,,,,,,0.84,corner is taken from the corner area with right foot,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-126,six_yard_box,right_foot,n/a,,,,,,,0.82,keeper clears right-footed from the goal-area region,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-127,n/a,n/a,n/a,,,,,,,0.88,"substitution occurs at the touchline, no pitch contact",/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-128,halfway_line,n/a,n/a,,,,,,,0.78,card sequence is around the halfway line,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-129,inside_box,right_foot,sliding,,,,,,,0.69,target stretches into a right-footed shot inside the box,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-130,six_yard_box,right_foot,placed_shot,,,,,,,0.7,close-range right-foot contact occurs in the goalmouth,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-131,outside_box,right_foot,n/a,,,,,,,0.83,free kick is struck right-footed from outside the box,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-132,halfway_line,n/a,n/a,,,,,,,0.91,kick-off occurs at midfield,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-133,outside_box,n/a,n/a,,,,,,,0.7,carded incident is away from the penalty area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-134,outside_box,n/a,n/a,,,,,,,0.68,offside actor is outside the penalty area on the flank,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-135,outside_box,right_foot,n/a,,,,,,,0.85,free-kick taker contacts ball right-footed outside the box,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-136,six_yard_box,head,header,,,,,,,0.52,crowded goalmouth shot appears to be a headed contact,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-137,six_yard_box,right_foot,n/a,,,,,,,0.82,goalkeeper clears with right foot from inside the goal area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-138,halfway_line,n/a,n/a,,,,,,,0.82,foul sequence is centered near the halfway line,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-139,inside_box,right_foot,placed_shot,,,,,,,0.7,target shoots right-footed among defenders inside the box,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-140,outside_box,right_foot,n/a,,,,,,,0.76,corner contact is from the corner area with right foot,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-141,outside_box,n/a,n/a,,,,,,,0.68,foul occurs outside the penalty area in the attacking half,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-142,six_yard_box,head,header,,,,,,,0.64,target rises in the goal area for a headed shot,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-143,halfway_line,n/a,n/a,,,,,,,0.73,offside sequence is near the center circle,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-144,inside_box,right_foot,placed_shot,,,,,,,0.91,penalty is struck right-footed from the spot,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-145,outside_box,right_foot,n/a,,,,,,,0.82,corner taker uses right foot from the corner area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-146,inside_box,right_foot,sliding,,,,,,,0.63,target slides into a right-footed attempt inside the box,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-147,six_yard_box,right_foot,n/a,,,,,,,0.84,keeper clears with right foot from the goal area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-148,inside_box,right_foot,placed_shot,,,,,,,0.61,goal shot comes from the right edge of the penalty area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-149,halfway_line,n/a,n/a,,,,,,,0.9,kick-off happens at the center spot,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-150,n/a,n/a,n/a,,,,,,,0.88,substitution is shown at the touchline,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-187,outside_box,right_foot,n/a,,,,,,,0.84,corner is taken from outside the box with right foot,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-188,n/a,n/a,n/a,,,,,,,0.88,substitution event has no ball-contact location,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-189,outside_box,n/a,n/a,,,,,,,0.7,foul is outside the penalty area on the left side,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-190,inside_box,right_foot,placed_shot,,,,,,,0.69,right-footed shot from inside the right side of the box,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-191,six_yard_box,n/a,n/a,,,,,,,0.69,offside actor is positioned in the goalmouth area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-192,outside_box,n/a,n/a,,,,,,,0.7,yellow card is shown just outside the penalty area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-193,outside_box,right_foot,n/a,,,,,,,0.82,free kick is right-footed from outside the box,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-194,six_yard_box,right_foot,n/a,,,,,,,0.81,keeper clears right-footed from the goal area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-195,inside_box,right_foot,placed_shot,,,,,,,0.72,target strikes right-footed inside the penalty area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-196,six_yard_box,right_foot,n/a,,,,,,,0.82,goalkeeper clearance is right-footed inside the six-yard box,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-197,six_yard_box,n/a,n/a,,,,,,,0.66,foul incident is in the goalmouth by the keeper,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-198,outside_box,right_foot,n/a,,,,,,,0.84,free kick is right-footed from a wide outside-box area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-199,outside_box,right_foot,n/a,,,,,,,0.83,corner taker contacts with right foot from corner area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
+SNGS-200,six_yard_box,right_foot,placed_shot,,,,,,,0.67,close-range right-foot shot occurs inside the goal area,/Users/gluo/.codex/attachments/8608176c-e654-476b-90f2-0dec21488e32/pasted-text.txt
