@@ -35,7 +35,7 @@ def get_video_info(video_path: Path) -> dict:
         "duration_s": duration,
         "width": int(vs["width"]),
         "height": int(vs["height"]),
-        "total_frames": int(duration * fps),
+        "total_frames": int(duration * fps + 1e-6),  # 19.56 * 25 is 488.99999 in floats
     }
 
 
